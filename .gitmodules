@@ -1,0 +1,3 @@
+[submodule "tractor"]
+	path = tractor
+	url = git@github.com:dstndstn/tractor.git
