@@ -34,12 +34,13 @@ def gen_model_image(srcs, image):
 
         # compute pixel space location of source
         # returns the X,Y = Width, Height pixel coordinate corresponding to u
-        v_s = image.equa2pixel(src.u) + np.array([0, -2])
+        v_s = image.equa2pixel(src.u) #+ np.array([0, -2])
 
         # TODO: turn this into a convolution or something...
         # compute pixel space location, v_{n,s}
-        y_grid     = np.arange(image.nelec.shape[0])
-        x_grid     = np.arange(image.nelec.shape[1])
+        zmeans = np.zeros(image.means.shape)
+        y_grid     = np.arange(image.nelec.shape[0]) + 1
+        x_grid     = np.arange(image.nelec.shape[1]) + 1
         yy, xx     = np.meshgrid(x_grid, y_grid, indexing='xy')
         f_s[s,:,:] = np.exp(gmm_log_like(np.column_stack((xx.ravel(), yy.ravel())) - v_s,
                                          image.weights,
@@ -81,10 +82,11 @@ class PointSrcParams():
           b : python dictionary such that b['r'] = brightness value for 'r' band
           t : temperature of source
     """
-    def __init__(self, u, b, t): 
+    def __init__(self, u, b, t, header=None): 
         self.u = u
         self.b = b
         self.t = t
+        self.header = header
 
 
 def get_sources_from_catalog(cat_file):
@@ -94,13 +96,15 @@ def get_sources_from_catalog(cat_file):
         enter into the likelihood. 
     """
     cat_data = fitsio.read(cat_file)
+    cat_header = fitsio.read_header(cat_file)
     keys = ['u', 'g', 'r', 'i', 'z']
     catalog_srcs = []
     for src_info in cat_data: 
         src_info = [s for s in src_info]
         src = PointSrcParams(u = src_info[0:2], 
                              b = dict(zip(keys, src_info[2:])), 
-                             t = None)
+                             t = None, 
+                             header = cat_header)
         catalog_srcs.append(src)
     return catalog_srcs
 
@@ -177,15 +181,16 @@ class FitsImage():
         psfvec = [header['PSF_P%d'%i] for i in range(18)]
         self.weights = np.array(psfvec[0:3])
         self.means   = np.array(psfvec[3:9]).reshape(3, 2)  # one comp mean per row
-        tmp = self.means[:,0]
-        self.means[:,0] = self.means[:,1]
-        self.means[:,1] = tmp
-        self.means[:,0] *= -1.
+
+        # The axes seem to be switched (most noticeably, the variance)
+        #tmp = self.means[:,0]
+        #self.means[:,0] = self.means[:,1]
+        #self.means[:,1] = tmp
         covars       = np.array(psfvec[9:]).reshape(3, 3)   # [var_k(x), var_k(y), cov_k(x,y)] per row
         self.covars  = np.zeros((3, 2, 2))
         for i in range(3):
-            self.covars[i,:,:] = np.array([[ covars[i,1], -covars[i,2]],
-                                           [-covars[i,2],  covars[i,0]]])
+            self.covars[i,:,:] = np.array([[ covars[i,0],  covars[i,2]],
+                                           [ covars[i,2],  covars[i,1]]])
 
     def equa2pixel(self, s_equa):
         x, y = self.wcs.wcs_world2pix(s_equa[0], s_equa[1], 1)
