@@ -15,7 +15,7 @@ import fitsio
 import numpy as np
 from scipy.misc import logsumexp
 from astropy.wcs import WCS
-from util.gmm_like import gmm_log_like
+from gmm_like import gmm_log_like
 
 def gen_model_image(srcs, image):
     """ gen_model_image: computes pixel-wise mean count values from only point sources
