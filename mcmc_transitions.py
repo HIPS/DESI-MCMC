@@ -75,8 +75,8 @@ def sampleAuxSourceCounts(srcs, img, eta, rand=None):
   """Returns an array of size S+1
   with u summed over pixels for this image"""
   rand = rand or np.random.RandomState()
-  src_patches = [NativePatch(src.getModelPatch(img)) for src in srcs]
-  image_data = img.getImage()
+  src_patches = [NativePatch(gen_model_image([src], img)) for src in srcs]
+  image_data = img.nelec
   return nativeSampleAuxSourceCounts(image_data, src_patches, eta, rand)
 
   # DEAD CODE - DO NOT EAT
@@ -139,7 +139,7 @@ def gibbsSampleBrightnesses(srcs, img, aPrior, bPrior, eta, rand=None):
       b = bPrior
       for img, uvec in band_imgs_uvecs[bandname]:
         # print "img", img.name
-        lam = src.getUnitFluxModelPatch(img, minval=0.).getPatch()
+        lam = gen_model_image([src], img)
         sumlam = np.sum(lam)
 
         # If we scale each lamba *up* by the photon scaling factor,
@@ -149,7 +149,7 @@ def gibbsSampleBrightnesses(srcs, img, aPrior, bPrior, eta, rand=None):
 
         # TODO: this feature detection isn't working, so just assume we're working in photons
         # if hasattr(img.getPhotoCal(), "getPhotonScalingFactor"):
-        sumlam = sumlam * img.getPhotoCal().getPhotonScalingFactor()
+        # sumlam = sumlam * img.getPhotoCal().getPhotonScalingFactor()
 
         # print "sumlam %f" % sumlam
         a += uvec[s]
