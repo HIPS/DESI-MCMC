@@ -5,7 +5,7 @@ from celeste import *
 from mcmc_utils import *
 from mcmc_transitions import *
 
-im = FitsImage('b')
+im = FitsImage('r')
 
 # MCMC step
 rand = np.random.RandomState(seed=89) # http://xkcd.com/221/

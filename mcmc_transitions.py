@@ -1,6 +1,5 @@
 from mcmc_utils import *
 from mcmc_utils import SDSS_BANDNAMES
-from mcmc_native_utils import *
 import numpy as np
 import re
 from tractor import *
@@ -75,13 +74,13 @@ def sampleAuxSourceCounts(srcs, img, eta, rand=None):
   """Returns an array of size S+1
   with u summed over pixels for this image"""
   rand = rand or np.random.RandomState()
-  src_patches = [NativePatch(gen_model_image([src], img)) for src in srcs]
+  src_patches = [gen_model_image([src], img) for src in srcs]
   image_data = img.nelec
-  return nativeSampleAuxSourceCounts(image_data, src_patches, eta, rand)
 
+  #return nativeSampleAuxSourceCounts(image_data, src_patches, eta, rand)
   # DEAD CODE - DO NOT EAT
 
-  src_extent_data = [(p.getExtent(), p.getImage()) for p in src_patches]
+  src_extent_data = [p.nelec for p in src_patches]
   S = len(srcs)
 
   probs = np.zeros(S+1) # scratch matrix
@@ -90,22 +89,21 @@ def sampleAuxSourceCounts(srcs, img, eta, rand=None):
   for (i,j), xij in np.ndenumerate(image_data):
     xij = int(xij) # rounding takes too long?
     probs[:] = 0
-    patch_intersected_img = False
-    for s, ((x0,x1,y0,y1), patch_data) in enumerate(src_extent_data):
+    # patch_intersected_img = False
+    # for s, patch_data in enumerate(src_extent_data):
       # x0,x1,y0,y1 = patch.getExtent() # doing these in the loop is long
       # patch_data = patch.getImage()
-      if j >= x0 and j < x1 and i >= y0 and i < y1:
-        patch_intersected_img = True
-        probs[s] = patch_data[j-x0, i-y0]
+      # if j >= x0 and j < x1 and i >= y0 and i < y1:
+      #  patch_intersected_img = True
+      #  probs[s] = patch_data[j-x0, i-y0]
 
-    if patch_intersected_img:
-      probs[S] = eta
-      probs /= np.sum(probs)
-      samples += rand.multinomial(xij, probs)
-    else:
+    probs[S] = eta
+    probs /= np.sum(probs)
+    samples += rand.multinomial(xij, probs)
+    #else:
       # No sources overlapped this patch,
       # so all photons must be attributed to noise.
-      samples[S] += xij
+    #  samples[S] += xij
   return samples
 
 def gibbsSampleBrightnesses(srcs, img, aPrior, bPrior, eta, rand=None):
@@ -133,39 +131,39 @@ def gibbsSampleBrightnesses(srcs, img, aPrior, bPrior, eta, rand=None):
     bright = src.b
     # BrightnessClass = bright.__class__ # probably tractor.NanoMaggies
     new_bright_dict = dict()
-    for bandname in SDSS_BANDNAMES:
-      # print "bandname",bandname
-      a = aPrior
-      b = bPrior
-      for img, uvec in band_imgs_uvecs[bandname]:
-        # print "img", img.name
-        lam = gen_model_image([src], img)
-        sumlam = np.sum(lam)
 
-        # If we scale each lamba *up* by the photon scaling factor,
-        # the mean of the gamma distribution is effectively divided by the
-        # (weighted) mean of the photon scaling factors,
-        # so that the brightness vector is sampled in units of nanomaggies!
+    bandname = img.band
+    a = aPrior
+    b = bPrior
+    for img, uvec in band_imgs_uvecs[bandname]:
+      # print "img", img.name
+      lam = gen_model_image([src], img)
+      sumlam = np.sum(lam)
 
-        # TODO: this feature detection isn't working, so just assume we're working in photons
-        # if hasattr(img.getPhotoCal(), "getPhotonScalingFactor"):
-        # sumlam = sumlam * img.getPhotoCal().getPhotonScalingFactor()
+      # If we scale each lamba *up* by the photon scaling factor,
+      # the mean of the gamma distribution is effectively divided by the
+      # (weighted) mean of the photon scaling factors,
+      # so that the brightness vector is sampled in units of nanomaggies!
 
-        # print "sumlam %f" % sumlam
-        a += uvec[s]
-        b += sumlam
+      # TODO: this feature detection isn't working, so just assume we're working in photons
+      # if hasattr(img.getPhotoCal(), "getPhotonScalingFactor"):
+      # sumlam = sumlam * img.getPhotoCal().getPhotonScalingFactor()
+
+      # print "sumlam %f" % sumlam
+      a += uvec[s]
+      b += sumlam
 
       # print "a,b",a,b
-      sampled = rand.gamma(a, 1/b)
+    sampled = rand.gamma(a, 1/b)
 
-      new_bright_dict[bandname] = sampled
+    new_bright_dict[bandname] = sampled
     # print new_bright_dict
 
     # We need to explicitly save brightnesses as NanoMaggies,
     # even if the source brightness was of a different type.
     # TODO: Make sure this is setting them as nanomaggies, not as log-scale mags!
     # Possibly use NanoMaggies.fromMags(Mags(**new_bright_dict))?
-    src.setBrightness(NanoMaggies(**new_bright_dict))
+    src.b = new_bright_dict
   return srcs
 
 # Some utility functions for loops

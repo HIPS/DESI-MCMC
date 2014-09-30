@@ -25,51 +25,24 @@ def enumerate_pairs(L):
 
 SDSS_BANDNAMES = ['u','g','r','i','z']
 
-class PhotonScaledPhotoCal(ScaledPhotoCal):
-  """
-  When this is used to wrap a PhotoCal instance in a Tractor,
-  things like `tractor.getModelImage(img)` will be output in
-  terms of photon numbers, not nanomaggies as would normally be the case.
-  See its usage in `loadTractorSingleImage`.
-
-  Its custom method `getPhotonScalingFactor` can be used to divide
-  photon numbers (from inference) into nanomaggies that can be passed
-  into constructors for Brightness instances, etc.
-  """
-  def getPhotonScalingFactor(self):
-    "Nanomaggies are multiplied by this to get photon numbers."
-    return self.factor
-
-# TODO: we might use the neighborhood around the pixel
-def sourceBrightnessEstimate(image, image_data, i, j):
-  # return image_data[i,j]
-  val = np.max(image_data)
-  # if isinstance(image.getPhotoCal(), PhotonScaledPhotoCal):
-  val = val / image.getPhotoCal().getPhotonScalingFactor()
-  return val
-
-def getFirstImgWithBand(tractor, bandname):
-  for img in tractor.getImages():
-    if getBandNameForImage(img) == bandname:
+def getFirstImgWithBand(imgs, bandname):
+  for img in imgs:
+    if imgs.band == bandname:
       return img
   raise Exception("Tractor must have an image in band %s" % bandname)
 
-def initializeTractor(tractor, threshold=10):
-  tractor.setCatalog(Catalog())
-
-  timg = getFirstImgWithBand(tractor, 'r')
-  data = timg.getImage()
-
+def initializeSources(srcs, img, percentile=90):
+  data = img.nelec
   from ndimage_utils import generate_peaks
 
-  for x, y in generate_peaks(data, threshold=threshold):
-    pos = timg.getWcs().pixelToPosition(x, y)
+  for x, y in generate_peaks(data, threshold=np.percentile(data, 90)):
+    pos = img.pixel2equa(y, x)
     kwargs = {}
     for band in SDSS_BANDNAMES:
-      kwargs[band] = sourceBrightnessEstimate(timg, data, y, x)
+      kwargs[band] = data[x, y]
     # print kwargs
-    bright = NanoMaggies(**kwargs)
-    tractor.addSource(PointSource(pos, bright))
+    # TODO(albertwu): how do we measure temperature?
+    srcs.append(PointSrcParams(pos, kwargs, 0))
 
   # for i in range(len(data[:,1])):
   #   for j in range(len(data[1,:])):
@@ -82,15 +55,6 @@ def initializeTractor(tractor, threshold=10):
   #       print kwargs
   #       bright = NanoMaggies(**kwargs)
   #       tractor.addSource(PointSource(pos, bright))
-
-# sdss.py:742 and sdss.py:1070 have:
-# name=('SDSS (r/c/f/b=%i/%i/%i/%s)' % (run, camcol, field, bandname))
-_bandNameRegex = re.compile(r"([ugriz])\s*\)\s*$", flags=re.IGNORECASE)
-def getBandNameForImage(img):
-  try:
-    return img.getPhotoCal().bandname
-  except:
-    return _bandNameRegex.search(img.name).group(1)
 
 def createImageDifference(filename, im1, im2):
   diff = im2 - im1
