@@ -16,7 +16,7 @@ def sliceSampleSourceSingleAxis(srcs, im, index, axis=0, w=1e-6, m=100, rand=Non
   rand = rand or np.random.RandomState()
   src = srcs[index]
   orig_pos_obj = src.u.copy()
-  orig_pos = orig_pos_obj.getParams()
+  orig_pos = src.u.copy()
   pos_obj = src.u # in-place
 
   # From this point, we use the notation in Neal (2003).
@@ -80,7 +80,6 @@ def sampleAuxSourceCounts(srcs, img, eta, rand=None):
   #return nativeSampleAuxSourceCounts(image_data, src_patches, eta, rand)
   # DEAD CODE - DO NOT EAT
 
-  src_extent_data = [p.nelec for p in src_patches]
   S = len(srcs)
 
   probs = np.zeros(S+1) # scratch matrix
@@ -118,7 +117,7 @@ def gibbsSampleBrightnesses(srcs, img, aPrior, bPrior, eta, rand=None):
   band_imgs_uvecs = dict([(n,[]) for n in SDSS_BANDNAMES])
 
   print "Sampling auxiliary source counts for image"
-  bandname = getBandNameForImage(img)
+  bandname = img.band
   uvec = sampleAuxSourceCounts(srcs, img, eta=eta, rand=rand)
   band_imgs_uvecs[bandname].append((img, uvec))
 

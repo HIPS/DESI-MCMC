@@ -11,6 +11,7 @@ im = FitsImage('r')
 rand = np.random.RandomState(seed=89) # http://xkcd.com/221/
 
 srcs = []
+initializeSources(srcs, im) 
 Niters = 2
 logprobs = np.zeros(Niters + 1)
 logprobs[0] = celeste_likelihood(srcs, im)

@@ -140,7 +140,7 @@ class FitsImage():
           - nelec = NxM array : number of electrons corresponding to each 
                                 pixel, indexed nelec[y, x]
     """
-    def __init__(self, band, fits_file_template="../data/blobs/stamp-%s-130.1765-52.7501.fits"): 
+    def __init__(self, band, fits_file_template="data/stamps/stamp-%s-130.1765-52.7501.fits"): 
         self.band      = band
         self.band_file = fits_file_template%band
         self.img       = fitsio.read(self.band_file)

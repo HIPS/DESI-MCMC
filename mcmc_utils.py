@@ -6,6 +6,7 @@ from astrometry.sdss import * #DR7, band_name, band_index
 import time
 from scipy.special import gammaln
 from scipy.ndimage.interpolation import shift
+from celeste import *
 
 class Timing:
   def __init__(self, name="(unnamed)"):
@@ -36,7 +37,7 @@ def initializeSources(srcs, img, percentile=90):
   from ndimage_utils import generate_peaks
 
   for x, y in generate_peaks(data, threshold=np.percentile(data, 90)):
-    pos = img.pixel2equa(y, x)
+    pos = img.pixel2equa([y, x])
     kwargs = {}
     for band in SDSS_BANDNAMES:
       kwargs[band] = data[x, y]
