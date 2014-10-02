@@ -11,7 +11,10 @@ im = FitsImage('r')
 rand = np.random.RandomState(seed=89) # http://xkcd.com/221/
 
 srcs = []
-initializeSources(srcs, im) 
+initializeSources(srcs, im)
+createImageDifference("initialize_im_diff_%d.png", im.nelec, gen_model_image(srcs, im).copy())
+print len(srcs)
+
 Niters = 2
 logprobs = np.zeros(Niters + 1)
 logprobs[0] = celeste_likelihood(srcs, im)
@@ -28,10 +31,10 @@ for it in xrange(Niters):
 
     for i in xrange(len(srcs)):
         # TODO: randomize order
-        sliceSampleSourceSingleAxis(srcs, i, 0, rand=rand)
-        sliceSampleSourceSingleAxis(srcs, i, 1, rand=rand)
+        sliceSampleSourceSingleAxis(srcs, im, i, 0, rand=rand)
+        sliceSampleSourceSingleAxis(srcs, im, i, 1, rand=rand)
 
-    im3 = gen_model_image(src, im).copy()
+    im3 = gen_model_image(srcs, im).copy()
     createImageDifference("slice_im_diff_%d.png" % it, im2, im3)
 
     #if rand.rand() > 0.5:

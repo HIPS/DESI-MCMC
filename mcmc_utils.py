@@ -32,11 +32,11 @@ def getFirstImgWithBand(imgs, bandname):
       return img
   raise Exception("Tractor must have an image in band %s" % bandname)
 
-def initializeSources(srcs, img, percentile=90):
+def initializeSources(srcs, img, percentile=99):
   data = img.nelec
   from ndimage_utils import generate_peaks
 
-  for x, y in generate_peaks(data, threshold=np.percentile(data, 90)):
+  for x, y in generate_peaks(data, threshold=np.percentile(data, percentile)):
     pos = img.pixel2equa([y, x])
     kwargs = {}
     for band in SDSS_BANDNAMES:
