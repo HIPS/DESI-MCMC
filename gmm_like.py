@@ -2,20 +2,21 @@ import numpy as np
 from scipy.misc import logsumexp
 
 def multivariate_normal_logpdf(x, mean, cov):
-    k = np.shape(mean)[0]
-    inv_cov = np.linalg.inv(cov)
-    det = np.linalg.det(cov)
-    x_shift = x - mean
-    quad_form = np.dot(np.dot(x_shift, inv_cov), np.transpose(x_shift))
-    return -0.5 * (np.log((2*np.pi)**k * det) + quad_form)
+    """ Log density of a multivariate normal distribution 
+        Input:
+          - x  : N x D array of data (N iid)
+          - mu : D length vector, mean values
+          - cov: D x D array, covariance
+    """
+    D          = np.shape(mean)[0]
+    inv_cov    = np.linalg.inv(cov)
+    sign, ldet = np.linalg.slogdet(cov)
+    x_shift    = x - mean
+    quad_form  = (x_shift * np.linalg.solve(cov, x_shift.T).T).sum(axis=1)
+    return -.5 * D * np.log(2*np.pi) - .5 * np.abs(ldet) - 0.5 * quad_form
 
 def multivariate_normal_pdf(x, mean, cov):
-    k = np.shape(mean)[0]
-    inv_cov = np.linalg.inv(cov)
-    det = np.linalg.det(cov)
-    x_shift = x - mean
-    quad_form = np.dot(np.dot(x_shift, inv_cov), np.transpose(x_shift))
-    return 1 / (np.sqrt((2*np.pi)**k * det)) * np.exp(-0.5 * quad_form)
+    return np.exp(multivariate_normal_logpdf(x, mean, cov))
 
 def gmm_log_like(x, ws, mus, sigs):
     """ Gaussian Mixture Model likelihood
@@ -33,9 +34,12 @@ def gmm_log_like(x, ws, mus, sigs):
     N_elem = np.atleast_1d(x).shape[0] # number of rows of data
     ll = np.zeros((N_elem, len(ws)))
     for k in range(len(ws)):
-        for n in range(N_elem):
-            ll[n, k] = multivariate_normal_logpdf(x[n,:], mean=mus[k,:], cov=sigs[k,:,:]) + np.log(ws[k])
+        #for n in range(N_elem):
+        #    ll[n, k] = multivariate_normal_logpdf(x[n,:], mean=mus[k,:], cov=sigs[k,:,:]) + np.log(ws[k])
         #ll[:, k] = multivariate_normal(mean=mus[k,:], cov=sigs[k,:,:]).logpdf(x) + np.log(ws[k])
+        ll[:, k] = multivariate_normal_logpdf(x,
+                                              mean = mus[k,:],
+                                              cov  = sigs[k,:,:]) + np.log(ws[k])
     return logsumexp(ll, axis=1)
 
 
@@ -62,11 +66,11 @@ if __name__ == "__main__":
   axarr[0].contour(xx, yy, np.exp(zz))
 
   ## unstable test for comparison
-  ll = np.zeros((X.shape[0], len(ws)))
-  for k in range(len(ws)):
-    for n in range(X.shape[0]):
-      ll[n,k] = multivariate_normal_pdf(X[n, :], mean=means[k,:], cov=covs[k,:,:])*ws[k]
-  ll = ll.sum(axis=1).reshape(xx.shape)
-  axarr[1].contour(xx, yy, ll)
+  #ll = np.zeros((X.shape[0], len(ws)))
+  #for k in range(len(ws)):
+  #  for n in range(X.shape[0]):
+  #    ll[n,k] = multivariate_normal_logpdf(X[n, :], mean=means[k,:], cov=covs[k,:,:])*ws[k]
+  #ll = ll.sum(axis=1).reshape(xx.shape)
+  #axarr[1].contour(xx, yy, np.exp(ll))
 
   plt.show()

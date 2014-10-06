@@ -17,9 +17,9 @@ hpicc2 = 2 * np.pi * h * c * c
 
 #Stefan-Boltzmann constant
 sigma       = 2 * np.pi**5 * k**4 / (15 * c**2 * h**3)  # J / (s * m^2 * K^4)
-sun_wattage = 3.839 * 1e26
-sun_radius  = 6.995e8
-m_per_ly    = c * 31556952.
+sun_wattage = 3.846 * 1e26    # Luminosity of the sun (Joules / Second)
+sun_radius  = 6.995e8         # Radius of the sun (meters)
+m_per_ly    = c * 31556952.   # meters in a light year
 lens_area   = .75 * np.pi * 1.25**2 # in meters^2
 exposure_duration = 54.
 bands       = ['u', 'g', 'r', 'i', 'z']
@@ -53,7 +53,7 @@ def photons_per_joule(T, band):
             - T
             - band: string in bands
     """
-    x                  = wavelength_lookup[band]
+    x = wavelength_lookup[band]
     if len(x) == 0: 
       raise Exception('Band band: %s'%band)
 
@@ -62,8 +62,8 @@ def photons_per_joule(T, band):
     total_radiance     = sigma * np.power(T, 4.) #across bands, per m^2
     radiance_densities = radiances / total_radiance
 
-    photon_energies = (h * c / x) # Joules
-    photon_fluxes = radiance_densities / photon_energies
+    photon_energies = (h * c / x) # Photon energy for each wavelength (in Joules)
+    photon_fluxes   = radiance_densities / photon_energies
     filtered_photon_fluxes = photon_fluxes * sensitivity_lookup[band]
 
     avg_photons = np.mean(filtered_photon_fluxes) #per hertz
@@ -71,10 +71,10 @@ def photons_per_joule(T, band):
     return avg_photons * range #approximates the integral
 
 def photons_expected(T, solar_L, d, band):
-    L          = solar_L * sun_wattage
-    D          = d * m_per_ly
-    lens_prop  = lens_area / (4*np.pi * D**2)
-    lens_watts = lens_prop * L
+    L          = solar_L * sun_wattage          # Joules/Seconds of source
+    D          = d * m_per_ly                   # Distance of source
+    lens_prop  = lens_area / (4*np.pi * D**2)   # proportion if energy captured by lens at distance D
+    lens_watts = lens_prop * L                  # Joules/Seconds of source => lens
     return photons_per_joule(T, band) * lens_watts * exposure_duration
 
 # for testing
@@ -99,10 +99,10 @@ if __name__=="__main__":
   print "%2.2e"%photons_expected(4290., 170., 36.7, 'r')  ### 1e12 photons in the r band?
 
   # a supergiant on the edge of the milky way?
-  # photons_expected(3602., 400000., 90e3) ### 4e8 photons in the r band?
+  print "%2.2e"%hotons_expected(3602., 400000., 90e3) ### 4e8 photons in the r band?
 
   # our sun at the edge of the milky way?
-  # photons_expected(6000., 1., 90e3) ### 1685 photons in the r band?
+  print "%2.2e"%photons_expected(6000., 1., 90e3) ### 1685 photons in the r band?
 
 
 
