@@ -34,9 +34,6 @@ def gmm_log_like(x, ws, mus, sigs):
     N_elem = np.atleast_1d(x).shape[0] # number of rows of data
     ll = np.zeros((N_elem, len(ws)))
     for k in range(len(ws)):
-        #for n in range(N_elem):
-        #    ll[n, k] = multivariate_normal_logpdf(x[n,:], mean=mus[k,:], cov=sigs[k,:,:]) + np.log(ws[k])
-        #ll[:, k] = multivariate_normal(mean=mus[k,:], cov=sigs[k,:,:]).logpdf(x) + np.log(ws[k])
         ll[:, k] = multivariate_normal_logpdf(x,
                                               mean = mus[k,:],
                                               cov  = sigs[k,:,:]) + np.log(ws[k])
