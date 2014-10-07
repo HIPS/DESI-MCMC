@@ -16,6 +16,53 @@ import numpy as np
 from scipy.misc import logsumexp
 from astropy.wcs import WCS
 from gmm_like import gmm_log_like
+from planck import photons_expected
+
+def gen_src_image(src, image):
+    """ Generates expected photon image for a single point source.  Multiple
+        model images (and the 'sky' term) will add together to form an
+        expected image for a single observed image.
+          - src   : single PointSrcParam object
+          - image : FitsImage object
+    """
+    # 0. Compute expected photon count for this image from source
+    if src.b[image.band] is not None: 
+        expected_photons = src.b[image.band] / image.calib
+    elif src.ell is not None and src.t is not None:
+        c_L   = .25 * .75 * 1.25**2 * 54
+        expected_photons = planck.photons_expected(src.t,
+                                                   src.ell,
+                                                   src.d,
+                                                   image.band)
+
+    # compute pixel space location of source
+    # returns the X,Y = Width, Height pixel coordinate corresponding to u
+    v_s = image.equa2pixel(src.u)
+
+    # TODO: turn this into a convolution
+    # compute pixel space location, v_{n,s}
+    y_grid = np.arange(image.nelec.shape[0]) + 1
+    x_grid = np.arange(image.nelec.shape[1]) + 1
+    yy, xx = np.meshgrid(x_grid, y_grid, indexing='xy')
+    f_s    = np.exp(gmm_log_like(np.column_stack((xx.ravel(), yy.ravel())),
+                                 image.weights,
+                                 image.means + v_s,
+                                 image.covars).reshape(xx.shape)).T
+
+    # slow for sanity check
+    #for x in range(image.nelec.shape[1]): 
+    #    for y in range(image.nelec.shape[0]):
+    #        pix_val = np.exp(gmm_log_like(np.array([[x,y]]),
+    #                                      image.weights,
+    #                                      v_s + image.means,
+    #                                      image.covars))
+    #        assert np.abs(pix_val - f_s[s,y,x]) < 1e-5
+
+    # Might want to insert a check so that f_s.sum() is close to one (or 
+    # f_s.sum() * dA is close to one - otherwise some of your point spread
+    # mass will fall off the image, and you're neighboring image will probably 
+    # have some unexplained boosting of their counts
+    return f_s * expected_photons
 
 def gen_model_image(srcs, image):
     """ gen_model_image: computes pixel-wise mean count values from only point sources
@@ -29,65 +76,43 @@ def gen_model_image(srcs, image):
 
         Author: Andy Miller <acm@seas.harvard.edu>
     """
-    f_s = np.zeros((len(srcs), image.shape[0], image.shape[1]))
+    f_s = np.zeros((image.nelec.shape))
     for s, src in enumerate(srcs):
+        f_s += gen_src_image(src, image)
 
-        # compute pixel space location of source
-        # returns the X,Y = Width, Height pixel coordinate corresponding to u
-        v_s = image.equa2pixel(src.u) #+ np.array([0, -2])
-
-        # TODO: turn this into a convolution or something...
-        # compute pixel space location, v_{n,s}
-        zmeans = np.zeros(image.means.shape)
-        y_grid     = np.arange(image.nelec.shape[0]) + 1
-        x_grid     = np.arange(image.nelec.shape[1]) + 1
-        yy, xx     = np.meshgrid(x_grid, y_grid, indexing='xy')
-        f_s[s,:,:] = np.exp(gmm_log_like(np.column_stack((xx.ravel(), yy.ravel())) - v_s,
-                                         image.weights,
-                                         image.means,
-                                         image.covars).reshape(xx.shape)).T
-
-        # slow for sanity check
-        #for x in range(image.nelec.shape[1]): 
-        #    for y in range(image.nelec.shape[0]):
-        #        pix_val = np.exp(gmm_log_like(np.array([[x,y]]),
-        #                                      image.weights,
-        #                                      v_s + image.means,
-        #                                      image.covars))
-        #        assert np.abs(pix_val - f_s[s,y,x]) < 1e-5
-
-        # compute the band-specific temperature multiplier for this source
-        ## I_band_s = 
-        ## f_s[s,:,:] *= I_band_s
-
-        # multiply by band-specific brightness.  Brightness values are 
-        # stored in nanomaggies, so divide by the image calibration to 
-        # convert to counts (acm)
-        f_s[s,:,:] *= (src.b[image.band] / image.calib)
-
-    # Plug f_s and I_band into 
-    return image.kappa * (image.epsilon + np.sum(f_s, axis=0))
-
+    # offset image by epsilon and boost image by kappa value
+    return image.kappa * (image.epsilon + f_s)
 
 def celeste_likelihood(srcs, image):
     """ Evaluates the likelihood of a set of hypothesis sources given an image """
     lambdas = gen_model_image(srcs, image)
-    return np.sum(image.nelec[:] * np.log(lambdas) - lambdas)  #Poisson Likelihood
+    return np.sum(image.nelec * np.log(lambdas) - lambdas)  #Poisson Likelihood
 
+class PointSrcParams():
+    """ Point source parameter object
+        Input:
+          u : 2-d np.array holdin right ascension and declination
+          b : python dictionary such that b['r'] = brightness value for 'r'
+              band.  Note that this is essentially the expected number
+              of photons to enter the lens and be recorded by a given band
+              over the length of one exposure (typically 1.25^2 meters^2 size
+              lens and 54 second exposure)
 
-class PointSrcParams(): 
-    """ Point source parameter object. 
-        Input: 
-          u : 2-d np.array holdin right ascension and declination 
-          b : python dictionary such that b['r'] = brightness value for 'r' band
-          t : temperature of source
+              This will be kept in nanomaggies (must be scaled by 
+              image calibration). If this is present, it takes priority
+              over the combo of the next few parameters
+
+          t : effective temperature of source (in Kelvin)
+          ell : luminosity of source (in Suns)
+          d : distance to source (in light years)
     """
-    def __init__(self, u, b, t, header=None): 
+    def __init__(self, u, b, t=None, ell=None, d=None, header=None): 
         self.u = u
         self.b = b
         self.t = t
+        self.ell = ell
+        self.d = d
         self.header = header
-
 
 def get_sources_from_catalog(cat_file):
     """ Takes a catalog fits file and returns a python list of PointSrcParam Objects. 
@@ -101,9 +126,9 @@ def get_sources_from_catalog(cat_file):
     catalog_srcs = []
     for src_info in cat_data: 
         src_info = [s for s in src_info]
-        src = PointSrcParams(u = src_info[0:2], 
-                             b = dict(zip(keys, src_info[2:])), 
-                             t = None, 
+        src = PointSrcParams(u = np.array(src_info[0:2]),
+                             b = dict(zip(keys, src_info[2:])),
+                             t = None,
                              header = cat_header)
         catalog_srcs.append(src)
     return catalog_srcs
@@ -170,22 +195,9 @@ class FitsImage():
         self.calib   = header['CALIB']    # dn = nmaggies / calib, calib is NMGY
 
         # point spread function
-        # TODO: Weird things happening with point spread function
-        #   - Are the x/y in the mean0x, var0xx, etc. in the header file 
-        #     really x,y?  Or are they reversed? They seem reversed... for 
-        #     instance, var0[x,x] and var0[y,y] are definitely reversed with
-        #     respect to observed spread
-        #   - The covariance between x and y also seem to be negated in order 
-        #     to yield patterns similar to the observed behavior.  
-        #
-        psfvec = [header['PSF_P%d'%i] for i in range(18)]
+        psfvec       = [header['PSF_P%d'%i] for i in range(18)]
         self.weights = np.array(psfvec[0:3])
         self.means   = np.array(psfvec[3:9]).reshape(3, 2)  # one comp mean per row
-
-        # The axes seem to be switched (most noticeably, the variance)
-        #tmp = self.means[:,0]
-        #self.means[:,0] = self.means[:,1]
-        #self.means[:,1] = tmp
         covars       = np.array(psfvec[9:]).reshape(3, 3)   # [var_k(x), var_k(y), cov_k(x,y)] per row
         self.covars  = np.zeros((3, 2, 2))
         for i in range(3):

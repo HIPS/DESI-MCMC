@@ -1,0 +1,159 @@
+\documentclass[11pt]{article}
+
+\setlength\parindent{0pt}
+\setlength{\parskip}{.25\baselineskip}
+
+\usepackage{hyperref}
+\usepackage{amsmath,amsfonts,amssymb,bbm}
+\usepackage{todonotes}
+
+\DeclareMathOperator{\Tr}{Tr}
+
+\newcommand{\R}{\mathbbm{R}}
+\newcommand{\mba}{\mathbf{a}}
+\newcommand{\mbb}{\mathbf{b}}
+\newcommand{\mbx}{\mathbf{x}}
+\newcommand{\mbxt}{\tilde{\mathbf{x}}}
+\newcommand{\Sigmat}{\tilde{\Sigma}}
+\newcommand{\mbz}{\mathbf{z}}
+\newcommand{\mbw}{\mathbf{w}}
+\newcommand{\mcN}{\mathcal{N}}
+\newcommand{\mcP}{\mathcal{P}}
+\newcommand{\eps}{\epsilon}
+\newcommand{\trans}{\intercal}
+\newcommand{\Ut}{\tilde{U}}
+
+\title{Methods for Astronomical Source Discovery and Separation}
+\author{}
+\date{\today}
+
+%% DOC START
+\begin{document}
+\maketitle
+
+The goal of this project is to develop reliable inference techniques to simultaneously discover and characterize properties of distant stars and galaxies from a massive database of photometric imagery.  
+
+We define notation: 
+\begin{itemize} \itemsep 0pt
+\item $s \in \{1, \dots, S\}$ will index unique sources (stars or galaxies)
+\item $n \in \{1, \dots, N\}$ will index unique images
+\item $\beta_n \in \{r, \dots, z\}$ will stand for the band of image $n$
+\end{itemize}
+
+For each source, we define the following \emph{intrinsic} properties, which are the estimands of interest: 
+\begin{align*}
+  u_s &= (u_{s,ra}, u_{s,dec}) = \text{right ascension and declination of source $s$} \\
+  t_s &= \text{temerpature of source $s$ (kelvin)} \\
+  d_s &= \text{distance to source $s$ (meters)} \\
+  \ell_s &= \text{luminosity of source $s$ (Joules/second)} 
+\end{align*}
+
+This paper describes a probabilistic model-based approach to inferring these quantities of interest.  We treat the observed pixel values as random variables, and describe a (stochastic) forward generating procedure based on the properties of these sources (the likelihood), as well as an a priori distribution over the properties themselves (the prior), and use Bayesian inference and Markov Chain Monte Carlo techniques to draw simulations from the posterior.  To understand the likelihood, we first outline the physical motivation underlying our model.  
+
+\section{Computing the expected number of photons}
+The random variable that gives rise to our likelihood and motivates probabilistic inference in this problem is the number of photo-electrons detected by the instrument with a lens of a fixed size (area) over a fixed exposure length (duration).  According to our idealized model, this random variable is Poisson distributed conditioned on the intrinsic properties of a source.  To describe our observations, we need to outline the procedure by which the band-specific flux images are generated.  
+
+To compute how many photo-electrons we expect to be captured by a lens of size $A$ over exposure duration $\Delta$, we must compute the number of photons that will eventually be intercepted by the instrument as a function of the source's distance, luminosity, and temperature.  Geometrically, we can view the source as a single point in space at a distance $d_s$, which radiates energy uniformly outward, such that the level sets of equal radiation form a sphere.  We can think of the area of the lens of the instrument as some fraction of the total surface area of this sphere, which is, roughly
+\begin{align}
+  \frac{A}{4\pi d_s^2} &= \text{ proportion of surface area detected }
+\end{align}
+If a source is emitting $\ell_s$ Joules per second, the amount of energy that actually is detected by the instrument dissipates as the proportion of surface area decreases, which falls off $\frac{1}{d_s^2}$ as a function of distance (e.g. if we had a `lens' that formed a perfect sphere around the black body, we could effectively measure all $\ell_s \Delta$ Joules for an exposure of length $\Delta$).  
+
+To obtain the total number photo-electrons we expect to detect in band $\beta_n$, we need to compute how much of a black body's energy is distributed within the spectrum recorded by $\beta_n$ \emph{and} account for how our instrument filters $\beta_n$ over a chunk of the energy spectrum (non-uniformly, see Figure~\ref{fig:sensitivity}).
+
+Intuitively, we can do this by computing the photon flux as a function of source temperature and wavelength, and then integrate this value times the sensitivity curve to obtain the total amount of energy we expect the black body to emit per unit area per unit time.  
+\begin{align}
+  \text{\# P-E detectable in band $\beta_n$} &= p_{\beta_n}(t_s, S_\lambda) \cdot \ell_s \frac{A \Delta}{4\pi d_s^2}  
+  \label{eq:brightness}
+\end{align}
+which reads the number of photo-electrons detectable by our instrument in band $\beta_n$ due to a single source $s$ is simply the number of photons we expect to see per unit energy that a source at temperature $t_s$ emits in band $\beta_n$ (modulated by our instrument filter $S_\lambda$) times the total luminosity of the source (energy emitted per second) times the fraction of the sphere at distance $d_s$ we can actually detect times the duration of exposure.  
+
+The simple geometric approximation for $\frac{ A \Delta }{ 4 \pi d_s^2 }$ will suffice for that term.  To compute $p_{\beta_n}(t_s, S_\lambda)$, we must compute the spectral energy density of an idealized black body, for which we appeal to Planck's law. 
+
+\begin{figure}[t!]
+\begin{align*}
+  B(t_s, \lambda) &= \frac{2 \pi h c^2}{\lambda^5 (e^{\frac{hc}{k} \frac{1}{\lambda t_s}}-1)} \frac{1}{\sigma t_s^4} \\
+  E(\lambda) &= \frac{hc}{\lambda} \\
+  S(\lambda) &= \text{ instrument sensitivity - lookup table } \\
+  A &= \text{ lens area (meters$^2$) } \\
+  \Delta  &= \text{ exposure duration (seconds) } \\
+  c &= \text{ speed of light (meters / second) } \\
+  h &= \text{ Planck constant } \\
+  k &= \text{ Boltzmann constant } \\
+  \sigma &= \text{ Stefan-Boltzmann constant } 
+\end{align*}
+\caption{Relevant physical relationships and constants}
+\end{figure}
+
+\subsection{Planck's Law}
+Our goal is characterize the distribution of energy radiated by an idealized black body as a function of definite temperature and wavelength, which is the relationship described by Planck's law, which tells us that the spectral radiance is given by
+\begin{align}
+  B(t, \lambda) &= \frac{2 h c^2}{\lambda^5} \frac{1}{ e^{\frac{hc}{\lambda k_B t}} - 1}
+\end{align}
+which is in units of Watts per steradian per meter$^2$ per wavelength unit.  Intuitively, this describes the amount of energy the black body emits per unit time per unit area per solid angle. 
+
+The total radiance across all wavelengths per square meter per steradian is given by the Stefan-Boltzmann law, which is easily computed as 
+\begin{align}
+  P(t) = \frac{\sigma}{\pi} t^4 \text{  in J / (s $\cdot$ m$^2$ $\cdot$ str) } 
+\end{align}
+which is obtainable if you integrate the relationship in Planck's law over wavelength.  Simply dividing the two relationships gives you the energy density, or the \emph{distribution} of energy over the spectrum you expect the black body to exhibit.  At this point, we must convert flux in Watts (Joules/second) into flux in photo-electron counts, which is given to us by the relationship \todo{what's this called?}
+\begin{align}
+  E(\lambda) &= \frac{h c}{\lambda} \text{ in J / photon }
+\end{align}
+Now we must consider the sensitivity of our instrument with respect to wavelength, which allows us to compute our per-wavelength photo-electron fluxes (counts per unit time) as 
+\begin{align}
+  F(t, \lambda) &= \frac{B(t, \lambda)}{P(t)} \frac{S_{\beta_n}(\lambda)}{E(\lambda)} 
+\end{align}
+where $S_{\beta_n}(\lambda)$ is the sensitivity filter for band $\beta_n$, which is a function of $\lambda$ with range in the unit interval.  The above value is the number of photons detected by our sensor per unit wavelength.  
+
+Finally, integrating over wavelength (which will be approximated numerically) will yield the expected number of photo-electrons detected by our instrument in a given band from a source 
+\begin{align}
+  p_{\beta_n}(t_s, S_\lambda) &= \int_{\beta_n} \frac{B(t_s, \lambda)}{P(t_s)} \frac{S_{\beta_n}(\lambda)}{ E(\lambda)} d\lambda
+  \label{eq:photojoules}
+\end{align}
+which gives us the number of photo-electrons per Joule we expect to see from the source in band $\beta_n$.  This is \emph{almost} the random variable we actually observe.  These photo-electrons are then spread out by the instrument according to a calibrated point-spread function (PSF).  The PSF model is known, and will finally relate the observed pixel values to the source's intrinsic properties. 
+
+We can express the numerical integration as a dot product
+\begin{align}
+  \hat p_{\beta_n}(t_s) &= \mathbf{f}_{t_s}^\trans \mathbf{h_{\beta_n}} \\
+  \mathbf{f}_{t_s}     &= (B(t_s, \lambda_1)/P(t_s), \dots, B(t_s, \lambda_L)/P(t_s)) \\ 
+  \mathbf{h}_{\beta_n} &= (S_{\beta_n}(\lambda_1)d\lambda / E(\lambda_1), \dots, S_{\beta_n}(\lambda_L)d\lambda / E_{\lambda_L}) 
+\end{align}
+which will be a convenient representation when we differentiate the likelihood with respect to $t_s$.  
+
+\subsection{Putting it together}
+We can now compute the brightness of a source as observed in an image by combining Equation~\ref{eq:brightness} with Equation~\ref{eq:photojoules} to yield
+\begin{align}
+  b(t_s, d_s, \ell_s, \beta_n) &= p_{\beta_n}(t_s, S_\lambda) \cdot \ell_s \frac{A \Delta}{4\pi d_s^2}  
+\end{align}
+giving us the `brightness' of a source $s$ as observed by image $n$. 
+
+\begin{figure}[t!]
+\includegraphics[width=\textwidth]{imgs/filter_sensitivity.pdf}
+\caption{Instrument filter sensitivity curves in each band.  The amount of energy (i.e. number of photo-electrons detected) are are not collected uniformly across the range of wavelengths detected in each band - they are scaled according to these curves.  The total count for each band will be the integral of number of photo-electrons detected in each wavelength (energy level), scaled by these curves. }
+\label{fig:sensitivity}
+\end{figure}
+
+
+\section{From Sources to Pixel Observations}
+An image $n$ corresponds to measurements in one band, $\beta_n$, and consists of pixels locations $m = (x,y)$.  The total number of photons we expect to observe in image $n$ is simply the sum of the contribution we expect to see from each source, described above.  However, this total number is distributed about the pixels of the image according to the image's point spread function (PSF).  For image $n$ (with only point sources), pixel $m = (x,y)$, the distribution over photon count is modeled
+\begin{align}
+  x_{n,m} | \dots &\sim \textrm{Poisson}( F_{n,m} ) \\
+  F(n,m) &= \epsilon_n + \sum_{s=1}^S b(t_s, d_s, \ell_s, \beta_n) f_s(m) \\
+  \epsilon_n &\sim \textrm{Gamma}(\alpha, \beta) \text{ (unexplained counts in image $n$) } \\
+  b(t_s, d_s, \ell_s, \beta_n) &= \mathbf{f}_{t_s}^\trans \mathbf{h_{\beta_n}} \cdot \ell_s \frac{A \Delta}{4\pi d_s^2}  \\
+  f_s(m)  &= \sum_{k=1}^3 w_{n,k} \phi(m; v_{n,s} + \mu_{n,k}, \Sigma_{n,k}) \\
+  v_{n,s} &= \Upsilon_n(u_s - \phi_n) + \rho_n = \text{ pixel location of source } 
+\end{align}
+ 
+
+
+
+
+
+
+
+
+
+
+\end{document}
