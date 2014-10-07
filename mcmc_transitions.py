@@ -74,7 +74,7 @@ def sampleAuxSourceCounts(srcs, img, eta, rand=None):
   """Returns an array of size S+1
   with u summed over pixels for this image"""
   rand = rand or np.random.RandomState()
-  src_patches = [gen_model_image([src], img) for src in srcs]
+  src_patches = [gen_source_image(src, img) for src in srcs]
   image_data = img.nelec
 
   #return nativeSampleAuxSourceCounts(image_data, src_patches, eta, rand)
@@ -83,7 +83,7 @@ def sampleAuxSourceCounts(srcs, img, eta, rand=None):
   S = len(srcs)
 
   probs = np.zeros(S+1) # scratch matrix
-  samples = np.zeros(S+1, dtype=np.int)
+  samples = np.zeros((S, image_data.shape[0], image_data.shape[1]), dtype=np.int)
 
   for (i,j), xij in np.ndenumerate(image_data):
     xij = int(xij) # rounding takes too long?
@@ -96,9 +96,11 @@ def sampleAuxSourceCounts(srcs, img, eta, rand=None):
       #  patch_intersected_img = True
       #  probs[s] = patch_data[j-x0, i-y0]
 
-    probs[S] = eta
+    probs[0] = img.epsilon
+    for k, s in enumerate(src_patches):
+        probs[k + 1] = s[i, j]
     probs /= np.sum(probs)
-    samples += rand.multinomial(xij, probs)
+    samples[:,i,j] = rand.multinomial(xij, probs)
     #else:
       # No sources overlapped this patch,
       # so all photons must be attributed to noise.
@@ -118,7 +120,7 @@ def gibbsSampleBrightnesses(srcs, img, aPrior, bPrior, eta, rand=None):
 
   print "Sampling auxiliary source counts for image"
   bandname = img.band
-  uvec = sampleAuxSourceCounts(srcs, img, eta=eta, rand=rand)
+  uvec = sampleAuxSourceCounts(srcs, img, eta=eta, rand=rand).sum(axis=(1, 2))
   band_imgs_uvecs[bandname].append((img, uvec))
 
   # print band_imgs_uvecs

@@ -20,7 +20,7 @@ imsave("init_image.png", gen_model_image(srcs, im))
 createImageDifference("initialize_im_diff.png", im.nelec, gen_model_image(srcs, im).copy())
 print len(srcs)
 
-Niters = 2
+Niters = 20
 logprobs = np.zeros(Niters + 1)
 logprobs[0] = celeste_likelihood(srcs, im)
 
@@ -34,13 +34,13 @@ for it in xrange(Niters):
 
     createImageDifference("gibbs_im_diff_%d.png" % it, im1, im2)
 
-    for i in xrange(len(srcs)):
+    #for i in xrange(len(srcs)):
         # TODO: randomize order
-        sliceSampleSourceSingleAxis(srcs, im, i, 0, rand=rand)
-        sliceSampleSourceSingleAxis(srcs, im, i, 1, rand=rand)
+    #    sliceSampleSourceSingleAxis(srcs, im, i, 0, rand=rand)
+    #    sliceSampleSourceSingleAxis(srcs, im, i, 1, rand=rand)
 
-    im3 = gen_model_image(srcs, im).copy()
-    createImageDifference("slice_im_diff_%d.png" % it, im2, im3)
+    #im3 = gen_model_image(srcs, im).copy()
+    #createImageDifference("slice_im_diff_%d.png" % it, im2, im3)
 
     #if rand.rand() > 0.5:
     #    splitStar(tractor, rand=rand)

@@ -40,7 +40,7 @@ def initializeSources(srcs, img, percentile=99):
     pos = img.pixel2equa([x, y])
     kwargs = {}
     for band in SDSS_BANDNAMES:
-      kwargs[band] = data[y, x]
+      kwargs[band] = data[y, x] * 10
     # print kwargs
     # TODO(albertwu): how do we measure temperature?
     srcs.append(PointSrcParams(pos, kwargs, 0))
