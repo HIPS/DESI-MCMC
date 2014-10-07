@@ -10,9 +10,14 @@ im = FitsImage('r')
 # MCMC step
 rand = np.random.RandomState(seed=89) # http://xkcd.com/221/
 
+from scipy.misc import imsave
+
 srcs = []
-initializeSources(srcs, im)
-createImageDifference("initialize_im_diff_%d.png", im.nelec, gen_model_image(srcs, im).copy())
+imsave("orig_image.png", im.nelec)
+initializeSources(srcs, im, percentile = 99)
+
+imsave("init_image.png", gen_model_image(srcs, im))
+createImageDifference("initialize_im_diff.png", im.nelec, gen_model_image(srcs, im).copy())
 print len(srcs)
 
 Niters = 2

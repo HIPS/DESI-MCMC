@@ -33,14 +33,14 @@ def getFirstImgWithBand(imgs, bandname):
   raise Exception("Tractor must have an image in band %s" % bandname)
 
 def initializeSources(srcs, img, percentile=99):
-  data = img.nelec
+  data = img.img
   from ndimage_utils import generate_peaks
 
   for x, y in generate_peaks(data, threshold=np.percentile(data, percentile)):
-    pos = img.pixel2equa([y, x])
+    pos = img.pixel2equa([x, y])
     kwargs = {}
     for band in SDSS_BANDNAMES:
-      kwargs[band] = data[x, y]
+      kwargs[band] = data[y, x]
     # print kwargs
     # TODO(albertwu): how do we measure temperature?
     srcs.append(PointSrcParams(pos, kwargs, 0))
