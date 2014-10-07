@@ -75,7 +75,7 @@ def sampleAuxSourceCounts(srcs, img, eta, rand=None):
   with u summed over pixels for this image"""
   rand = rand or np.random.RandomState()
   src_patches = [gen_model_image([src], img) for src in srcs]
-  image_data = img.img
+  image_data = img.nelec
 
   #return nativeSampleAuxSourceCounts(image_data, src_patches, eta, rand)
   # DEAD CODE - DO NOT EAT
