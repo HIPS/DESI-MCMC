@@ -43,8 +43,9 @@ def initializeSources(srcs, img, percentile=99):
       kwargs[band] = data[y, x] * 10
     # print kwargs
     # TODO(albertwu): how do we measure temperature?
-    srcs.append(PointSrcParams(pos, kwargs, 0))
+    srcs = np.append(srcs, PointSrcParams(pos, kwargs, 0))
 
+  return srcs
   # for i in range(len(data[:,1])):
   #   for j in range(len(data[1,:])):
   #     if data[i][j] >= 50:
@@ -82,9 +83,9 @@ def shiftBandImageToRef(img, refimg, data=None):
 
   return shifted
 
-def diffData(tractor, im):
-  im_data = im.getImage()
-  model_data = tractor.getModelImage(im)
+def diffData(srcs, im):
+  im_data = im.nelec
+  model_data = gen_model_image(srcs, im)
   data_diff = np.clip(im_data - model_data, 0, np.inf)
 
   # Bias towards only the brightest points
@@ -92,7 +93,7 @@ def diffData(tractor, im):
 
   return data_diff
 
-def falseColorImage(tractor, useModel=False):
+def falseColorImage(srcs, im, useModel=False):
   """
   Returns a PIL image which can be saved with rval.save(fname)
   or shown with matplotlib.pyplot.imshow(rval).

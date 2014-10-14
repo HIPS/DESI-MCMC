@@ -12,13 +12,14 @@ rand = np.random.RandomState(seed=89) # http://xkcd.com/221/
 
 from scipy.misc import imsave
 
-srcs = []
+srcs = np.array([])
 imsave("orig_image.png", im.nelec)
-initializeSources(srcs, im, percentile = 99)
+srcs = initializeSources(srcs, im, percentile = 95)
+print 
 
 imsave("init_image.png", gen_model_image(srcs, im))
 createImageDifference("initialize_im_diff.png", im.nelec, gen_model_image(srcs, im).copy())
-print len(srcs)
+print srcs.size
 
 Niters = 20
 logprobs = np.zeros(Niters + 1)
@@ -29,7 +30,7 @@ for it in xrange(Niters):
     # http://andrewgelman.com/2011/12/07/neutral-noninformative-and-informative-conjugate-beta-and-gamma-prior-distributions/
 
     im1 = gen_model_image(srcs, im).copy()
-    gibbsSampleBrightnesses(srcs, im, aPrior=1./3, bPrior=0.1, eta=1, rand=rand)
+    srcs = gibbsSampleBrightnesses(srcs, im, aPrior=1./3, bPrior=0.1, eta=1, rand=rand)
     im2 = gen_model_image(srcs, im).copy()
 
     createImageDifference("gibbs_im_diff_%d.png" % it, im1, im2)
@@ -43,14 +44,14 @@ for it in xrange(Niters):
     #createImageDifference("slice_im_diff_%d.png" % it, im2, im3)
 
     #if rand.rand() > 0.5:
-    #    splitStar(tractor, rand=rand)
+    #    srcs = splitStar(srcs, im, rand=rand)
     #else:
-    #    mergeStar(tractor, rand=rand)
+    #    srcs = mergeStar(srcs, im, rand=rand)
 
     #if rand.rand() > 0.5:
-    #    birthStar(tractor, rand=rand)
+    #    srcs = birthStar(srcs, im, rand=rand)
     #else:
-    #    deathStar(tractor, rand=rand)
+    #    srcs = deathStar(srcs, im, rand=rand)
 
     logprobs[it+1] = logprob = celeste_likelihood(srcs, im)
     print "After iteration %s: %s, cat len %s" % (it, logprob, len(srcs))
