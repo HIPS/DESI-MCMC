@@ -15,13 +15,12 @@ from scipy.misc import imsave
 srcs = np.array([])
 imsave("orig_image.png", im.nelec)
 srcs = initializeSources(srcs, im, percentile = 95)
-print 
 
 imsave("init_image.png", gen_model_image(srcs, im))
 createImageDifference("initialize_im_diff.png", im.nelec, gen_model_image(srcs, im).copy())
 print srcs.size
 
-Niters = 20
+Niters = 1
 logprobs = np.zeros(Niters + 1)
 logprobs[0] = celeste_likelihood(srcs, im)
 
@@ -40,18 +39,18 @@ for it in xrange(Niters):
     #    sliceSampleSourceSingleAxis(srcs, im, i, 0, rand=rand)
     #    sliceSampleSourceSingleAxis(srcs, im, i, 1, rand=rand)
 
-    #im3 = gen_model_image(srcs, im).copy()
-    #createImageDifference("slice_im_diff_%d.png" % it, im2, im3)
+    im3 = gen_model_image(srcs, im).copy()
+    createImageDifference("slice_im_diff_%d.png" % it, im2, im3)
 
-    #if rand.rand() > 0.5:
-    #    srcs = splitStar(srcs, im, rand=rand)
-    #else:
-    #    srcs = mergeStar(srcs, im, rand=rand)
+    if rand.rand() > 0.5:
+        srcs = splitStar(srcs, im, rand=rand)
+    else:
+        srcs = mergeStar(srcs, im, rand=rand)
 
-    #if rand.rand() > 0.5:
-    #    srcs = birthStar(srcs, im, rand=rand)
-    #else:
-    #    srcs = deathStar(srcs, im, rand=rand)
+    if rand.rand() > 0.5:
+        srcs = birthStar(srcs, im, rand=rand)
+    else:
+        srcs = deathStar(srcs, im, rand=rand)
 
     logprobs[it+1] = logprob = celeste_likelihood(srcs, im)
     print "After iteration %s: %s, cat len %s" % (it, logprob, len(srcs))

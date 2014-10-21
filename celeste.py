@@ -114,6 +114,12 @@ class PointSrcParams():
         self.d = d
         self.header = header
 
+    def __eq__(self, other):
+	if isinstance(other, self.__class__):
+	    return np.array_equal(self.u, other.u) and self.b == other.b
+        else:
+	    return False
+
 def get_sources_from_catalog(cat_file):
     """ Takes a catalog fits file and returns a python list of PointSrcParam Objects. 
         NOTE: The fits files store these brightness parameters in nanomaggies - they
@@ -211,6 +217,3 @@ class FitsImage():
     def pixel2equa(self, s_pixel):
         r, d = self.wcs.wcs_pix2world(s_pixel[0], s_pixel[1], 1)
         return np.array([r, d]) 
-
-
-
