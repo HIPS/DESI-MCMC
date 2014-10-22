@@ -24,8 +24,8 @@
 \newcommand{\Ut}{\tilde{U}}
 \DeclareMathOperator*{\argmax}{arg\,max}
 
-\title{Methods for Astronomical Source Discovery and Separation}
-\author{}
+\title{A Probabilistic Model for Astronomical Source Discovery and Separation}
+\author{Andrew Miller, Albert Wu, Brenton Partridge, Ryan Adams}
 \date{\today}
 
 %% DOC START
@@ -153,12 +153,16 @@ giving us the expected number of photons that source $s$ contributes to image $n
 
 
 \section{From Sources to Pixel Observations}
-An image $n$ corresponds to measurements in one band, $\beta_n$, and consists of pixels locations denoted by $m = (w,h)$.  The total number of photons we expect to observe in image $n$ is simply the sum of the contribution we expect to see from each source, described above.  However, this total number is distributed about the pixels of the image according to the image's point spread function (PSF), due to atmospheric turbulence.  For image $n$ (with only point source contributions) and pixel $m = (w,h)$, the distribution over photon count is modeled
+An image $n$ corresponds to measurements in one band, $\beta_n$, and consists of pixels locations denoted by $m = (w,h)$.  The total number of photons we expect to observe in image $n$ is simply the sum of the contribution we expect to see from each source, described above.  However, this total number is distributed about the pixels of the image according to the image's point spread function (PSF), due to atmospheric turbulence.  For image $n$ (with only point source contributions) and pixel $m = (w,h)$, where $m \in \mathcal{P}_n$ denotes a pixel in the set of pixels associated with image $n$, the distribution over photon count is modeled
 \begin{align}
-  x_{n,m} | \{(u_s, t_s, \ell_s, d_s)\}_{s=1}^S &\sim \textrm{Poisson}( F_{n,m} ) \\
-  F_{n,m} &= \epsilon_n + \sum_{s=1}^S \underbrace{c(t_s, d_s, \ell_s, \beta_n) f_s(m)}_{\equiv F_{n,m,s}} \\
-  \epsilon_n &\sim \textrm{Gamma}(\alpha, \beta) \\
-  c(t_s, d_s, \ell_s, \beta_n) &= \mathbf{f}_{t_s}^\trans \mathbf{h_{\beta_n}} \cdot \ell_s \frac{A \Delta}{4\pi d_s^2}  \\
+  x_{n,m} | \{(u_s, t_s, \ell_s, d_s)\}_{s=1}^S &\sim \textrm{Poisson}( \epsilon_n + \sum_{s=1}^S F_{n,m,s} ) \\
+  F_{n,m,s} 
+    &= c(t_s, d_s, \ell_s, \beta_n) f_s(m)  \\
+    &= \underbrace{\mathbf{f}_{t_s}^\trans \mathbf{h_{\beta_n}}}_{I(t_s, \beta_n)} \cdot 
+       \underbrace{\frac{\ell_s}{4 \pi d_s^2}}_{b_s} \cdot
+       \underbrace{A \Delta}_{lens} \cdot 
+       \underbrace{f_s(m,n)}_{psf} \\
+ \epsilon_n &\sim \textrm{Gamma}(\alpha, \beta) \\
   f_s(m)  &= \sum_{k=1}^3 w_{n,k} \phi(m; v_{n,s} + \mu_{n,k}, \Sigma_{n,k}) \\
   v_{n,s} &= \Upsilon_n(u_s - \phi_n) + \rho_n
 \end{align}
@@ -219,7 +223,7 @@ Conditioned on $\{Z_{n,m}\}$, we can re-write the likelihood as
 where we define $F_{n,m,0} \equiv \epsilon_n$.  For an image $n$ and a source $s$, we can gather all photons assigned to that source add them
 \begin{align}
   z_{n,m,s} &\sim \textrm{Pois}(F_{n,m,s}) \\
-  \sum_{m} z_{n,m,s} &\sim \textrm{Pois}\left( \sum_{m} F_{n,m} \right) \\
+  \sum_{m} z_{n,m,s} &\sim \textrm{Pois}\left( \sum_{m} F_{n,m,s} \right) \\
     &\sim \begin{cases}
          \textrm{Pois}( c(t_s, d_s, \ell_s, \beta_n) ) & \text{ if } s > 0  \\
          \textrm{Pois}( M_n \epsilon_n ) & \text{ if } s = 0 
@@ -252,14 +256,14 @@ Conditioned on the assignment of photons to specific sources, sampling the locat
 \begin{align}
   z_{n,m,s} | u_s, t_s, b_s 
     &\sim \textrm{Poisson}(F_{n,m,s}) \\
-    &\sim \textrm{Poisson}\left(\mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot \frac{A \Delta}{4 \pi} f_s(m) \right)
+    &\sim \textrm{Poisson}\left(\mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot A \Delta f_s(m,n) \right)
 \end{align}
 for $m \in 1, \dots, M_n$ (pixels per image) and $n \in 1, \dots, N$ (total images containing this source).  
 
 The goal is to sample $u_s, t_s, b_s$ leaving the conditional posterior invariant.  Firstly, note that only the location variable $u_s$ relies on the spatial pixel structure through $f_s(m)$.  This allows us to conditionally slice sample these values, and then effectively ignore them (when we sum over the $m$, the $f_s(m)$ term falls out and sums to one).  
 \begin{align}
   p(u_s | \{ z_{n,m,s} \}, t_s, b_s) &\propto p( \{ z_{n,m,s} \} | u_s, t_s, b_s) \\
-  &= \prod_{m,n} p_{pois}\left(z_{n,m,s}; \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot \frac{A \Delta}{4 \pi} f_s(m) \right)
+  &= \prod_{m,n} p_{pois}\left(z_{n,m,s}; \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot A \Delta f_s(m) \right)
 \end{align}
 
 Conditioned on $u_s$ and $b_s$, we have a somewhat simpler likelihood 
@@ -283,8 +287,8 @@ where $C$ is a constant with respect to the conditional likelihood.  We place a 
 \end{align}
 
 
-\subsection{Expectation Maximization}
-With a fixed number of sources, $S$, the latent variable formulation admits a simple and parallelize-able maximum likelihood procedure.  This can be used as a way to seed the model, or allow us to compute a MAP conditional posterior for particular parameters.  The maximum likelihood procedure is as follows
+\subsection{Initialization with EM}
+The goal of this section is derive a routine to find the maximum likelihood values for $\{ u_s, t_s, b_s \}_{s=1}^N$ (and $\{ \epsilon_n \}_{n=1}^N$ for a fixed number of sources $S$.  This will give us an initialization for star parameters (or allow us to sample over a conditional likelihood).  With a fixed number of sources, $S$, the latent variable formulation admits a simple and parallelize-able maximum likelihood procedure.  This can be used as a way to seed the model, or allow us to compute a MAP conditional posterior for particular parameters.  The maximum likelihood procedure is as follows
 \begin{itemize}
 \item Compute $F_{n,m,s}$ for all $n,m,s$ and define $F_{n,m,0} = \epsilon_n$.  Compute conditional expectations  
 \begin{align}
@@ -296,22 +300,63 @@ where
   p_{n,m,s} &= \frac{F_{n,m,s}}{\sum_{s=0}^S F_{n,m,s}}
 \end{align}
 
-\item The expected complete data log likelihood is
+\item Defining $\theta \equiv (\{u_s, t_s, b_s\}_{s=1}^S, \{ \epsilon_n \}_{n=1}^N) $, the expected complete data log likelihood (so-called $Q$ function) is
 \begin{align}
-  E(\ell)
-    &= \sum_{n,m,s} E(Z_{n,m,s}) \log F_{n,m,s} - F_{n,m,s} \\
-    &= \sum_{n,m,s} x_{n,m} p_{n,m,s} \log F_{n,m,s} - F_{n,m,s} \\
-    &= \underbrace{\left( \sum_{n,m} x_{n,m} p_{n,m,0} \log \epsilon_n - \epsilon_n \right)}_{\text{image noise}} + \underbrace{\left(\sum_{n,m,s\neq 0} x_{n,m} p_{n,m,s} \log F_{n,m,s} - F_{n,m,s}\right)}_{\text{source params}}
+  Q(\theta | \theta^{(t-1)})
+    =& \sum_{n,m,s} E(Z_{n,m,s}) \log F_{n,m,s} - F_{n,m,s} \\
+    =& \sum_{n,m,s} x_{n,m} p_{n,m,s} \log F_{n,m,s} - F_{n,m,s} \\
+    =& \underbrace{\left( \sum_{n,m} x_{n,m} p_{n,m,0} \log \epsilon_n - \epsilon_n \right)}_{\text{image noise}} + \\
+     & \underbrace{\left(\sum_{n,m,s\neq 0} x_{n,m} p_{n,m,s} \log F_{n,m,s} - F_{n,m,s}\right)}_{\text{source params}}
 \end{align}
 
-\item Maximize over source parameters.  Compute
+Note that the $\log z_{n,m,s}!$ term due to the Poisson likelihood is constant in the likelihood and omitted. 
+
+\item Maximize over source and image noise parameters.  The image noise parameters are simple to compute
 \begin{align}
-  \hat \epsilon_n &= \frac{1}{M_n} \sum_{m} x_{n,m} p_{n,m,0} \\
-  \hat u_s, \hat b_s, \hat t_s &= \argmax_{u_s, b_s, t_s} \sum_{n,m} x_{n,m} p_{n,m,s} \log F_{n,m,s} - F_{n,m,s}
+  \hat \epsilon_n &= \frac{1}{M_n} \sum_{m} x_{n,m} p_{n,m,0}
 \end{align}
-where the image noise parameters have a straightforward closed form, and the source specific parameters can be optimized numerically.   
+\todo{Albert - can you look over the following functions for me?}
+The source specific parameters all separate, so they can be independently maximized
+\begin{align}
+  \hat u_s, \hat b_s, \hat t_s &= \argmax_{u_s, b_s, t_s} Q_s(u_s, b_s, t_s | \theta^{t-1}) \\
+  Q_s(u_s, b_s, t_s) &\equiv \sum_{n,m} x_{n,m} p_{n,m,s} \log F_{n,m,s} - F_{n,m,s}
+\end{align}
+To gain some traction on the problem, our first strategy is to note that we can write the maximizing temperature, $\hat t_s$ as a function independent of $u_s$ and $b_s$.  From here, we can compute the maximizing brightness by deriving the profile likelihood $\hat b_s(t_s)$.  Finally, we can compute the maximizing $u_s$ using gradient or local search methods in 2-d.  
+
+We can isolate $t_s$ in the likelihood by noting that it only depends on the number of observed photons \emph{across bands}, not across the pixel space. The point spread function defines a density, so if we are summing over its full support, it will integrate to one and the non-pixel dependent parameters will fall out, namely $t_s$ and $b_s$.  Then we can look at the maximizing likelihood value We can gain some traction on the problem by maximizing over $t_s$ and $b_s$ first, and then maximizing over the location $u_s$.  
+
+Decompose the source specific $Q_s$ function as 
+\begin{align*}
+Q_s(\cdot | \cdot) 
+  =& \sum_{n,m} x_{n,m} p_{n,m,s} \left(\log b_s A \Delta + \log I(t_s, \beta_n) + \log f_s(m,n) \right) - \\
+   & b_s A \Delta \sum_{n} I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} f_s(m,n) \\
+  =& \sum_{n} \log I(t_s, \beta_n) \underbrace{\sum_{m \in \mathcal{P}_n} x_{n,m} p_{n,m,s}}_{\equiv \tilde X_n} \\
+   & + \log (b_s A \Delta) \sum_{n,m} x_{n,m} p_{n,m,s} \\
+   & + \sum_{n,m} x_{n,m} p_{n,m,s} \log f_s(n,m) \\
+   & - b_s A \Delta \sum_{n} I(t_s, \beta_n) 
+\end{align*}
+
+We can use this to derive the maximizing $b_s$ as a function of $t_s$, $\hat b_s(t_s)$, which is conveniently independent of $u_s$.  For a given $t_s$, the maximizing brightness, $\hat b_s(t_s)$ can be derived
+\begin{align}
+  \frac{\partial Q(\theta)}{\partial b_s} 
+    &= \frac{1}{b_s} \sum_{n,m} x_{n,m} p_{n,m,s} - A \Delta \sum_{n} I(t_s, \beta_n) \\
+  \implies 
+  \hat b_s(t_s) &= \frac{1}{A \Delta \sum_n I(t_s, \beta_n)} \left( \sum_{n,m} x_{n,m} p_{n,m,s} \right)  
+  %&= \sum_{n,m} x_{n,m} p_{n,m,s} \log \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} - \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \\
+\end{align}
+
+Plugging this back into $Q_s(\cdot | \cdot)$, the partial likelihood with respect to $t_s$ gives us 
+\begin{align}
+  \hat Q_s(t_s) 
+    =& \sum_{n} \log I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} x_{n,m} p_{n,m,s} \\
+    & + \log\left( \frac{ \sum_{n,m} x_{n,m} p_{n,m,s} }{\sum_{n} I(t_s, \beta_n)} \right) \sum_{n,m} x_{n,m} p_{n,m,s} \\
+    & + \sum_{n,m} x_{n,m} p_{n,m,s} \log f_s(n,m) - \sum_{n,m} x_{n,m} p_{n,m,s} \\
+    =& \sum_{n} \log I(t_s, \beta_n) \sum_{m\in \mathcal{P}_n} x_{n,m} p_{n,m,s} \\
+    & - \log\left( \sum_{n} I(t_s, \beta_n) \right) \sum_{n,m} x_{n,m} p_{n,m,s}
+\end{align}
+where the $t_s$ value in the last term conveniently cancels.  Now we have a one dimensional function of $t_s$ to maximize and a closed form expression for the $\hat b_s(t_s)$.  We can compute this and then compute the optimal value for $u_s$ (or simply sample it).  
+
 \end{itemize}
-\todo{Can the source parameters be optimized in a clever way?}
 
 \section{Priors}
 For sampling, we must define priors over all of our source and image parameters.  
