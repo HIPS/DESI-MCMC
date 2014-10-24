@@ -18,7 +18,7 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
 
     printif("Initial Log Likelihood = %2.2f"%prev_ll, verbose)
     for em_iter in range(maxiter):
-        print "============================================"
+        printif("============================================", verbose)
 
         ## E-step, generate sub-images 
         printif("  iter %d E-step"%em_iter, verbose)
@@ -106,21 +106,21 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
             temp_b   = srcs[s].b
             srcs[s].t = t_hat
             srcs[s].b = b_hat
-            print "   src %d temp       = %2.2f => %2.2f"%(s, temp_tmp, srcs[s].t)
-            print "   src %d brightness = %2.2f => %2.2f"%(s, temp_b, srcs[s].b)
+            printif("   src %d temp       = %2.2f => %2.2f"%(s, temp_tmp, srcs[s].t), verbose)
+            printif("   src %d brightness = %2.2f => %2.2f"%(s, temp_b, srcs[s].b), verbose)
 
         ll = celeste_likelihood_multi_image(srcs, imgs)
         ll_trace.append(ll)
-        print ".... current marginal likelihood = %2.2f"%ll
+        printif(".... current marginal likelihood = %2.2f"%ll, verbose)
         if prev_ll > ll: 
-            print "marginal likelihood DECREASED!!!"
-            print "   %2.4f => %2.4f"%(prev_ll, ll)
-            print "   probably a bug or a failure of the internal maximization scheme"
+            printif("marginal likelihood DECREASED!!!", verbose)
+            printif("   %2.4f => %2.4f"%(prev_ll, ll), verbose)
+            printif("   probably a bug or a failure of the internal maximization scheme", verbose)
         if ll - prev_ll < 1: 
-            print "marginal likelihood converging, stopping"
+            print "marginal likelihood converging, stopping (iter = %d, maxiter = %d)"%(em_iter, maxiter)
             break
         prev_ll = ll
-    return ll_trace
+    return ll_trace, em_iter < maxiter
 
 def printif(statement, condition):
     if condition:
