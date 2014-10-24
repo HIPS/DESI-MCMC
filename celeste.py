@@ -16,7 +16,7 @@ import numpy as np
 from scipy.misc import logsumexp
 from astropy.wcs import WCS
 from gmm_like import gmm_log_like
-from planck import photons_expected
+from planck import photons_expected, photons_expected_brightness
 
 def gen_src_image(src, image):
     """ Generates expected photon image for a single point source.  Multiple
@@ -26,18 +26,22 @@ def gen_src_image(src, image):
           - image : FitsImage object
     """
     # 0. Compute expected photon count for this image from source
-    if src.b[image.band] is not None: 
-        expected_photons = src.b[image.band] / image.calib
-    elif src.ell is not None and src.t is not None:
-        c_L   = .25 * .75 * 1.25**2 * 54
-        expected_photons = planck.photons_expected(src.t,
-                                                   src.ell,
-                                                   src.d,
-                                                   image.band)
+    if src.fluxes is not None:
+        expected_photons = image.kappa * src.fluxes[image.band] / image.calib
+    elif src.b is not None and src.t is not None:
+        expected_photons = photons_expected_brightness(src.t, src.b, image.band)
+    else:
+        raise Exception("No way to compute expected photons without at least fluxes or brightness")
 
     # compute pixel space location of source
+    f_s = gen_point_source_psf_image(src.u, image)
+    return f_s * expected_photons
+
+def gen_point_source_psf_image(u, image): 
+    """ generates a PSF image (assigns density values to pixels) """
+    # compute pixel space location of source
     # returns the X,Y = Width, Height pixel coordinate corresponding to u
-    v_s = image.equa2pixel(src.u)
+    v_s = image.equa2pixel(u)
 
     # TODO: turn this into a convolution
     # compute pixel space location, v_{n,s}
@@ -48,7 +52,6 @@ def gen_src_image(src, image):
                                  image.weights,
                                  image.means + v_s,
                                  image.covars).reshape(xx.shape)).T
-
     # slow for sanity check
     #for x in range(image.nelec.shape[1]): 
     #    for y in range(image.nelec.shape[0]):
@@ -57,12 +60,11 @@ def gen_src_image(src, image):
     #                                      v_s + image.means,
     #                                      image.covars))
     #        assert np.abs(pix_val - f_s[s,y,x]) < 1e-5
-
     # Might want to insert a check so that f_s.sum() is close to one (or 
     # f_s.sum() * dA is close to one - otherwise some of your point spread
     # mass will fall off the image, and you're neighboring image will probably 
     # have some unexplained boosting of their counts
-    return f_s * expected_photons
+    return f_s
 
 def gen_model_image(srcs, image):
     """ gen_model_image: computes pixel-wise mean count values from only point sources
@@ -79,20 +81,51 @@ def gen_model_image(srcs, image):
     f_s = np.zeros((image.nelec.shape))
     for s, src in enumerate(srcs):
         f_s += gen_src_image(src, image)
+    # offset image by epsilon
+    return image.epsilon + f_s
 
-    # offset image by epsilon and boost image by kappa value
-    return image.kappa * (image.epsilon + f_s)
+def gen_src_prob_layers(srcs, img):
+    """ for a particular image, generate the probability that each source
+    produced the count in each pixel
+    """
+    src_patches = np.array([gen_src_image(src, img) for src in srcs])
+    src_sum     = src_patches.sum(axis=0) + img.epsilon # * img.kappa
+    src_probs   = np.zeros((src_patches.shape[0]+1, 
+                            src_patches.shape[1], 
+                            src_patches.shape[2]))
+    src_probs[0,:,:] = img.epsilon / src_sum
+    for s in range(1, src_patches.shape[0]+1):
+        src_probs[s,:,:] = src_patches[s-1,:,:] / src_sum
+    return src_probs
 
 def celeste_likelihood(srcs, image):
     """ Evaluates the likelihood of a set of hypothesis sources given an image """
     lambdas = gen_model_image(srcs, image)
     return np.sum(image.nelec * np.log(lambdas) - lambdas)  #Poisson Likelihood
 
+def celeste_likelihood_multi_image(srcs, images):
+    """ Full marginal log likelihood - should never decrease 
+        Input: 
+            srcs: python list of PointSrcParams objects
+            imgs: python list of FitsImage objects
+    """
+    ll = 0
+    for img in images: 
+        ll += celeste_likelihood(srcs, img)
+    return ll
+
 class PointSrcParams():
     """ Point source parameter object
         Input:
           u : 2-d np.array holdin right ascension and declination
-          b : python dictionary such that b['r'] = brightness value for 'r'
+          b : Total brightness/flux.  Equal to 
+
+               b = ell / (4 * pi d^2)
+
+               where ell is the luminosity (in Suns) and d is the distance
+               to the source (in light years)
+
+          fluxes : python dictionary such that b['r'] = brightness value for 'r'
               band.  Note that this is essentially the expected number
               of photons to enter the lens and be recorded by a given band
               over the length of one exposure (typically 1.25^2 meters^2 size
@@ -106,9 +139,10 @@ class PointSrcParams():
           ell : luminosity of source (in Suns)
           d : distance to source (in light years)
     """
-    def __init__(self, u, b, t=None, ell=None, d=None, header=None): 
-        self.u = u
-        self.b = b
+    def __init__(self, u, fluxes=None, b=None, t=None, ell=None, d=None, header=None):
+        self.u      = u
+        self.b      = b
+        self.fluxes = fluxes
         self.t = t
         self.ell = ell
         self.d = d
@@ -132,10 +166,11 @@ def get_sources_from_catalog(cat_file):
     catalog_srcs = []
     for src_info in cat_data: 
         src_info = [s for s in src_info]
-        src = PointSrcParams(u = np.array(src_info[0:2]),
-                             b = dict(zip(keys, src_info[2:])),
-                             t = None,
+        src = PointSrcParams(u      = np.array(src_info[0:2]),
+                             fluxes = dict(zip(keys, src_info[2:])),
                              header = cat_header)
+        if np.any(np.array(src.fluxes.values()) < 0):
+            continue
         catalog_srcs.append(src)
     return catalog_srcs
 
@@ -196,7 +231,7 @@ class FitsImage():
 
         # set image specific KAPPA and epsilon 
         self.kappa   = header['GAIN']     # TODO is this right??
-        self.epsilon = header['SKY']
+        self.epsilon = header['SKY'] * self.kappa
         self.darkvar = header['DARKVAR']  # also eventually contributes to mean?
         self.calib   = header['CALIB']    # dn = nmaggies / calib, calib is NMGY
 

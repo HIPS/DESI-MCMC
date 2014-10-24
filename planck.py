@@ -38,13 +38,15 @@ def load_filter_curves():
         wavelength_lookup[band].append(float(wavelength)*1e-4*1e-6) # angs to meters
         sensitivity_lookup[band].append(float(sensitivity))
     filter_curves.close()
-    h_vecs = {}
     for b in bands: 
         wavelength_lookup[b] = np.array(wavelength_lookup[b])
         sensitivity_lookup[b] = np.array(sensitivity_lookup[b])
 
-        # number of photons/Joule that make it through the filter at each energy level
-        dLam =  np.abs(wavelength_lookup[b][2] - wavelength_lookup[b][1])
+    # pre-compute filter curve vectors
+    # number of photons/Joule that make it through the filter at each energy level
+    h_vecs = {}
+    for b in wavelength_lookup.keys():
+        dLam     =  np.abs(wavelength_lookup[b][2] - wavelength_lookup[b][1])
         h_vecs[b] = sensitivity_lookup[b] / (h * c / wavelength_lookup[b]) * dLam
     return wavelength_lookup, sensitivity_lookup, h_vecs
 wavelength_lookup, sensitivity_lookup, h_vecs = load_filter_curves()
@@ -74,43 +76,42 @@ def photons_per_joule(T, band):
     #radiances          = hpicc2 / (np.power(x, 5.) * (np.exp(hc_k / (x * T)) - 1))
     #total_radiance     = sigma * np.power(T, 4.) #across bands, per m^2
     #radiance_densities = radiances / total_radiance
-    f_vec = spec_density(T, x)
 
-    # filter and convert to photon counts
-    return f_vec.dot(h_vecs[band])
     #photon_energies = (h * c / x) # Photon energy for each wavelength (in Joules)
     #photon_fluxes   = radiance_densities / photon_energies
     #filtered_photon_fluxes = photon_fluxes * sensitivity_lookup[band]
 
     #avg_photons = np.mean(filtered_photon_fluxes) #per hertz
     #range       = np.abs(x[2] - x[1]) * len(x)
-    #return avg_photons * range #approximates the integral
+    #out = avg_photons * range #approximates the integral
+    #return out
+
+    # quicker photons_per_joule - compute approx to spectral density and filter
+    f_vec = spec_density(T, x)
+    return f_vec.dot(h_vecs[band])
 
 def photons_expected(T, solar_L, d, band):
-    #L          = solar_L * sun_wattage          # Joules/Seconds of source
-    #D          = d * m_per_ly                   # Distance of source
-    #lens_prop  = lens_area / (4*np.pi * D**2)   # proportion if energy captured by lens at distance D
-    #lens_watts = lens_prop * L                  # Joules/Seconds of source => lens
+    L          = solar_L * sun_wattage          # Joules/Seconds of source
+    D          = d * m_per_ly                   # Distance of source
+    lens_prop  = lens_area / (4*np.pi * D**2)   # proportion if energy captured by lens at distance D
+    lens_watts = lens_prop * L                  # Joules/Seconds of source => lens
 
     # compute brightness
-    brightness = solar_L / (d**2)
-    return photons_expected_brightness(T, brightness, band)
-    #return photons_per_joule(T, band) * lens_watts * exposure_duration
+    brightness = solar_L / (4 * np.pi * d**2)
+    #return photons_expected_brightness(T, brightness, band)
+    return photons_per_joule(T, band) * lens_watts * exposure_duration
 
 def photons_expected_brightness(T, b, band):
     """ same as above, except this uses b = ell/d^2 """
-    lens_prop  = lens_area / (4 * np.pi)         # lens solid angle
-    lens_watts = lens_prop * b * sun_wattage / (m_per_ly**2) # Joules/Seconds of source => lens
+    lens_watts = lens_area * b * sun_wattage / (m_per_ly**2) # Joules/Seconds of source => lens
     return photons_per_joule(T, band) * lens_watts * exposure_duration 
 
 def plancks_law(t, W):
     """ Planck's law, defines spectral radiance 
         Returns in units of Watts / m^2 / sec / steradian
     """
-    radiance = (2 * h * c * c) / (np.power(W, 5.) * (np.exp(hc_k/(W*t)) - 1))
+    radiance = (2 * np.pi * h * c * c) / (np.power(W, 5.) * (np.exp(hc_k/(W*t)) - 1))
     return radiance
-
-
 
 def planck_regression(spec_obs, wavelengths, isd_error, t0=None, 
                       fix_temp=False, disp=False):
