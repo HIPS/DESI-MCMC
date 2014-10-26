@@ -1,8 +1,10 @@
 import planck
 import numpy as np
 from scipy.optimize import fmin 
-from celeste import celeste_likelihood_multi_image, gen_src_prob_layers
+from celeste import celeste_likelihood_multi_image, gen_src_prob_layers, gen_point_source_psf_image
 from util.plot_util import compare_to_model
+from mcmc_transitions import sampleAuxSourceCounts
+from util.slicesample import slicesample
 import matplotlib.pyplot as plt
 
 def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True): 
@@ -100,14 +102,14 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
             fac   = 1./(planck.lens_area * planck.exposure_duration * \
                         planck.sun_wattage / (planck.m_per_ly**2))
             b_hat = fac * (1./I_ts.sum()) * X_tildes.sum()
-
-            ## 3) maximize u_s given \hat b_s, \hat t_s
-            temp_tmp = srcs[s].t
-            temp_b   = srcs[s].b
+            printif("   src %d temp       = %2.2f => %2.2f"%(s, srcs[s].t, t_hat), verbose)
+            printif("   src %d brightness = %2.2f => %2.2f"%(s, srcs[s].b, b_hat), verbose)
             srcs[s].t = t_hat
             srcs[s].b = b_hat
-            printif("   src %d temp       = %2.2f => %2.2f"%(s, temp_tmp, srcs[s].t), verbose)
-            printif("   src %d brightness = %2.2f => %2.2f"%(s, temp_b, srcs[s].b), verbose)
+
+            ## 3) maximize u_s given \hat b_s, \hat t_s
+            #def location_loss(u): 
+            #    return 0
 
         ll = celeste_likelihood_multi_image(srcs, imgs)
         ll_trace.append(ll)
@@ -121,6 +123,72 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
             break
         prev_ll = ll
     return ll_trace, em_iter < maxiter
+
+
+
+def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True): 
+    """ Does a single gibbs sweep - samples all Z_{n,m,s} and then samples
+        all u_s, t_s, b_s for each source (repeats subiter times)
+        Input: 
+            srcs: python list of PointSrcParams
+            imgs: python list of FitsImage objects
+            maxiter : max number of EM iterations
+            debug : turn on plotting
+    """
+
+    # for each image, sample the source specific counts (Z_{n,m,s})
+    printif("    sampling Z's", verbose)
+    all_src_images = []
+    for img in imgs:
+        src_image = sampleAuxSourceCounts(srcs, img, eta=0)
+        #src_probs = gen_src_prob_layers(srcs, img)
+        #src_image = np.array(src_probs.shape)
+        #print src_image.shape
+        #for (i,j), xij in np.ndenumerate(img.nelec):
+        #    print src_probs[:,i,j], np.sum(src_probs[:,i,j])
+        #    src_image[:,i,j] = np.random.multinomial(int(xij), src_probs[:,i,j])
+        all_src_images.append(src_image)
+    printif("    .... done", verbose)
+
+    # for each source, sample source specific params
+    # TODO: add some sort of prior over brightness and temp (maybe location)
+    for s in range(len(srcs)):
+
+        #### joint Temp, Brightness source specific opt func (Q function)
+        def temp_bright_like(th):
+            ll = 0
+            for i, img in enumerate(imgs): 
+                expected_num_photons = planck.photons_expected_brightness(th[0], th[1], img.band)
+                ll += np.sum(all_src_images[i][s+1,:,:]) * np.log(expected_num_photons) - expected_num_photons
+            return ll
+
+        #### likelihood factor that only depends on location
+        def loc_like(u): 
+            for n, img in enumerate(imgs):
+                f_sn = gen_point_source_psf_image(u, img)
+                return (np.log(f_sn) * all_src_images[n][s+1,:,:]).sum()
+
+        #### iterate a bunch - sample locs and brightness/temps
+        for gibbs_iter in range(subiter):
+
+            # sample temp/brightness
+            printif( "    slice sampling t's and b's", verbose)
+            th, ll = slicesample(xx       = np.array([srcs[s].t, srcs[s].b]), 
+                                 llh_func = temp_bright_like,
+                                 step     = [1000, .1], 
+                                 step_out = True)
+            srcs[s].t = th[0]
+            srcs[s].b = th[1]
+            printif("    .... done", verbose)
+
+            # sample location
+            printif("    slice sampling u's", verbose)
+            u, ll = slicesample(xx       = srcs[s].u,
+                                llh_func = loc_like,
+                                step     = [1e-3, 1e-3])
+            srcs[s].u = u
+            printif("    .... done", verbose)
+    return None
 
 def printif(statement, condition):
     if condition:
