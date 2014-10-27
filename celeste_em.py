@@ -49,7 +49,7 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
         for i,img in enumerate(imgs):
             eps_tmp = img.epsilon
             img.epsilon = np.sum(img.nelec * src_probs[0,:,:]) / (img.nelec.size)
-            printif("      img %d eps %2.2f => %2.2f"%(i, eps_tmp, img.epsilon), verbose)
+            printif("      img %d eps %2.2f => %2.2f (eps0 = %2.2f)"%(i, eps_tmp, img.epsilon, img.epsilon0), verbose)
 
         # compute optimal params for each source
         for s in range(len(srcs)):
@@ -65,21 +65,29 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
 
             # helper maximization functions
             def compute_image_statistics(temp): 
-                X_tildes = np.zeros(len(imgs))
-                I_ts     = np.zeros(len(imgs))
+                X_tildes = np.zeros(len(imgs))  # num photons source s is reponsible for in image n (p_n,m,s * x_n,m)
+                # fraction of photons you'd expect to see due to point spread
+                # function - if the entire source is in the image, this should 
+                # one, if the source is far away from this image, this should be 0
+                sum_fs   = np.zeros(len(imgs))  
                 for n, img in enumerate(imgs):
                     # compute sum x_{n,m} p_{n,m,s}
                     X_tildes[n] = np.sum(all_src_probs[n][s+1,:,:] * img.nelec)
 
-                    # compute I(t_s, beta_n)
-                    I_ts[n] = planck.photons_per_joule(temp, img.band)
-                return X_tildes, I_ts
+                    # compute fraction of photons this image will see
+                    sum_fs[n] = min(1., np.sum(gen_point_source_psf_image(srcs[s].u, img)))
+                return X_tildes, sum_fs
+
+            # Cache image statistics that are constant - the PSF computation is 
+            # expensive and not necessary at this point
+            X_tildes, sum_fs = compute_image_statistics(srcs[s].t)
 
             # profile likelihood - only of temperature
             def partial_loss(temp): 
-                X_tildes, I_ts = compute_image_statistics(temp)
+                # compute I(t_s, beta_n) - num photons you'd expect to see
+                I_ts = np.array([planck.photons_per_joule(temp, img.band) for img in imgs])
                 return X_tildes.dot(np.log(I_ts)) - \
-                       np.log(I_ts.sum()) * X_tildes.sum()
+                       np.log(I_ts.dot(sum_fs)) * X_tildes.sum()
 
             ######### DEBUG ##################################################
             if debug:
@@ -98,18 +106,18 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
             t_hat = t_hat[0]
 
             ## 2) compute maximal brightness \hat b_s( \hat t_s )
-            X_tildes, I_ts = compute_image_statistics(t_hat)
+            I_ts = np.array([planck.photons_per_joule(t_hat, img.band) for img in imgs])
             fac   = 1./(planck.lens_area * planck.exposure_duration * \
                         planck.sun_wattage / (planck.m_per_ly**2))
-            b_hat = fac * (1./I_ts.sum()) * X_tildes.sum()
+            b_hat = fac * (1./I_ts.dot(sum_fs)) * X_tildes.sum()
             printif("   src %d temp       = %2.2f => %2.2f"%(s, srcs[s].t, t_hat), verbose)
             printif("   src %d brightness = %2.2f => %2.2f"%(s, srcs[s].b, b_hat), verbose)
             srcs[s].t = t_hat
             srcs[s].b = b_hat
 
+            ## TODO - maximize u_s (this will probably have to be incorporated 
+            ## into a joint update of t_s (or an iterative routine)
             ## 3) maximize u_s given \hat b_s, \hat t_s
-            #def location_loss(u): 
-            #    return 0
 
         ll = celeste_likelihood_multi_image(srcs, imgs)
         ll_trace.append(ll)

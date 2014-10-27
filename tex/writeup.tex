@@ -6,9 +6,9 @@
 \usepackage{hyperref}
 \usepackage{amsmath,amsfonts,amssymb,bbm}
 \usepackage{todonotes}
+\usepackage{subcaption}
 
 \DeclareMathOperator{\Tr}{Tr}
-
 \newcommand{\R}{\mathbbm{R}}
 \newcommand{\mba}{\mathbf{a}}
 \newcommand{\mbb}{\mathbf{b}}
@@ -25,12 +25,14 @@
 \DeclareMathOperator*{\argmax}{arg\,max}
 
 \title{A Probabilistic Model for Astronomical Source Discovery and Separation}
-\author{Andrew Miller, Albert Wu, Brenton Partridge, Ryan Adams}
+\author{Andrew Miller, Albert Wu, Brenton Partridge, Ryan Adams, ...}
 \date{\today}
 
 %% DOC START
 \begin{document}
 \maketitle
+
+\section{Introduction}
 
 The goal of this project is to develop reliable inference techniques to simultaneously discover and characterize properties of distant stars and galaxies from a massive database of photometric imagery.  
 
@@ -50,6 +52,33 @@ For each source, we define the following \emph{intrinsic} properties, which are 
 \end{align*}
 
 This paper describes a probabilistic model-based approach to inferring these quantities of interest.  We treat the observed pixel values as random variables, and describe a (stochastic) forward generating procedure based on the properties of these sources (the likelihood), as well as an a priori distribution over the properties themselves (the prior), and use Bayesian inference and Markov Chain Monte Carlo techniques to draw simulations from the posterior.  To understand the likelihood, we first outline the physical motivation underlying our model.  
+
+\begin{figure}[t!]
+\begin{center}
+\begin{subfigure}[a]{.3\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/data/nelec-u"}}
+  \caption{u band}
+\end{subfigure}
+\begin{subfigure}[a]{.3\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/data/nelec-g"}}
+  \caption{g band}
+\end{subfigure}
+\begin{subfigure}[a]{.3\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/data/nelec-r"}}
+  \caption{r band}
+\end{subfigure}
+\begin{subfigure}[a]{.3\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/data/nelec-i"}}
+  \caption{i band}
+\end{subfigure}
+\begin{subfigure}[a]{.3\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/data/nelec-z"}}
+  \caption{z band}
+\end{subfigure}
+\end{center}
+\caption{SDSS photon count images.  Each image corresponds to one band These five images have been aligned - each corresponding to the same viewing frame, among 5 bands. Five sources are visible - their intensity/number of photon observations are a function of their temperature, luminosity, and distance to earth.}
+\end{figure}
+
 
 \section{Computing the expected number of photons}
 The random variable that gives rise to our likelihood and motivates probabilistic inference in this problem is the number of photons detected by an instrument with a lens of a fixed area over a fixed exposure duration.  According to our idealized model, this random variable is Poisson distributed conditioned on the intrinsic properties of a source.  To describe our observations, we need to outline the procedure by which the band-specific flux images are generated.  
@@ -196,7 +225,9 @@ and the log likelihood, over all images, as
 \end{align}
 One problematic aspect of the likelihood is the $\log F_{n,m}$ term, which is difficult to directly optimize and compute with multiple cores.  We can simplify this by using a natural latent variable representation of additive Poisson intensity functions.  
 
-\section{Latent variable representation}
+\section{Inference}
+
+\subsection{Latent Variable Representation}
 A convenient property of Poisson random variables with additive intensity functions is that they can be viewed as independent Poisson random variables that have been summed, that is
 \begin{align}
   X &\sim \textrm{Poisson}(\lambda_1 + \lambda_2 + \dots + \lambda_S) \\
@@ -231,61 +262,7 @@ where we define $F_{n,m,0} \equiv \epsilon_n$.  For an image $n$ and a source $s
 \end{align}
 which is due to the fact that the PSF is a density, so it sums to one (note that this assumes that image $n$ contains the entire support of the PSF, which will eventually be approximated).  
 
-Conditioning on $Z$ allows us to consider the sources independently.  We can sample each source specific variable, $t_s, b_s$ and $u_s$ independently (and in parallel).  Gibbs sampling strategy then becomes
-\begin{itemize}
-\item sample $Z_{n,m,s} | X_{n,m}, \{u_s, t_s, b_s\}_{s=1}^S$
-\item for each source $s$
-  \begin{itemize}
-  \item Sample $u_s, t_s, b_s | \{z_{n,m,s}\}_{n=0}^N$
-  \end{itemize}
-\item Randomly propose a split/merge move: 
-  \begin{itemize}
-  \item Propose to split source $s$ into two sources, $s_1'$ and $s_2'$.  Accept/reject.
-  \item Propose to merge two sources, $s_1$ and $s_2$ into one source, $s'$.  Accept/reject. 
-  \end{itemize}
-  
-\item Randomly propose a birth/death move
-  \begin{itemize}
-  \item  
-  \end{itemize}
-\end{itemize}
- 
- 
-\subsection{Sampling source-specific parameters}
-Conditioned on the assignment of photons to specific sources, sampling the location, temperature, and brightness variables for a specific source is much simpler.  For a source $s$, we can express the likelihood conditioned on $\{z_{n,m,s}\}$ as 
-\begin{align}
-  z_{n,m,s} | u_s, t_s, b_s 
-    &\sim \textrm{Poisson}(F_{n,m,s}) \\
-    &\sim \textrm{Poisson}\left(\mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot A \Delta f_s(m,n) \right)
-\end{align}
-for $m \in 1, \dots, M_n$ (pixels per image) and $n \in 1, \dots, N$ (total images containing this source).  
-
-The goal is to sample $u_s, t_s, b_s$ leaving the conditional posterior invariant.  Firstly, note that only the location variable $u_s$ relies on the spatial pixel structure through $f_s(m)$.  This allows us to conditionally slice sample these values, and then effectively ignore them (when we sum over the $m$, the $f_s(m)$ term falls out and sums to one).  
-\begin{align}
-  p(u_s | \{ z_{n,m,s} \}, t_s, b_s) &\propto p( \{ z_{n,m,s} \} | u_s, t_s, b_s) \\
-  &= \prod_{m,n} p_{pois}\left(z_{n,m,s}; \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot A \Delta f_s(m) \right)
-\end{align}
-
-Conditioned on $u_s$ and $b_s$, we have a somewhat simpler likelihood 
-\begin{align}
-  p(b_s | \{z_{n,m,s}\}, t_s, u_s) 
-    &\propto p_{pois}\left( \sum_{n,m} z_{n,m,s};  \sum_{n} \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot \frac{A \Delta}{4 \pi} \right) 
-\end{align}
-which gives us a 1-dimensional slice sampling problem.  
-
-Finally, conditioned on $t_s$ and $u_s$, we have a very simple likelihood
-\begin{align}
-  p(b_s | \{z_{n,m,s}\}, t_s, u_s) 
-    &\propto p_{pois}\left( \sum_{n,m} z_{n,m,s}; \sum_{n} \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot \frac{A \Delta}{4 \pi} \right) \\
-    &= p_{pois}\left( \sum_{n,m} z_{n,m,s};  b_s C \right)
-\end{align}
-where $C$ is a constant with respect to the conditional likelihood.  We place a Gamma prior over $b_s$ for conditional conjugacy, admitting a simple posterior sampler. 
-\begin{align}
-  b_s &\sim \textrm{Gamma}(\alpha_0, \beta_0) \\
-  \sum_{n,m} z_{n,m,s} &\sim \textrm{Poisson}(b_s C) \\
-  b_s | \{z_{n,m,s}\}, t_s, u_s &\sim \textrm{Gamma}\left(\alpha_0 + \sum_{n,m}z_{n,m,s}, \beta_0 + C\right)
-\end{align}
-
+Conditioning on $Z$ allows us to consider the sources independently.  This will prove important when fitting source-specific parameters.  We will either sample (or impute) $Z_{n,m,s}$ for each pixel, and then sample (or maximize) over $u_s, t_s, b_s$ independently across sources.  
 
 \subsection{Initialization with EM}
 The goal of this section is derive a routine to find the maximum likelihood values for $\{ u_s, t_s, b_s \}_{s=1}^N$ (and $\{ \epsilon_n \}_{n=1}^N$ for a fixed number of sources $S$.  This will give us an initialization for star parameters (or allow us to sample over a conditional likelihood).  With a fixed number of sources, $S$, the latent variable formulation admits a simple and parallelize-able maximum likelihood procedure.  This can be used as a way to seed the model, or allow us to compute a MAP conditional posterior for particular parameters.  The maximum likelihood procedure is as follows
@@ -328,35 +305,101 @@ We can isolate $t_s$ in the likelihood by noting that it only depends on the num
 Decompose the source specific $Q_s$ function as 
 \begin{align*}
 Q_s(\cdot | \cdot) 
+  =& \sum_{n,m} x_{n,m} p_{n,m,s} \log\left(I(t_s,\beta_n) b_s A \Delta f_s(n,m) \right) - I(t_s,\beta_n) b_s A \Delta f_s(n,m)\\
   =& \sum_{n,m} x_{n,m} p_{n,m,s} \left(\log b_s A \Delta + \log I(t_s, \beta_n) + \log f_s(m,n) \right) - \\
    & b_s A \Delta \sum_{n} I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} f_s(m,n) \\
   =& \sum_{n} \log I(t_s, \beta_n) \underbrace{\sum_{m \in \mathcal{P}_n} x_{n,m} p_{n,m,s}}_{\equiv \tilde X_n} \\
-   & + \log (b_s A \Delta) \sum_{n,m} x_{n,m} p_{n,m,s} \\
-   & + \sum_{n,m} x_{n,m} p_{n,m,s} \log f_s(n,m) \\
-   & - b_s A \Delta \sum_{n} I(t_s, \beta_n) 
+   & + \log (b_s A \Delta) \sum_{n} \sum_{m \in \mathcal{P}_n} x_{n,m} p_{n,m,s} \\
+   & + \sum_{n} \sum_{m \in \mathcal{P}_n} x_{n,m} p_{n,m,s} \log f_s(n,m) \\
+   & - b_s A \Delta \sum_{n} I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} f_s(n,m)
 \end{align*}
 
 We can use this to derive the maximizing $b_s$ as a function of $t_s$, $\hat b_s(t_s)$, which is conveniently independent of $u_s$.  For a given $t_s$, the maximizing brightness, $\hat b_s(t_s)$ can be derived
 \begin{align}
   \frac{\partial Q(\theta)}{\partial b_s} 
-    &= \frac{1}{b_s} \sum_{n,m} x_{n,m} p_{n,m,s} - A \Delta \sum_{n} I(t_s, \beta_n) \\
+    &= \frac{1}{b_s} \sum_{n,m} x_{n,m} p_{n,m,s} - A \Delta \sum_{n} I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} f_s(n,m) \\
   \implies 
-  \hat b_s(t_s) &= \frac{1}{A \Delta \sum_n I(t_s, \beta_n)} \left( \sum_{n,m} x_{n,m} p_{n,m,s} \right)  
+  \hat b_s(t_s) &= \frac{1}{A \Delta \sum_n I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} f_s(n,m)
+} \left( \sum_{n,m} x_{n,m} p_{n,m,s} \right)  
   %&= \sum_{n,m} x_{n,m} p_{n,m,s} \log \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} - \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \\
 \end{align}
 
-Plugging this back into $Q_s(\cdot | \cdot)$, the partial likelihood with respect to $t_s$ gives us 
+Plugging this back into $Q_s(\cdot | \cdot)$, the profile likelihood with respect to $t_s$ gives us 
 \begin{align}
   \hat Q_s(t_s) 
     =& \sum_{n} \log I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} x_{n,m} p_{n,m,s} \\
-    & + \log\left( \frac{ \sum_{n,m} x_{n,m} p_{n,m,s} }{\sum_{n} I(t_s, \beta_n)} \right) \sum_{n,m} x_{n,m} p_{n,m,s} \\
+    & + \log\left( \frac{ \sum_{n,m} x_{n,m} p_{n,m,s} }{\sum_{n} I(t_s, \beta_n)\sum_{m \in \mathcal{P}_n} f_s(n,m)} \right) \sum_{n,m} x_{n,m} p_{n,m,s} \\
     & + \sum_{n,m} x_{n,m} p_{n,m,s} \log f_s(n,m) - \sum_{n,m} x_{n,m} p_{n,m,s} \\
     =& \sum_{n} \log I(t_s, \beta_n) \sum_{m\in \mathcal{P}_n} x_{n,m} p_{n,m,s} \\
-    & - \log\left( \sum_{n} I(t_s, \beta_n) \right) \sum_{n,m} x_{n,m} p_{n,m,s}
+    & - \log\left( \sum_{n} I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} f_s(n,m) \right) \sum_{n,m} x_{n,m} p_{n,m,s}
 \end{align}
 where the $t_s$ value in the last term conveniently cancels.  Now we have a one dimensional function of $t_s$ to maximize and a closed form expression for the $\hat b_s(t_s)$.  We can compute this and then compute the optimal value for $u_s$ (or simply sample it).  
 
+Note: the computationally expensive piece of this procedure is computing the statistics $\sum_{m\in \mathcal{P}_n} x_{n,m} p_{n,m,s}$ and $\sum_{m \in \mathcal{P}_n} f_s(n,m)$ for each image $n \in \{1, \dots, N\}$.  The first sum is constant with respect to the $Q_s$ function, so it need only be computed once per iteration (in fact, that computation \emph{is} the E-step).  The latter sum is only a function of the current source location value $u_s$.  If we were to optimize $u_s$ and $t_s$ jointly, then we would have to compute this value for each iteration.  \todo{at the moment - we are just maximizing over temperature, and then integrating out location w/ monte carlo in the second step.}  
+
+One saving grace is that each of these source specific maximizations can be done in parallel, so we can farm out this somewhat expensive computation to many compute nodes.  
 \end{itemize}
+
+
+\subsection{Simulating from the posterior}
+It is of scientific interest to characterize our uncertainty about the modeled properties of stars.  To do so, we compute samples from the posterior distribution over $u_s, t_s$ and $b_s$ given the photometric observations.  
+
+We can sample each source specific variable, $t_s, b_s$ and $u_s$ independently (and in parallel).  Gibbs sampling strategy then becomes
+\begin{itemize}
+\item sample $Z_{n,m,s} | X_{n,m}, \{u_s, t_s, b_s\}_{s=1}^S$
+\item for each source $s$
+  \begin{itemize}
+  \item Sample $u_s, t_s, b_s | \{z_{n,m,s}\}_{n=0}^N$
+  \end{itemize}
+\item Randomly propose a split/merge move: 
+  \begin{itemize}
+  \item Propose to split source $s$ into two sources, $s_1'$ and $s_2'$.  Accept/reject.
+  \item Propose to merge two sources, $s_1$ and $s_2$ into one source, $s'$.  Accept/reject. 
+  \end{itemize}
+  
+\item Randomly propose a birth/death move
+  \begin{itemize}
+  \item  
+  \end{itemize}
+\end{itemize}
+ 
+\subsection{Sampling source-specific parameters}
+Conditioned on the assignment of photons to specific sources, sampling the location, temperature, and brightness variables for a specific source is much simpler.  For a source $s$, we can express the likelihood conditioned on $\{z_{n,m,s}\}$ as 
+\begin{align}
+  z_{n,m,s} | u_s, t_s, b_s 
+    &\sim \textrm{Poisson}(F_{n,m,s}) \\
+    &\sim \textrm{Poisson}\left(\mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot A \Delta f_s(m,n) \right)
+\end{align}
+for $m \in 1, \dots, M_n$ (pixels per image) and $n \in 1, \dots, N$ (total images containing this source).  
+
+The goal is to sample $u_s, t_s, b_s$ leaving the conditional posterior invariant.  Firstly, note that only the location variable $u_s$ relies on the spatial pixel structure through $f_s(m)$.  This allows us to conditionally slice sample these values, and then effectively ignore them (when we sum over the $m$, the $f_s(m)$ term falls out and sums to one).  
+\begin{align}
+  p(u_s | \{ z_{n,m,s} \}, t_s, b_s) &\propto p( \{ z_{n,m,s} \} | u_s, t_s, b_s) \\
+  &= \prod_{m,n} p_{pois}\left(z_{n,m,s}; \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot A \Delta f_s(m) \right)
+\end{align}
+
+Conditioned on $u_s$ and $b_s$, we have a somewhat simpler likelihood 
+\begin{align}
+  p(b_s | \{z_{n,m,s}\}, t_s, u_s) 
+    &\propto p_{pois}\left( \sum_{n,m} z_{n,m,s};  \sum_{n} \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot \frac{A \Delta}{4 \pi} \right) 
+\end{align}
+which gives us a 1-dimensional slice sampling problem.  
+
+Finally, conditioned on $t_s$ and $u_s$, we have a very simple likelihood
+\begin{align}
+  p(b_s | \{z_{n,m,s}\}, t_s, u_s) 
+    &\propto p_{pois}\left( \sum_{n,m} z_{n,m,s}; \sum_{n} \mathbf{f}_{t_s}^\trans \mathbf{h}_{\beta_n} \cdot b_s \cdot \frac{A \Delta}{4 \pi} \right) \\
+    &= p_{pois}\left( \sum_{n,m} z_{n,m,s};  b_s C \right)
+\end{align}
+where $C$ is a constant with respect to the conditional likelihood.  We place a Gamma prior over $b_s$ for conditional conjugacy, admitting a simple posterior sampler. 
+\begin{align}
+  b_s &\sim \textrm{Gamma}(\alpha_0, \beta_0) \\
+  \sum_{n,m} z_{n,m,s} &\sim \textrm{Poisson}(b_s C) \\
+  b_s | \{z_{n,m,s}\}, t_s, u_s &\sim \textrm{Gamma}\left(\alpha_0 + \sum_{n,m}z_{n,m,s}, \beta_0 + C\right)
+\end{align}
+
+
+
 
 \section{Priors}
 For sampling, we must define priors over all of our source and image parameters.  
@@ -369,13 +412,36 @@ For sampling, we must define priors over all of our source and image parameters.
 \end{align}
 
 
-However, we are also free to choose informative priors based on prior knowledge of the joint distribution of the temperatures and luminosities of stars.  For instance, different types of stars exhibit characteristic behavior, such as the stars falling along the main sequence, giants, white dwarfs, etc.  We can encode this prior knowledge by imposing 
+However, we are also free to choose informative priors based on prior knowledge of the joint distribution of the temperatures and luminosities of stars.  For instance, different types of stars exhibit characteristic behavior, such as the stars falling along the main sequence, giants, white dwarfs, etc.  We can encode this prior knowledge by introducing an informative prior of these different types.  
 \begin{align}
   t_s, b_s &\sim P
 \end{align}
 
 
+\section{Analysis}
 
+\begin{figure}[t!]
+\begin{center}
+\begin{subfigure}[a]{.45\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/temp_marginal"}}
+  \caption{Temperature, $t_s$}
+\end{subfigure}
+\begin{subfigure}[a]{.45\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/bright_marginal"}}
+  \caption{Brightness, $b_s$}
+\end{subfigure}
+\begin{subfigure}[a]{.45\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/loc_samples"}}
+  \caption{Location samples, $u_s$}
+\end{subfigure}
+\begin{subfigure}[a]{.45\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/like_trace"}}
+  \caption{likelihood trace}
+\end{subfigure}
+\end{center}
+\caption{Posterior marginals for temperature and brightness variables for a single source with a uniform prior.  Posterior location samples and likelihood trace. }
+\label{fig:marginals}
+\end{figure}
 
 
 

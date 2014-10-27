@@ -231,7 +231,8 @@ class FitsImage():
 
         # set image specific KAPPA and epsilon 
         self.kappa   = header['GAIN']     # TODO is this right??
-        self.epsilon = header['SKY'] * self.kappa
+        self.epsilon = header['SKY'] * self.kappa # background rate
+        self.epsilon0 = self.epsilon      # background rate copy (for debuggin)
         self.darkvar = header['DARKVAR']  # also eventually contributes to mean?
         self.calib   = header['CALIB']    # dn = nmaggies / calib, calib is NMGY
 
