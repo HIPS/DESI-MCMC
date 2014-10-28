@@ -26,10 +26,10 @@ def gen_src_image(src, image):
           - image : FitsImage object
     """
     # 0. Compute expected photon count for this image from source
-    if src.fluxes is not None:
-        expected_photons = image.kappa * src.fluxes[image.band] / image.calib
-    elif src.b is not None and src.t is not None:
+    if src.b is not None and src.t is not None:
         expected_photons = photons_expected_brightness(src.t, src.b, image.band)
+    elif src.fluxes is not None:
+        expected_photons = image.kappa * src.fluxes[image.band] / image.calib
     else:
         raise Exception("No way to compute expected photons without at least fluxes or brightness")
 

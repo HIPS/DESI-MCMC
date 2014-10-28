@@ -1,8 +1,8 @@
 import planck
 import numpy as np
 from scipy.optimize import fmin 
-from celeste import celeste_likelihood_multi_image, gen_src_prob_layers, gen_point_source_psf_image
-from util.plot_util import compare_to_model
+from celeste import celeste_likelihood_multi_image, gen_src_prob_layers, gen_point_source_psf_image, gen_src_image
+from util.plot_util import compare_to_model, subplot_imshow_colorbar
 from mcmc_transitions import sampleAuxSourceCounts
 from util.slicesample import slicesample
 import matplotlib.pyplot as plt
@@ -148,55 +148,98 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
     printif("    sampling Z's", verbose)
     all_src_images = []
     for img in imgs:
-        src_image = sampleAuxSourceCounts(srcs, img, eta=0)
-        #src_probs = gen_src_prob_layers(srcs, img)
-        #src_image = np.array(src_probs.shape)
-        #print src_image.shape
-        #for (i,j), xij in np.ndenumerate(img.nelec):
-        #    print src_probs[:,i,j], np.sum(src_probs[:,i,j])
-        #    src_image[:,i,j] = np.random.multinomial(int(xij), src_probs[:,i,j])
+        #src_image = sampleAuxSourceCounts(srcs, img, eta=0)
+        src_probs = gen_src_prob_layers(srcs, img)
+        src_image = np.zeros(src_probs.shape)
+        for (i,j), xij in np.ndenumerate(img.nelec):
+            src_image[:,i,j] = np.random.multinomial(int(xij), src_probs[:,i,j])
         all_src_images.append(src_image)
-    printif("    .... done", verbose)
+
+        #### debug #####
+        if debug:
+            if img.band == 'r':
+                fig, axarr = plt.subplots(1, src_image.shape[0])
+                subplot_imshow_colorbar(src_image, fig, axarr)
+                plt.show()
+        #### end debug ####
+    printif("      .... done", verbose)
+
+    # compute optimal noise param for each image
+    printif("    sampling image specific epsilons", verbose)
+    a_0 = 5      # convolution parameter - higher tends to avoid 0
+    b_0 = .005   # inverse scale parameter
+    for i,img in enumerate(imgs):
+        a_n = a_0 + np.sum(all_src_images[i][0,:,:])
+        b_n = b_0 + img.nelec.size
+        eps_tmp = img.epsilon
+        img.epsilon = np.random.gamma(a_n, 1./b_n)
+        printif("      img %d eps %2.2f => %2.2f (eps0 = %2.2f)"%(i, eps_tmp, img.epsilon, img.epsilon0), 
+                verbose and i < 5)
+    printif("      .... done", verbose)
 
     # for each source, sample source specific params
     # TODO: add some sort of prior over brightness and temp (maybe location)
     for s in range(len(srcs)):
 
         #### joint Temp, Brightness source specific opt func (Q function)
-        def temp_bright_like(th):
+        def temp_bright_like(th, fs_sum):
             ll = 0
             for i, img in enumerate(imgs): 
-                expected_num_photons = planck.photons_expected_brightness(th[0], th[1], img.band)
-                ll += np.sum(all_src_images[i][s+1,:,:]) * np.log(expected_num_photons) - expected_num_photons
+                expected_num_photons = fs_sum[i]*planck.photons_expected_brightness(th[0], th[1], img.band)
+                if expected_num_photons > 0:
+                    ll += np.sum(all_src_images[i][s+1,:,:]) * np.log(expected_num_photons) - expected_num_photons
             return ll
 
-        #### likelihood factor that only depends on location
+        #### likelihood factor that only depends on locatio
         def loc_like(u): 
+            ll = 0
+            srcs[s].u = u
             for n, img in enumerate(imgs):
-                f_sn = gen_point_source_psf_image(u, img)
-                return (np.log(f_sn) * all_src_images[n][s+1,:,:]).sum()
+                f_sn = gen_src_image(srcs[s], img)
+
+                # mask to remove the negative infinities
+                mask = all_src_images[n][s+1,:,:] > 0
+                ll  += np.sum(np.log(f_sn[mask])*all_src_images[n][s+1,mask]) \
+                       - f_sn.sum()
+            return ll
 
         #### iterate a bunch - sample locs and brightness/temps
         for gibbs_iter in range(subiter):
 
             # sample temp/brightness
-            printif( "    slice sampling t's and b's", verbose)
-            th, ll = slicesample(xx       = np.array([srcs[s].t, srcs[s].b]), 
-                                 llh_func = temp_bright_like,
-                                 step     = [1000, .1], 
-                                 step_out = True)
+            printif( "    source %d: slice sampling t's and b's"%s, verbose)
+
+            # cache existing state
+            tmp_t = srcs[s].t
+            tmp_b = srcs[s].b
+
+            # compute fraction of photons this image will see
+            sum_fs   = np.zeros(len(imgs))  
+            for n, img in enumerate(imgs):
+                sum_fs[n] = min(1., np.sum(gen_point_source_psf_image(srcs[s].u, img)))
+            for it in range(5):
+                th     = np.array([srcs[s].t, srcs[s].b])
+                th, ll = slicesample(xx       = th,
+                                     llh_func = lambda(th): temp_bright_like(th, sum_fs),
+                                     step     = [1000, .1], 
+                                     step_out = True)
             srcs[s].t = th[0]
             srcs[s].b = th[1]
-            printif("    .... done", verbose)
+            printif("        t: %2.2f => %2.2f"%(tmp_t, srcs[s].t),
+                    verbose and s < 5)
+            printif("        b: %.4g  => %.4g"%(tmp_b, srcs[s].b), 
+                    verbose and s < 5)
 
             # sample location
-            printif("    slice sampling u's", verbose)
+            tmp_u = srcs[s].u
             u, ll = slicesample(xx       = srcs[s].u,
                                 llh_func = loc_like,
-                                step     = [1e-3, 1e-3])
+                                step     = [1., 1.], 
+                                step_out = False)
             srcs[s].u = u
-            printif("    .... done", verbose)
+            printif("        u: (%2.2f, %2.2f) => (%2.2f, %2.2f)"%(tmp_u[0], tmp_u[1], u[0], u[1]), verbose)
     return None
+
 
 def printif(statement, condition):
     if condition:
