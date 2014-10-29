@@ -1,11 +1,13 @@
 import planck
 import numpy as np
+from scipy.stats import gamma
 from scipy.optimize import fmin 
 from celeste import celeste_likelihood_multi_image, gen_src_prob_layers, gen_point_source_psf_image, gen_src_image
 from util.plot_util import compare_to_model, subplot_imshow_colorbar
 from mcmc_transitions import sampleAuxSourceCounts
 from util.slicesample import slicesample
 import matplotlib.pyplot as plt
+from util.timer_util import *
 
 def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True): 
     """ maximizes log likelihood over fixed-num-source parameters 
@@ -49,7 +51,7 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
         for i,img in enumerate(imgs):
             eps_tmp = img.epsilon
             img.epsilon = np.sum(img.nelec * src_probs[0,:,:]) / (img.nelec.size)
-            printif("      img %d eps %2.2f => %2.2f (eps0 = %2.2f)"%(i, eps_tmp, img.epsilon, img.epsilon0), verbose)
+            printif("      img %d eps %2.2f => %2.2f (eps0 = %2.2f)"%(i, eps_tmp, img.epsilon, img.epsilon0), verbose > 1)
 
         # compute optimal params for each source
         for s in range(len(srcs)):
@@ -110,8 +112,8 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
             fac   = 1./(planck.lens_area * planck.exposure_duration * \
                         planck.sun_wattage / (planck.m_per_ly**2))
             b_hat = fac * (1./I_ts.dot(sum_fs)) * X_tildes.sum()
-            printif("   src %d temp       = %2.2f => %2.2f"%(s, srcs[s].t, t_hat), verbose)
-            printif("   src %d brightness = %2.2f => %2.2f"%(s, srcs[s].b, b_hat), verbose)
+            printif("   src %d temp       = %2.2f => %2.2f"%(s, srcs[s].t, t_hat), verbose>1)
+            printif("   src %d brightness = %2.2f => %2.2f"%(s, srcs[s].b, b_hat), verbose>1)
             srcs[s].t = t_hat
             srcs[s].b = b_hat
 
@@ -181,13 +183,15 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
     # TODO: add some sort of prior over brightness and temp (maybe location)
     for s in range(len(srcs)):
 
-        #### joint Temp, Brightness source specific opt func (Q function)
+        #### joint Temp, Brightness source specific opt func
         def temp_bright_like(th, fs_sum):
             ll = 0
             for i, img in enumerate(imgs): 
                 expected_num_photons = fs_sum[i]*planck.photons_expected_brightness(th[0], th[1], img.band)
                 if expected_num_photons > 0:
                     ll += np.sum(all_src_images[i][s+1,:,:]) * np.log(expected_num_photons) - expected_num_photons
+            ll += gamma(2, scale=1/.0002).logpdf(th[0])
+            ll += gamma(1., scale=1.).logpdf(th[1])
             return ll
 
         #### likelihood factor that only depends on locatio
@@ -217,12 +221,13 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
             sum_fs   = np.zeros(len(imgs))  
             for n, img in enumerate(imgs):
                 sum_fs[n] = min(1., np.sum(gen_point_source_psf_image(srcs[s].u, img)))
-            for it in range(5):
+            for it in range(2):
                 th     = np.array([srcs[s].t, srcs[s].b])
                 th, ll = slicesample(xx       = th,
                                      llh_func = lambda(th): temp_bright_like(th, sum_fs),
                                      step     = [1000, .1], 
-                                     step_out = True)
+                                     step_out = True,
+                                     x_l      = [0., 0.])
             srcs[s].t = th[0]
             srcs[s].b = th[1]
             printif("        t: %2.2f => %2.2f"%(tmp_t, srcs[s].t),
@@ -237,7 +242,8 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
                                 step     = [1., 1.], 
                                 step_out = False)
             srcs[s].u = u
-            printif("        u: (%2.2f, %2.2f) => (%2.2f, %2.2f)"%(tmp_u[0], tmp_u[1], u[0], u[1]), verbose)
+            printif("        u: (%.4g, %4g) => (%.4g, %.4g)"%(tmp_u[0], tmp_u[1], u[0], u[1]), 
+                    verbose and s < 5)
     return None
 
 

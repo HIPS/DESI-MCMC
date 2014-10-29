@@ -37,13 +37,16 @@ def gen_src_image(src, image):
     f_s = gen_point_source_psf_image(src.u, image)
     return f_s * expected_photons
 
-def gen_point_source_psf_image(u, image): 
+def gen_point_source_psf_image(u, image, check_overlap=True): 
     """ generates a PSF image (assigns density values to pixels) """
     # compute pixel space location of source
     # returns the X,Y = Width, Height pixel coordinate corresponding to u
     v_s = image.equa2pixel(u)
+    if check_overlap and \
+        (v_s[0] < -50 or v_s[0] > 2*image.nelec.shape[0] or v_s[1] < -50 or v_s[0] > 2*image.nelec.shape[1]):
+       return np.zeros(image.nelec.shape)
 
-    # TODO: turn this into a convolution
+    # TODO: turn this into a convolution/speed it uppp
     # compute pixel space location, v_{n,s}
     y_grid = np.arange(image.nelec.shape[0]) + 1
     x_grid = np.arange(image.nelec.shape[1]) + 1
