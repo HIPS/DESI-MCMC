@@ -37,7 +37,6 @@ def plot_comparison(band, file_ra_dec, model_image):
     plt.colorbar(im)
     return fig, axarr
 
-
 def compare_to_model(srcs, img, fig=None, axarr=None): 
     """ plots true image, model image, and difference (much like above) 
         Input: 
@@ -69,4 +68,17 @@ def compare_to_model(srcs, img, fig=None, axarr=None):
     cax3 = divider3.append_axes('right', size='10%', pad=.05)
     cbar3 = fig.colorbar(im3, cax=cax3)
     return fig, axarr
+
+
+def subplot_imshow_colorbar(imgs, fig=None, axarr=None):
+    if fig is None or axarr is None:
+        fig, axarr = plt.subplots(1, len(imgs))
+
+    for i in range(len(imgs)):
+        im = axarr[i].imshow(imgs[i], interpolation = 'none', origin = 'lower')
+        divider = make_axes_locatable(axarr[i])
+        cax = divider.append_axes('right', size='10%', pad=.05)
+        cbar = fig.colorbar(im, cax=cax)
+    return fig, axarr
+
 

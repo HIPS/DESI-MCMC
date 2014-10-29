@@ -271,6 +271,7 @@ The goal of this section is derive a routine to find the maximum likelihood valu
 \begin{align}
   z_{n,m,s} | u_s, t_s, b_s, x_{n,m,s}
     &\sim \textrm{Mult}(p_{n,m,0}, \dots, p_{n,m,S}; n = x_{n,m})
+  \label{eq:mult}
 \end{align}
 where 
 \begin{align}
@@ -340,30 +341,42 @@ Note: the computationally expensive piece of this procedure is computing the sta
 One saving grace is that each of these source specific maximizations can be done in parallel, so we can farm out this somewhat expensive computation to many compute nodes.  
 \end{itemize}
 
-
 \subsection{Simulating from the posterior}
-It is of scientific interest to characterize our uncertainty about the modeled properties of stars.  To do so, we compute samples from the posterior distribution over $u_s, t_s$ and $b_s$ given the photometric observations.  
+It is of scientific interest to characterize our uncertainty about the modeled properties of stars.  Toward this end, we generate samples from the posterior distribution over each source $u_s, t_s$ and $b_s$ given the photometric observations, $\{ x \}$.  To do so, we again use the Poisson-Multinomial relationship by first attributing each photon observation to a particular source (sampling $z_{n,m,s}$) and then sampling the image specific noise terms, $\epsilon_n$, as well as source specific parameters.  
 
-We can sample each source specific variable, $t_s, b_s$ and $u_s$ independently (and in parallel).  Gibbs sampling strategy then becomes
-\begin{itemize}
-\item sample $Z_{n,m,s} | X_{n,m}, \{u_s, t_s, b_s\}_{s=1}^S$
-\item for each source $s$
-  \begin{itemize}
-  \item Sample $u_s, t_s, b_s | \{z_{n,m,s}\}_{n=0}^N$
-  \end{itemize}
-\item Randomly propose a split/merge move: 
-  \begin{itemize}
-  \item Propose to split source $s$ into two sources, $s_1'$ and $s_2'$.  Accept/reject.
-  \item Propose to merge two sources, $s_1$ and $s_2$ into one source, $s'$.  Accept/reject. 
-  \end{itemize}
-  
-\item Randomly propose a birth/death move
-  \begin{itemize}
-  \item  
-  \end{itemize}
-\end{itemize}
+\paragraph{Sampling source responsibilities, $z_{n,m,s}$}
+In the previous section we characterized the distribution over the source responsibilities, as a simple Multinomial, Equation~\ref{eq:mult}. The first step in our posterior sampling routine is to simply generate from this multinomial distribution. Conditioning on this realization will render our sources independent, giving us both analytic and computational tractability for generating posterior samples.  
+
+From here, it is useful highlighting the decomposition of the complete data likelihood to see which components need to be re-computed during sampling 
+\begin{align}
+  \log p( \{u_s, t_s, b_s\}, \{ \epsilon_n\} | \{ z \})
+  =& \underbrace{\left( \sum_{n,m} z_{n,m,0} \log \epsilon_n - \epsilon_n \right)}_{\text{image noise}} + \\
+     & \underbrace{\left(\sum_{n,m,s\neq 0} z_{n,m,s} \log F_{n,m,s} - F_{n,m,s}\right)}_{\text{source params}} 
+\end{align}
+and source specific conditionals are
+\begin{align}
+\log p(u_s, t_s, b_s | \{z\}) 
+  =& \sum_{n,m} z_{n,m,s} \log\left(I(t_s,\beta_n) b_s A \Delta f_s(n,m) \right) - I(t_s,\beta_n) b_s A \Delta f_s(n,m)\\
+  =& \sum_{n,m} z_{n,m,s} \left(\log b_s A \Delta + \log I(t_s, \beta_n) + \log f_s(m,n) \right) - \\
+   & b_s A \Delta \sum_{n} I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} f_s(m,n) \\
+  =& \sum_{n} \log I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} z_{n,m,s} \\
+   & + \log (b_s A \Delta) \sum_{n} \sum_{m \in \mathcal{P}_n} z_{n,m,s} \\
+   & + \sum_{n} \sum_{m \in \mathcal{P}_n} z_{n,m,s} \log f_s(n,m) \\
+   & - b_s A \Delta \sum_{n} I(t_s, \beta_n) \sum_{m \in \mathcal{P}_n} f_s(n,m)
+\end{align}
+
+
+\paragraph{Sampling image noise parameters, $\epsilon_n$}
+Conditioned on $z_{n,m,s}$, each image can be viewed as a single Poisson observation
+\begin{align}
+  \sum_{m \in \mathcal{P}_n} z_{n,m,s} &\sim \textrm{Poisson}(M_n \epsilon_n)
+\end{align}
+Placing a $\textrm{Gamma}(a_0, b_0)$ prior on $\epsilon_n$ yields a simple conjugate update for the posterior 
+\begin{align}
+  \epsilon_n | z_{n,m,s}, \dots &\sim \textrm{Gamma}\left(a_0 + \sum_{m\in \mathcal{P}_n} z_{n,m,s}, b_0 + M_n \right)
+\end{align}
  
-\subsection{Sampling source-specific parameters}
+\paragraph{Sampling source-specific parameters}
 Conditioned on the assignment of photons to specific sources, sampling the location, temperature, and brightness variables for a specific source is much simpler.  For a source $s$, we can express the likelihood conditioned on $\{z_{n,m,s}\}$ as 
 \begin{align}
   z_{n,m,s} | u_s, t_s, b_s 
@@ -398,6 +411,30 @@ where $C$ is a constant with respect to the conditional likelihood.  We place a 
   b_s | \{z_{n,m,s}\}, t_s, u_s &\sim \textrm{Gamma}\left(\alpha_0 + \sum_{n,m}z_{n,m,s}, \beta_0 + C\right)
 \end{align}
 
+\subsection{Discovering and discarding sources}
+\todo{Discuss reversible jump moves}
+
+\subsection{Posterior sampling summary}
+\todo{Might be a good idea to have the whole algorithm laid out here}
+
+We can sample each source specific variable, $t_s, b_s$ and $u_s$ independently (and in parallel).  Gibbs sampling strategy then becomes
+\begin{itemize}
+\item sample $Z_{n,m,s} | X_{n,m}, \{u_s, t_s, b_s\}_{s=1}^S$
+\item for each source $s$
+  \begin{itemize}
+  \item Sample $u_s, t_s, b_s | \{z_{n,m,s}\}_{n=0}^N$
+  \end{itemize}
+\item Randomly propose a split/merge move: 
+  \begin{itemize}
+  \item Propose to split source $s$ into two sources, $s_1'$ and $s_2'$.  Accept/reject.
+  \item Propose to merge two sources, $s_1$ and $s_2$ into one source, $s'$.  Accept/reject. 
+  \end{itemize}
+  
+\item Randomly propose a birth/death move
+  \begin{itemize}
+  \item  
+  \end{itemize}
+\end{itemize}
 
 
 
@@ -420,26 +457,49 @@ However, we are also free to choose informative priors based on prior knowledge 
 
 \section{Analysis}
 
+Preliminary experiments.  
+
 \begin{figure}[t!]
 \begin{center}
-\begin{subfigure}[a]{.45\textwidth}
-  \includegraphics[width=\textwidth]{{"imgs/temp_marginal"}}
+\begin{subfigure}[a]{.48\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/plot/temp_1_"}}
   \caption{Temperature, $t_s$}
 \end{subfigure}
-\begin{subfigure}[a]{.45\textwidth}
-  \includegraphics[width=\textwidth]{{"imgs/bright_marginal"}}
-  \caption{Brightness, $b_s$}
+\begin{subfigure}[a]{.48\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/plot/temp_bright_1"}}
+  \caption{Temperature vs. brightness samples}
 \end{subfigure}
-\begin{subfigure}[a]{.45\textwidth}
-  \includegraphics[width=\textwidth]{{"imgs/loc_samples"}}
-  \caption{Location samples, $u_s$}
+
+\begin{subfigure}[a]{.48\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/plot/temp_3_"}}
+  \caption{Temperature, $t_s$}
 \end{subfigure}
-\begin{subfigure}[a]{.45\textwidth}
-  \includegraphics[width=\textwidth]{{"imgs/like_trace"}}
-  \caption{likelihood trace}
+\begin{subfigure}[a]{.48\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/plot/temp_bright_3"}}
+  \caption{Temperature vs. brightness samples}
 \end{subfigure}
+
+
+\begin{subfigure}[a]{.48\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/plot/temp_15_"}}
+  \caption{Temperature, $t_s$}
+\end{subfigure}
+\begin{subfigure}[a]{.48\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/plot/temp_bright_15"}}
+  \caption{Temperature vs. brightness samples}
+\end{subfigure}
+
+\begin{subfigure}[a]{.48\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/plot/temp_8_"}}
+  \caption{Temperature, $t_s$}
+\end{subfigure}
+\begin{subfigure}[a]{.48\textwidth}
+  \includegraphics[width=\textwidth]{{"imgs/plot/temp_bright_8"}}
+  \caption{Temperature vs. brightness samples}
+\end{subfigure}
+
 \end{center}
-\caption{Posterior marginals for temperature and brightness variables for a single source with a uniform prior.  Posterior location samples and likelihood trace. }
+\caption{Posterior marginals for temperature (with a corresponding measured effective temperature in green if available), on the left.  On the right are temperature vs.~brightness posterior samples for the corresponding sources.  Note the correlation structure that exists in the posterior  }
 \label{fig:marginals}
 \end{figure}
 
