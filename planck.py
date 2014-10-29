@@ -53,8 +53,10 @@ wavelength_lookup, sensitivity_lookup, h_vecs = load_filter_curves()
 
 def spec_density(T, wavelengths):
     """ returns the spectral density for temperature t evaluated at wavelengths """
-    radiances          = hpicc2 / (np.power(wavelengths, 5.) * (np.exp(hc_k / (wavelengths * T)) - 1))
-    total_radiance     = sigma * np.power(T, 4.) #across bands, per m^2
+    w5 = wavelengths * wavelengths * wavelengths * wavelengths * wavelengths
+    T4 = T * T * T * T
+    radiances          = hpicc2 / (w5 * (np.exp(hc_k / (wavelengths * T)) - 1))
+    total_radiance     = sigma * T4 # np.power(T, 4.) #across bands, per m^2
     radiance_densities = radiances / total_radiance
     return radiance_densities
 
