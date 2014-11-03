@@ -51,8 +51,36 @@ def load_filter_curves():
     return wavelength_lookup, sensitivity_lookup, h_vecs
 wavelength_lookup, sensitivity_lookup, h_vecs = load_filter_curves()
 
+
+######################################################################
+# Expected number of photons Cacher
+######################################################################
+class PhotonPerJouleCacher:
+    def __init__(self):
+        self.band_temps  = dict(zip(bands, 5*[None]))
+        self.band_counts = dict(zip(bands, 5*[None]))
+
+    def has(self, temp, band):
+        return self.band_temps[band]==temp
+
+    def get(self, band):
+        return self.band_counts[band]
+
+    def set(self, temp, band, counts):
+        self.band_temps[band] = temp
+        self.band_counts[band] = counts
+
+# instantiate global cacher
+photon_cacher = PhotonPerJouleCacher()
+
+#######################################################################
+# Expected number of photons computation
+#######################################################################
 def spec_density(T, wavelengths):
-    """ returns the spectral density for temperature t evaluated at wavelengths """
+    """ returns the spectral density corresponding to a blackbody at 
+    temperature T along the input wavelengths
+    NOTE: this function is often the most called, and is quite slow!
+    """
     w5 = wavelengths * wavelengths * wavelengths * wavelengths * wavelengths
     T4 = T * T * T * T
     radiances          = hpicc2 / (w5 * (np.exp(hc_k / (wavelengths * T)) - 1))
@@ -60,9 +88,6 @@ def spec_density(T, wavelengths):
     radiance_densities = radiances / total_radiance
     return radiance_densities
 
-#######################################################################
-# Expected number of photons computation
-#######################################################################
 def photons_per_joule(T, band):
     """ Computes the number of expected photons for a given band at a given 
         energy level?? 
@@ -70,6 +95,22 @@ def photons_per_joule(T, band):
             - T
             - band: string in bands
     """
+    # we might have cached this op - check for it
+    if photon_cacher.has(T, band):
+        ##### DEBUG photon CACHER ########
+        #if False: 
+        #    x = wavelength_lookup[band]
+        #    if T <= 0:
+        #        I_tb = 0
+        #    else: 
+        #        f_vec = spec_density(T, x)
+        #        I_tb  = f_vec.dot(h_vecs[band])
+        #    if I_tb != photon_cacher.get(band):
+        #        print "NOOOO!", I_tb, photon_cacher.get(band)
+        #    assert I_tb == photon_cacher.get(band)
+        return photon_cacher.get(band)
+
+    # otherwise, continue with the slow-ish computation
     x = wavelength_lookup[band]
     if len(x) == 0: 
       raise Exception('Band band: %s'%band)
@@ -89,8 +130,13 @@ def photons_per_joule(T, band):
     #return out
 
     # quicker photons_per_joule - compute approx to spectral density and filter
-    f_vec = spec_density(T, x)
-    return f_vec.dot(h_vecs[band])
+    if T <= 0:
+        I_tb = 0
+    else: 
+        f_vec = spec_density(T, x)
+        I_tb  = f_vec.dot(h_vecs[band])
+    photon_cacher.set(T, band, I_tb)
+    return I_tb
 
 def photons_expected(T, solar_L, d, band):
     L          = solar_L * sun_wattage          # Joules/Seconds of source
