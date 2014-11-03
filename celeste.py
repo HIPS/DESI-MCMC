@@ -15,7 +15,7 @@ import fitsio
 import numpy as np
 from scipy.misc import logsumexp
 from astropy.wcs import WCS
-from gmm_like import gmm_log_like
+from gmm_like import gmm_like
 from planck import photons_expected, photons_expected_brightness
 
 def gen_src_image(src, image):
@@ -51,10 +51,16 @@ def gen_point_source_psf_image(u, image, check_overlap=True):
     y_grid = np.arange(image.nelec.shape[0]) + 1
     x_grid = np.arange(image.nelec.shape[1]) + 1
     yy, xx = np.meshgrid(x_grid, y_grid, indexing='xy')
-    f_s    = np.exp(gmm_log_like(np.column_stack((xx.ravel(), yy.ravel())),
-                                 image.weights,
-                                 image.means + v_s,
-                                 image.covars).reshape(xx.shape)).T
+    f_s    = gmm_like(np.column_stack((xx.ravel(), yy.ravel())),
+                      image.weights,
+                      image.means + v_s,
+                      image.covars,
+                      invsigs = image.invcovars,
+                      logdets = image.logdets).reshape(xx.shape).T
+    #f_s    = np.exp(gmm_log_like(np.column_stack((xx.ravel(), yy.ravel())),
+    #                             image.weights,
+    #                             image.means + v_s,
+    #                             image.covars).reshape(xx.shape)).T
     # slow for sanity check
     #for x in range(image.nelec.shape[1]): 
     #    for y in range(image.nelec.shape[0]):
@@ -215,7 +221,7 @@ class FitsImage():
         self.img       = fitsio.read(self.band_file)
         header         = fitsio.read_header(self.band_file)
         self.header    = header
- 
+
         # Compute the number of electrons, resource: 
         # http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
         # (Neither of these look like integers)
@@ -229,6 +235,8 @@ class FitsImage():
         self.phi_n = np.array([header['CRVAL1'], header['CRVAL2']])  # EQUA REFERENCE POINT
         self.Ups_n = np.array([[header['CD1_1'], header['CD1_2']],   # MATRIX takes you into EQUA TANGENT PLANE
                                [header['CD2_1'], header['CD2_2']]])
+        self.Ups_n_inv = np.linalg.inv(self.Ups_n)
+
         # astrometry wcs object for pixel x,y to equa ra,dec conversion
         self.wcs = WCS(self.band_file) #Tan(self.band_file)
 
@@ -245,14 +253,33 @@ class FitsImage():
         self.means   = np.array(psfvec[3:9]).reshape(3, 2)  # one comp mean per row
         covars       = np.array(psfvec[9:]).reshape(3, 3)   # [var_k(x), var_k(y), cov_k(x,y)] per row
         self.covars  = np.zeros((3, 2, 2))
+        self.invcovars = np.zeros((3, 2, 2))
+        self.logdets   = np.zeros(3)
         for i in range(3):
-            self.covars[i,:,:] = np.array([[ covars[i,0],  covars[i,2]],
-                                           [ covars[i,2],  covars[i,1]]])
+            self.covars[i,:,:]    = np.array([[ covars[i,0],  covars[i,2]],
+                                              [ covars[i,2],  covars[i,1]]])
+
+            # cache inverse covariance 
+            self.invcovars[i,:,:] = np.linalg.inv(self.covars[i,:,:])
+
+            # cache log determinant
+            sign, logdet = np.linalg.slogdet(self.covars[i,:,:])
+            self.logdets[i] = logdet
 
     def equa2pixel(self, s_equa):
-        x, y = self.wcs.wcs_world2pix(s_equa[0], s_equa[1], 1)
-        return np.array([x, y])
+        #### the WCS operation takes forever for some reason... 
+        #x, y = self.wcs.wcs_world2pix(s_equa[0], s_equa[1], 1)
+        #return np.array([x, y])
+
+        # faster calculation - directly from fits UPS image
+        phi1rad = self.phi_n[1] / 180. * np.pi
+        s_iwc = np.array([ (s_equa[0] - self.phi_n[0]) * np.cos(phi1rad),
+                           (s_equa[1] - self.phi_n[1]) ])
+        s_pix = self.Ups_n_inv.dot(s_iwc) + self.rho_n
+        #print x,y, s_pix
+        return s_pix
 
     def pixel2equa(self, s_pixel):
         r, d = self.wcs.wcs_pix2world(s_pixel[0], s_pixel[1], 1)
         return np.array([r, d]) 
+
