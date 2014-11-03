@@ -20,6 +20,12 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
     prev_ll = celeste_likelihood_multi_image(srcs, imgs)
     ll_trace = [prev_ll]
 
+    # cache the unique bands present in the dataset - if it's a small number 
+    # we can cut a few corners computing the number of expected photons per 
+    # joule in each band for a given temperature
+    imgbands    = np.array([img.band for img in imgs])
+    uniquebands = np.unique(imgbands)
+
     printif("Initial Log Likelihood = %2.2f"%prev_ll, verbose)
     for em_iter in range(maxiter):
         printif("============================================", verbose)
@@ -80,6 +86,22 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
                     sum_fs[n] = min(1., np.sum(gen_point_source_psf_image(srcs[s].u, img)))
                 return X_tildes, sum_fs
 
+            # instead of re-computing for each image band, we can just cache 
+            # the result and reference it later.  All 'r' band images yield 
+            # the same 'photon per joule' count at temperature t
+            # WOOO this is about 10x faster!
+            def compute_photons_per_joule_per_image(t, imgbands): 
+                I_ts = np.zeros(len(imgbands))
+                for i, b in enumerate(uniquebands):
+                    I_ts[imgbands==b] = planck.photons_per_joule(t, b)
+
+                ######## DEBUG ###############################################
+                if False:
+                    I_ts_slow = np.array([planck.photons_per_joule(temp, img.band) for img in imgs])
+                    assert np.all(I_ts_slow == I_ts), 'photons per joule per image do not match!'
+                ###############################################################
+                return I_ts
+
             # Cache image statistics that are constant - the PSF computation is 
             # expensive and not necessary at this point
             X_tildes, sum_fs = compute_image_statistics(srcs[s].t)
@@ -87,7 +109,7 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
             # profile likelihood - only of temperature
             def partial_loss(temp): 
                 # compute I(t_s, beta_n) - num photons you'd expect to see
-                I_ts = np.array([planck.photons_per_joule(temp, img.band) for img in imgs])
+                I_ts = compute_photons_per_joule_per_image(temp, imgbands)
                 return X_tildes.dot(np.log(I_ts)) - \
                        np.log(I_ts.dot(sum_fs)) * X_tildes.sum()
 
@@ -108,7 +130,8 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
             t_hat = t_hat[0]
 
             ## 2) compute maximal brightness \hat b_s( \hat t_s )
-            I_ts = np.array([planck.photons_per_joule(t_hat, img.band) for img in imgs])
+            #I_ts = np.array([planck.photons_per_joule(t_hat, img.band) for img in imgs])
+            I_ts  = compute_photons_per_joule_per_image(t_hat, imgbands)
             fac   = 1./(planck.lens_area * planck.exposure_duration * \
                         planck.sun_wattage / (planck.m_per_ly**2))
             b_hat = fac * (1./I_ts.dot(sum_fs)) * X_tildes.sum()
@@ -183,30 +206,6 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
     # TODO: add some sort of prior over brightness and temp (maybe location)
     for s in range(len(srcs)):
 
-        #### joint Temp, Brightness source specific opt func
-        def temp_bright_like(th, fs_sum):
-            ll = 0
-            for i, img in enumerate(imgs): 
-                expected_num_photons = fs_sum[i]*planck.photons_expected_brightness(th[0], th[1], img.band)
-                if expected_num_photons > 0:
-                    ll += np.sum(all_src_images[i][s+1,:,:]) * np.log(expected_num_photons) - expected_num_photons
-            ll += gamma(2, scale=1/.0002).logpdf(th[0])
-            ll += gamma(1., scale=1.).logpdf(th[1])
-            return ll
-
-        #### likelihood factor that only depends on locatio
-        def loc_like(u): 
-            ll = 0
-            srcs[s].u = u
-            for n, img in enumerate(imgs):
-                f_sn = gen_src_image(srcs[s], img)
-
-                # mask to remove the negative infinities
-                mask = all_src_images[n][s+1,:,:] > 0
-                ll  += np.sum(np.log(f_sn[mask])*all_src_images[n][s+1,mask]) \
-                       - f_sn.sum()
-            return ll
-
         #### iterate a bunch - sample locs and brightness/temps
         for gibbs_iter in range(subiter):
 
@@ -224,7 +223,7 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
             for it in range(2):
                 th     = np.array([srcs[s].t, srcs[s].b])
                 th, ll = slicesample(xx       = th,
-                                     llh_func = lambda(th): temp_bright_like(th, sum_fs),
+                                     llh_func = lambda(th): temp_bright_like(th, sum_fs, s, imgs, all_src_images),
                                      step     = [1000, .1], 
                                      step_out = True,
                                      x_l      = [0., 0.])
@@ -238,13 +237,59 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
             # sample location
             tmp_u = srcs[s].u
             u, ll = slicesample(xx       = srcs[s].u,
-                                llh_func = loc_like,
-                                step     = [1., 1.], 
+                                llh_func = lambda(u): loc_like(u, s, srcs, imgs, all_src_images),
+                                step     = [.1, .1], 
                                 step_out = False)
             srcs[s].u = u
             printif("        u: (%.4g, %4g) => (%.4g, %.4g)"%(tmp_u[0], tmp_u[1], u[0], u[1]), 
                     verbose and s < 5)
     return None
+
+
+#### likelihood factor that only depends on locatio
+def loc_like(u, s, srcs, imgs, all_src_images): 
+    ll = 0
+    srcs[s].u = u
+    for n, img in enumerate(imgs):
+        f_sn = gen_src_image(srcs[s], img)
+
+        # mask to remove the negative infinities
+        mask = (all_src_images[n][s+1,:,:] > 0) & (f_sn > 0)
+        ll  += np.sum(np.log(f_sn[mask])*all_src_images[n][s+1,mask]) \
+               - f_sn.sum()
+    return ll
+
+
+#### joint Temp, Brightness source specific opt func
+def temp_bright_like(th, fs_sum, s, imgs, all_src_images):
+    ll = 0
+    for i, img in enumerate(imgs): 
+        expected_num_photons = fs_sum[i] * \
+            planck.photons_expected_brightness(th[0], th[1], img.band)
+        if expected_num_photons > 0:
+            ll += np.sum(all_src_images[i][s+1,:,:]) * \
+                  np.log(expected_num_photons) - expected_num_photons
+
+    # prior over temperature, prior over brightness
+    #ll += gamma(4, scale=1/.0005).logpdf(th[0])
+    #ll += gamma(1., scale=1.).logpdf(th[1])
+    #ll += fast_gamma_lnpdf(th[0], 4., .0005)
+    #ll += fast_gamma_lnpdf(th[1], 1., 1.)
+    ll += unif_lnpdf(th[0], 20., 20000.)
+    ll += unif_lnpdf(th[1], 0., 1.)
+    return ll
+
+
+def unif_lnpdf(x, a0, b0):
+    if x <= a0 or x >= b0:
+      return -np.inf
+    return 0.
+
+def fast_gamma_lnpdf(x, a0, b0): 
+    """ Unnormalized gamma log pdf.  a0 = shape, b0 = rate """
+    if x <= 0:
+        return -np.inf
+    return (a0-1.)*np.log(x) - b0*x
 
 
 def printif(statement, condition):
