@@ -232,6 +232,9 @@ def jacobianForSplit(src):
   return np.prod(bright) * np.sum(bright)
 
 SPLIT_THROW_SD = 1e-7
+SPLIT_TEMP_SD = 50
+
+START_TEMP = 5000
 
 def splitRandomParamsLogProb(m, g=None):
   return normal.logpdf(m[0] / SPLIT_THROW_SD) + normal.logpdf(m[1] / SPLIT_THROW_SD)
@@ -250,33 +253,32 @@ def splitStar(srcs, im, rand=None):
 
   print "split_choice_prob %s" % split_choice_prob
 
-  bright = src.b.values()
   pos = np.array(src.u)
-  B = len(bright) # number of bands
+  ell = src.ell
+  t = src.t
 
   # Create random parameters (u in Green 2009's notation) controlling the split.
   m = rand.normal(0, SPLIT_THROW_SD, size=2) # should be a 1D vector
-  g = rand.rand(B)
+  g = rand.rand()
+  h = rand.normal(0, SPLIT_TEMP_SD);
 
-  bright1 = bright * g
-  bright2 = bright * (1-g)
-  pos1 = pos + np.sum(bright2) * m
-  pos2 = pos - np.sum(bright1) * m
+  ell1 = ell * g
+  ell2 = ell * (1-g)
+  pos1 = pos + ell2 * m
+  pos2 = pos - ell1 * m
+  t1 = t + ell2 * h
+  t2 = t - ell1 * h
+
+  if t1 < 0 or t2 < 0:
+    return srcs
 
   print "New positions: %s %s" % (pos1, pos2)
 
   p1 = np.array(pos1)
   p2 = np.array(pos2)
 
-  b1 = {}
-  b2 = {}
-  for i,band in enumerate(src.b.keys()):
-    b1[band] = bright1[i]
-    b2[band] = bright2[i]
-
-  print b1
-  src1 = PointSrcParams(p1, b1)
-  src2 = PointSrcParams(p2, b2)
+  src1 = PointSrcParams(p1, t=t1, ell=ell1)
+  src2 = PointSrcParams(p2, t=t2, ell=ell2)
 
   # consider transition
   srcs = removeObjFromArray(srcs, src)
@@ -323,19 +325,19 @@ def mergeStar(srcs, im, rand=None):
   src1, src2, merge_choice_prob = mergeChoiceProb(srcs, im, rand=rand)
 
   # Create src, which is the source formed by deterministically merging src1 and src2
-  bright1 = src1.b.values()
-  bright2 = src2.b.values()
+  ell1 = src1.ell
+  ell2 = src2.ell
   pos1 = src1.u
   pos2 = src2.u
+  t1 = src1.t
+  t2 = src2.t
 
   # Form updated brightnesses and positions for the merger by copying prototype from src1
-  bright = bright1 + bright2
-  pos = 1./np.sum(bright) * (np.sum(bright1) * pos1 + np.sum(bright2) * pos2)
+  ell = ell1 + ell2
+  pos = 1./ell * (ell1 * pos1 + ell2 * pos2)
+  t = 1/.ell * (ell1 * t1 + ell2 * t2)
 
-  b = {}
-  for i,band in enumerate(src1.b.keys()):
-    b[band] = bright[i]
-  src = PointSrcParams(pos, b)
+  src = PointSrcParams(u, t=t, ell=ell)
 
   srcs = removeObjFromArray(srcs, src1)
   srcs = removeObjFromArray(srcs, src2)
@@ -414,10 +416,7 @@ def birthChoiceProb(srcs, im, new_src=None, rand=None):
     pos = im.pixel2equa([j, i])
 
     # TODO: If we want to randomly choose brightnesses, include that probability
-    kwargs = {}
-    for band in SDSS_BANDNAMES:
-      kwargs[band] = im_data[j, i]
-    new_src = PointSrcParams(pos, kwargs)
+    new_src = PointSrcParams(pos, t=START_TEMP, ell=im_data[j,i])
 
   j, i = im.equa2pixel(new_src.u)
   new_src_prob = data_diff[i,j] / data_diff_sum
