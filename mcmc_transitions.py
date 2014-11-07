@@ -261,7 +261,7 @@ def splitStar(srcs, im, rand=None):
   bright1 = bright * g
   bright2 = bright * (1-g)
   pos1 = pos + np.sum(bright2) * m
-  pos2 = pos + np.sum(bright1) * m
+  pos2 = pos - np.sum(bright1) * m
 
   print "New positions: %s %s" % (pos1, pos2)
 
