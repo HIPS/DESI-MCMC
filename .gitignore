@@ -52,3 +52,14 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 
+########### andy's additions ###########
+# notebook pdfs + files
+notebooks/*.pdf
+notebooks/.texpadtmp/
+notebooks/.ipynb_checkpoints/
+notebooks/*.tex
+notebooks/*_files/
+
+data/*.gz
+data/*.bz2
+*.swp

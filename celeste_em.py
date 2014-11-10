@@ -251,6 +251,8 @@ def loc_like(u, s, srcs, imgs, all_src_images):
     ll = 0
     srcs[s].u = u
     for n, img in enumerate(imgs):
+        if not img.contains(srcs[s].u):
+            continue
         f_sn = gen_src_image(srcs[s], img)
 
         # mask to remove the negative infinities

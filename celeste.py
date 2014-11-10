@@ -266,6 +266,15 @@ class FitsImage():
             sign, logdet = np.linalg.slogdet(self.covars[i,:,:])
             self.logdets[i] = logdet
 
+    def contains(self, s_equa, pad = 50):
+        """ can this source be seen by this image? 
+          s_equa : equatorial locations of the point in the sky in question
+          pad    : how many pixels outside of the image do we include in 'contains'?
+        """
+        v_s = self.equa2pixel(s_equa)
+        return (v_s[0] > -pad) and (v_s[0] < self.nelec.shape[0] + pad) and \
+               (v_s[1] > -pad) and (v_s[1] < self.nelec.shape[1] + pad)
+
     def equa2pixel(self, s_equa):
         #### the WCS operation takes forever for some reason... 
         #x, y = self.wcs.wcs_world2pix(s_equa[0], s_equa[1], 1)

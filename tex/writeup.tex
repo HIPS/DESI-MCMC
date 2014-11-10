@@ -43,7 +43,7 @@ We define notation:
 \item $\beta_n \in \{r, \dots, z\}$ will stand for the band of image $n$
 \end{itemize}
 
-For each source, we define the following \emph{intrinsic} properties, which are the estimands of interest: 
+We note that the number of sources, $S$, is unknown a priori and modeled as a random variable.  For each source, we define the following \emph{intrinsic} properties, which are the estimands of interest: 
 \begin{align*}
   u_s &= (u_{s,ra}, u_{s,dec}) = \text{right ascension and declination of source $s$} \\
   t_s &= \text{temperature of source $s$ (kelvin)} \\
@@ -119,7 +119,7 @@ Our goal is characterize the distribution of energy radiated by an idealized bla
 \begin{align}
   B(t, \lambda) &= \frac{2 h c^2}{\lambda^5} \frac{1}{ e^{\frac{hc}{\lambda k_B t}} - 1}
 \end{align}
-which is in units of Watts per steradian per meter$^2$ per wavelength unit.  Intuitively, this describes the amount of energy the black body emits per unit time per unit area per solid angle. 
+which is in units of Watts per steradian per meter$^2$ per wavelength unit.  Intuitively, this describes the distribution of energy over the spectrum.  
 
 The total radiance across all wavelengths per square meter per steradian is given by the Stefan-Boltzmann law, which is easily computed as 
 \begin{align}
@@ -641,7 +641,13 @@ We can sample each source specific variable, $t_s, b_s$ and $u_s$ independently 
 
 
 \section{Priors}
-For sampling, we must define priors over all of our source and image parameters.  
+For sampling, we must define priors over all of our source and image parameters.  It is important to note that despite the number of sources, $S$, and the total number of pixel observations, $N \times M$, may grow to very large values, the maximum likelihood estimate of individual source parameters $t_s, u_s$, and $b_s$ may end up quite far from the true value of the source-specific parameters.  For instance, if we know the true value of $u_s$ and the corresponding source responsibility pixels, $z_{n,m,s}$, all of the information we have about $t_s$ and $b_s$ are given by a single Poisson observation 
+\begin{align}
+  \sum z_{n,m,s} &\sim \textrm{Pois}\left( I(t_s, \beta_n) b_s A \Delta \right) 
+\end{align}
+
+The consequence of this is that the effect of the prior \emph{will} be seen in the posterior.  Unless we get replications of the source images, $z_{n,m,s}$, then the posterior will not concentrate around the truth, and the best we can do is a posterior summary with an informative prior.  
+\todo{Discuss this with Ryan and Albert}
 
 \begin{align}
   v_s &\propto 1 \\

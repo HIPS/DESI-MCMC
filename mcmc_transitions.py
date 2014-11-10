@@ -335,7 +335,7 @@ def mergeStar(srcs, im, rand=None):
   # Form updated brightnesses and positions for the merger by copying prototype from src1
   ell = ell1 + ell2
   pos = 1./ell * (ell1 * pos1 + ell2 * pos2)
-  t = 1/.ell * (ell1 * t1 + ell2 * t2)
+  t = 1./ell * (ell1 * t1 + ell2 * t2)
 
   src = PointSrcParams(u, t=t, ell=ell)
 
