@@ -3,7 +3,8 @@ import numpy as np
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname('..'), os.path.pardir)))
 import planck
-from celeste import FitsImage, get_sources_from_catalog
+from celeste import FitsImage, PointSrcParams
+import fitsio
 
 def load_imgs_and_catalog(fits_cat_glob):
     """ return a list of images and initialized sources """
@@ -35,5 +36,27 @@ def load_imgs_and_catalog(fits_cat_glob):
         teff_catalog = np.concatenate((teff_catalog, temps))
 
     return srcs, imgs, teff_catalog, us
+
+
+def get_sources_from_catalog(cat_file):
+    """ Takes a catalog fits file and returns a python list of PointSrcParam Objects. 
+        NOTE: The fits files store these brightness parameters in nanomaggies - they
+        need to be adjusted by the _IMAGE SPECIFIC_ calibration parameter when they 
+        enter into the likelihood. 
+    """
+    cat_data = fitsio.read(cat_file)
+    cat_header = fitsio.read_header(cat_file)
+    keys = ['u', 'g', 'r', 'i', 'z']
+    catalog_srcs = []
+    for src_info in cat_data: 
+        src_info = [s for s in src_info]
+        src = PointSrcParams(u      = np.array(src_info[0:2]),
+                             fluxes = dict(zip(keys, src_info[2:])),
+                             header = cat_header)
+        if np.any(np.array(src.fluxes.values()) < 0):
+            continue
+        catalog_srcs.append(src)
+    return catalog_srcs
+
 
 

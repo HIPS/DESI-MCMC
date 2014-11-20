@@ -16,9 +16,10 @@ import numpy as np
 from scipy.misc import logsumexp
 from astropy.wcs import WCS
 from gmm_like import gmm_like
+from gmm_like_fast import gmm_like_2d_covinv_logdet as fast_gmm_like
 from planck import photons_expected, photons_expected_brightness
 
-def gen_src_image(src, image):
+def gen_src_image(src, image, pixel_grid = None):
     """ Generates expected photon image for a single point source.  Multiple
         model images (and the 'sky' term) will add together to form an
         expected image for a single observed image.
@@ -34,34 +35,55 @@ def gen_src_image(src, image):
         raise Exception("No way to compute expected photons without at least fluxes or brightness")
 
     # compute pixel space location of source
-    f_s = gen_point_source_psf_image(src.u, image)
+    f_s = gen_point_source_psf_image(src.u, image, pixel_grid=pixel_grid)
     return f_s * expected_photons
 
-def gen_point_source_psf_image(u, image, check_overlap=True): 
+def gen_point_source_psf_image(
+        u,                         # source location in equatorial coordinates
+        image,                     # FitsImage object
+        check_overlap = True,      # speedup to check overlap before computing
+        pixel_grid    = None,      # cached pixel grid
+        psf_grid      = None       # cached PSF grid to be filled out
+        ):
     """ generates a PSF image (assigns density values to pixels) """
     # compute pixel space location of source
     # returns the X,Y = Width, Height pixel coordinate corresponding to u
+
+    # compute pixel space location, v_{n,s}
     v_s = image.equa2pixel(u)
     if check_overlap and \
         (v_s[0] < -50 or v_s[0] > 2*image.nelec.shape[0] or v_s[1] < -50 or v_s[0] > 2*image.nelec.shape[1]):
        return np.zeros(image.nelec.shape)
 
-    # TODO: turn this into a convolution/speed it uppp
-    # compute pixel space location, v_{n,s}
-    y_grid = np.arange(image.nelec.shape[0]) + 1
-    x_grid = np.arange(image.nelec.shape[1]) + 1
-    yy, xx = np.meshgrid(x_grid, y_grid, indexing='xy')
-    f_s    = gmm_like(np.column_stack((xx.ravel(), yy.ravel())),
-                      image.weights,
-                      image.means + v_s,
-                      image.covars,
-                      invsigs = image.invcovars,
-                      logdets = image.logdets).reshape(xx.shape).T
-    #f_s    = np.exp(gmm_log_like(np.column_stack((xx.ravel(), yy.ravel())),
-    #                             image.weights,
-    #                             image.means + v_s,
-    #                             image.covars).reshape(xx.shape)).T
-    # slow for sanity check
+    # instantiate a pixel grid if necessary
+    if pixel_grid is None: 
+        y_grid = np.arange(image.nelec.shape[0], dtype=np.float) + 1
+        x_grid = np.arange(image.nelec.shape[1], dtype=np.float) + 1
+        yy, xx = np.meshgrid(x_grid, y_grid, indexing='xy')
+        pixel_grid = np.column_stack((xx.ravel(), yy.ravel()))
+
+    # instantiate a PSF grid 
+    if psf_grid is None:
+        psf_grid = np.zeros(pixel_grid.shape[0], dtype=np.float)
+
+    # compute the PSF (just a mixture call)
+    fast_gmm_like(probs  = psf_grid, 
+                  x      = pixel_grid,
+                  ws     = image.weights,
+                  mus    = image.means + v_s,
+                  invsigs = image.invcovars,
+                  logdets = image.logdets)
+
+    # slow python method
+    #psf_grid = gmm_like(x = pixel_grid, 
+    #                    ws = image.weights,
+    #                    mus = image.means + v_s,
+    #                    sigs = image.covars,
+    #                    invsigs = image.invcovars,
+    #                    logdets = image.logdets)
+    return psf_grid.reshape(image.nelec.shape).T
+
+        # slow for sanity check
     #for x in range(image.nelec.shape[1]): 
     #    for y in range(image.nelec.shape[0]):
     #        pix_val = np.exp(gmm_log_like(np.array([[x,y]]),
@@ -73,7 +95,7 @@ def gen_point_source_psf_image(u, image, check_overlap=True):
     # f_s.sum() * dA is close to one - otherwise some of your point spread
     # mass will fall off the image, and you're neighboring image will probably 
     # have some unexplained boosting of their counts
-    return f_s
+    #return f_s
 
 def gen_model_image(srcs, image):
     """ gen_model_image: computes pixel-wise mean count values from only point sources
@@ -87,9 +109,16 @@ def gen_model_image(srcs, image):
 
         Author: Andy Miller <acm@seas.harvard.edu>
     """
+
+    # generate pixel grid to be re-used across sources
+    y_grid = np.arange(image.nelec.shape[0], dtype=np.float) + 1
+    x_grid = np.arange(image.nelec.shape[1], dtype=np.float) + 1
+    yy, xx = np.meshgrid(x_grid, y_grid, indexing='xy')
+    pixel_grid = np.column_stack((xx.ravel(), yy.ravel()))
+
     f_s = np.zeros((image.nelec.shape))
     for s, src in enumerate(srcs):
-        f_s += gen_src_image(src, image)
+        f_s += gen_src_image(src, image, pixel_grid)
     # offset image by epsilon
     return image.epsilon + f_s
 
@@ -162,27 +191,6 @@ class PointSrcParams():
 	    return np.array_equal(self.u, other.u) and self.b == other.b
         else:
 	    return False
-
-def get_sources_from_catalog(cat_file):
-    """ Takes a catalog fits file and returns a python list of PointSrcParam Objects. 
-        NOTE: The fits files store these brightness parameters in nanomaggies - they
-        need to be adjusted by the _IMAGE SPECIFIC_ calibration parameter when they 
-        enter into the likelihood. 
-    """
-    cat_data = fitsio.read(cat_file)
-    cat_header = fitsio.read_header(cat_file)
-    keys = ['u', 'g', 'r', 'i', 'z']
-    catalog_srcs = []
-    for src_info in cat_data: 
-        src_info = [s for s in src_info]
-        src = PointSrcParams(u      = np.array(src_info[0:2]),
-                             fluxes = dict(zip(keys, src_info[2:])),
-                             header = cat_header)
-        if np.any(np.array(src.fluxes.values()) < 0):
-            continue
-        catalog_srcs.append(src)
-    return catalog_srcs
-
 
 class FitsImage():
     """ FitsImage - simple organization of fits file images that 
