@@ -66,7 +66,7 @@ def test_multivariate_normal_log_pdf():
 
 def test_gmm_like():
     np.random.seed(41)
-    K = 3
+    K = 10
     means = 2*np.random.randn(K*2).reshape(K, 2)
     covs  = np.zeros((K, 2, 2))
     invcovs = np.zeros((K, 2, 2))
@@ -92,7 +92,7 @@ def test_gmm_like():
                              invsigs = invcovs,
                              logdets = logdets)
 
-    ll_fastest = np.zeros(ll_faster.shape); \
+    ll_fastest = np.zeros(X.shape[0]); \
         gmlf.gmm_like_2d_covinv_logdet(probs = ll_fastest, 
                                        x     = X,
                                        ws    = ws,

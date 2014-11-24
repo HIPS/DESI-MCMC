@@ -4,7 +4,7 @@ from scipy.stats import gamma
 from scipy.optimize import fmin 
 from celeste import celeste_likelihood_multi_image, gen_src_prob_layers, gen_point_source_psf_image, gen_src_image
 from util.plot_util import compare_to_model, subplot_imshow_colorbar
-from mcmc_transitions import sampleAuxSourceCounts
+#from mcmc_transitions import sampleAuxSourceCounts
 from util.slicesample import slicesample
 import matplotlib.pyplot as plt
 from util.timer_util import *

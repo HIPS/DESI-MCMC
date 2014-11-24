@@ -14,7 +14,7 @@
 import fitsio
 import numpy as np
 from scipy.misc import logsumexp
-from astropy.wcs import WCS
+#from astropy.wcs import WCS
 from gmm_like import gmm_like
 from gmm_like_fast import gmm_like_2d_covinv_logdet as fast_gmm_like
 from planck import photons_expected, photons_expected_brightness
@@ -246,7 +246,7 @@ class FitsImage():
         self.Ups_n_inv = np.linalg.inv(self.Ups_n)
 
         # astrometry wcs object for pixel x,y to equa ra,dec conversion
-        self.wcs = WCS(self.band_file) #Tan(self.band_file)
+        #self.wcs = WCS(self.band_file) #Tan(self.band_file)
 
         # set image specific KAPPA and epsilon 
         self.kappa   = header['GAIN']     # TODO is this right??
