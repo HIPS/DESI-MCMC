@@ -14,9 +14,9 @@
 import fitsio
 import numpy as np
 from scipy.misc import logsumexp
-#from astropy.wcs import WCS
+from astropy.wcs import WCS
 from gmm_like import gmm_like
-from gmm_like_fast import gmm_like_2d_covinv_logdet as fast_gmm_like
+#from gmm_like_fast import gmm_like_2d_covinv_logdet as fast_gmm_like
 from planck import photons_expected, photons_expected_brightness
 
 def gen_src_image(src, image, pixel_grid = None):
@@ -67,20 +67,20 @@ def gen_point_source_psf_image(
         psf_grid = np.zeros(pixel_grid.shape[0], dtype=np.float)
 
     # compute the PSF (just a mixture call)
-    fast_gmm_like(probs  = psf_grid, 
-                  x      = pixel_grid,
-                  ws     = image.weights,
-                  mus    = image.means + v_s,
-                  invsigs = image.invcovars,
-                  logdets = image.logdets)
+    #fast_gmm_like(probs  = psf_grid, 
+    #              x      = pixel_grid,
+    #              ws     = image.weights,
+    #              mus    = image.means + v_s,
+    #              invsigs = image.invcovars,
+    #              logdets = image.logdets)
 
     # slow python method
-    #psf_grid = gmm_like(x = pixel_grid, 
-    #                    ws = image.weights,
-    #                    mus = image.means + v_s,
-    #                    sigs = image.covars,
-    #                    invsigs = image.invcovars,
-    #                    logdets = image.logdets)
+    psf_grid = gmm_like(x = pixel_grid, 
+                        ws = image.weights,
+                        mus = image.means + v_s,
+                        sigs = image.covars,
+                        invsigs = image.invcovars,
+                        logdets = image.logdets)
     return psf_grid.reshape(image.nelec.shape).T
 
         # slow for sanity check
@@ -187,10 +187,10 @@ class PointSrcParams():
         self.header = header
 
     def __eq__(self, other):
-	if isinstance(other, self.__class__):
-	    return np.array_equal(self.u, other.u) and self.b == other.b
+        if isinstance(other, self.__class__):
+            return np.array_equal(self.u, other.u) and self.b == other.b
         else:
-	    return False
+            return False
 
 class FitsImage():
     """ FitsImage - simple organization of fits file images that 
@@ -246,7 +246,7 @@ class FitsImage():
         self.Ups_n_inv = np.linalg.inv(self.Ups_n)
 
         # astrometry wcs object for pixel x,y to equa ra,dec conversion
-        #self.wcs = WCS(self.band_file) #Tan(self.band_file)
+        self.wcs = WCS(self.band_file) #Tan(self.band_file)
 
         # set image specific KAPPA and epsilon 
         self.kappa   = header['GAIN']     # TODO is this right??

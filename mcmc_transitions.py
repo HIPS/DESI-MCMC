@@ -10,8 +10,12 @@ def removeObjFromArray(array, obj):
   """
   remove object from numpy array by value
   """
-  indices = np.where( array == obj )
-  np.delete(array, indices)
+
+  indices = np.array([])
+  for i in range(len(array)):
+      if array[i] == obj:
+          indices = np.append(indices, i)
+  array = np.delete(array, indices)
   return array
 
 def sliceSampleSourceSingleAxis(srcs, im, index, axis=0, w=1e-6, m=100, rand=None):
@@ -227,17 +231,19 @@ def mergeChoiceProb(srcs, im, srcs_to_merge=None, rand=None):
 
   return sm1, sm2, choice_prob
 
-def jacobianForSplit(src):
-  bright = src.b
-  return np.prod(bright) * np.sum(bright)
+# construct Jacobian matrix and calculate its determinant
+def jacobianForSplit(src, src1, src2):
+  return src.b**4
 
 SPLIT_THROW_SD = 1e-7
 SPLIT_TEMP_SD = 50
 
 START_TEMP = 5000
 
-def splitRandomParamsLogProb(m, g=None):
-  return normal.logpdf(m[0] / SPLIT_THROW_SD) + normal.logpdf(m[1] / SPLIT_THROW_SD)
+def splitRandomParamsLogProb(m, h, g):
+  m_ll = normal.logpdf(m[0] / SPLIT_THROW_SD) + normal.logpdf(m[1] / SPLIT_THROW_SD)
+  h_ll = normal.logpdf(h / SPLIT_TEMP_SD)
+  return m_ll + h_ll
 
 def splitStar(srcs, im, rand=None):
   rand = rand or np.random.RandomState()
@@ -254,7 +260,7 @@ def splitStar(srcs, im, rand=None):
   print "split_choice_prob %s" % split_choice_prob
 
   pos = np.array(src.u)
-  ell = src.ell
+  b = src.b
   t = src.t
 
   # Create random parameters (u in Green 2009's notation) controlling the split.
@@ -262,12 +268,12 @@ def splitStar(srcs, im, rand=None):
   g = rand.rand()
   h = rand.normal(0, SPLIT_TEMP_SD);
 
-  ell1 = ell * g
-  ell2 = ell * (1-g)
-  pos1 = pos + ell2 * m
-  pos2 = pos - ell1 * m
-  t1 = t + ell2 * h
-  t2 = t - ell1 * h
+  b1 = b * g
+  b2 = b * (1-g)
+  pos1 = pos + b * m
+  pos2 = pos - b * m
+  t1 = t + b * h
+  t2 = t - b * h
 
   if t1 < 0 or t2 < 0:
     return srcs
@@ -277,13 +283,13 @@ def splitStar(srcs, im, rand=None):
   p1 = np.array(pos1)
   p2 = np.array(pos2)
 
-  src1 = PointSrcParams(p1, t=t1, ell=ell1)
-  src2 = PointSrcParams(p2, t=t2, ell=ell2)
+  src1 = PointSrcParams(p1, t=t1, b=b1)
+  src2 = PointSrcParams(p2, t=t2, b=b2)
 
   # consider transition
-  removeObjFromArray(srcs, src)
-  np.append(srcs, src1)
-  np.append(srcs, src2)
+  srcs = removeObjFromArray(srcs, src)
+  src = np.append(srcs, src1)
+  srcs = np.append(srcs, src2)
 
   new_prob = celeste_likelihood(srcs, im)
   src1, src2, merge_choice_prob = mergeChoiceProb(srcs, im, srcs_to_merge=(src1, src2), rand=rand)
@@ -291,7 +297,7 @@ def splitStar(srcs, im, rand=None):
   print "merge_choice_prob %s" % merge_choice_prob
 
   jacob = jacobianForSplit(src)
-  params_prob = splitRandomParamsLogProb(m, g)
+  params_prob = splitRandomParamsLogProb(m, h, g)
 
   print "jacob %4e, params %4e" % (np.log(jacob), params_prob)
 
@@ -307,8 +313,8 @@ def splitStar(srcs, im, rand=None):
 
   if np.log(rand.rand()) >= log_alpha:
     print "Reverting split"
-    removeObjFromArray(srcs, src1)
-    removeObjFromArray(srcs, src2)
+    srcs = removeObjFromArray(srcs, src1)
+    srcs = removeObjFromArray(srcs, src2)
     np.append(srcs, src)
   return srcs 
 
@@ -325,23 +331,23 @@ def mergeStar(srcs, im, rand=None):
   src1, src2, merge_choice_prob = mergeChoiceProb(srcs, im, rand=rand)
 
   # Create src, which is the source formed by deterministically merging src1 and src2
-  ell1 = src1.ell
-  ell2 = src2.ell
+  b1 = src1.b
+  b22 = src2.b
   pos1 = src1.u
   pos2 = src2.u
   t1 = src1.t
   t2 = src2.t
 
   # Form updated brightnesses and positions for the merger by copying prototype from src1
-  ell = ell1 + ell2
-  pos = 1./ell * (ell1 * pos1 + ell2 * pos2)
-  t = 1./ell * (ell1 * t1 + ell2 * t2)
+  b = b1 + b2
+  pos = 1./b * (b1 * pos1 + b2 * pos2)
+  t = 1./b * (b1 * t1 + b2 * t2)
 
-  src = PointSrcParams(u, t=t, ell=ell)
+  src = PointSrcParams(u, t=t, b=b)
 
-  removeObjFromArray(srcs, src1)
-  removeObjFromArray(srcs, src2)
-  np.append(srcs, src)
+  srcs = removeObjFromArray(srcs, src1)
+  srcs = removeObjFromArray(srcs, src2)
+  srcs = np.append(srcs, src)
 
   new_prob = celeste_likelihood(srcs, im)
   src, split_choice_prob = splitChoiceProb(srcs, im, src_to_split=src, rand=rand)
@@ -350,8 +356,10 @@ def mergeStar(srcs, im, rand=None):
 
   # Bookkeeping: this is the value for m that would be needed to split src into src1 and src2
   # if we were going in the split direction.
-  m = (pos1 - pos) / np.sum(bright2)
-  params_prob = splitRandomParamsLogProb(m)
+  g = b1 / b
+  m = (pos1 - pos2) / b
+  h = (t1 - t2) / b
+  params_prob = splitRandomParamsLogProb(m, h, g)
 
   # This is alpha(x' -> x) so g(u) which is params_prob is on the top,
   # and the jacobian is inverted.
@@ -363,7 +371,7 @@ def mergeStar(srcs, im, rand=None):
 
   if np.log(rand.rand()) >= log_alpha:
     print "Reverting merge"
-    removeObjFromArray(srcs, src)
+    srcs = removeObjFromArray(srcs, src)
     np.append(srcs, src1)
     np.append(srcs, src2)
   return srcs
@@ -385,27 +393,31 @@ def birthChoiceProb(srcs, im, new_src=None, rand=None):
   im_data = im.nelec
   im_height, im_width = im_data.shape
 
-  had_been_contained = False
-  if new_src:
-    old_size = srcs.size
-    srcs = removeObjFromArray(srcs, new_src)
-    if not size(srcs) == old_size:
-      has_been_contained = True
+  #had_been_contained = False
+  #if new_src:
+  #  print "gave source", new_src
+  #  print "sources ", srcs
+  #  old_size = len(srcs)
+  #  srcs = removeObjFromArray(srcs, new_src)
+  #  if not size(srcs) == old_size:
+  #    had_been_contained = True
+  #    print "Yes, got here"
 
   data_diff = diffData(srcs, im)
 
   data_diff_sum = np.sum(data_diff)
   data_diff_size = data_diff.size
 
-  if new_src:
-    if had_been_contained:
-      np.append(srcs, new_src)
-  else:
+  #if new_src:
+      #if had_been_contained:
+      #print "yes, go here"
+      #srcs = np.append(srcs, new_src)
+  if new_src is None:
     # We're proposing a new birth here
     data_diff_flat = data_diff.flatten()
     data_diff_cumsum = np.cumsum(data_diff_flat)
     idx = np.searchsorted(data_diff_cumsum,
-                          rand.rand() * data_diff_sum)
+            rand.rand() * data_diff_sum)
 
     # data_diff_flat_norm = data_diff_flat / data_diff_sum
     # print np.sum(data_diff_flat_norm)
@@ -416,7 +428,7 @@ def birthChoiceProb(srcs, im, new_src=None, rand=None):
     pos = im.pixel2equa([j, i])
 
     # TODO: If we want to randomly choose brightnesses, include that probability
-    new_src = PointSrcParams(pos, t=START_TEMP, ell=im_data[j,i])
+    new_src = PointSrcParams(pos, t=START_TEMP, b=data_diff[i,j])
 
   j, i = im.equa2pixel(new_src.u)
   new_src_prob = data_diff[i,j] / data_diff_sum
@@ -443,17 +455,22 @@ def birthStar(srcs, im, rand=None):
 
   new_src, birth_choice_prob = birthChoiceProb(srcs, im, rand=rand)
 
-  np.append(srcs, new_src)
+  srcs = np.append(srcs, new_src)
   new_prob = celeste_likelihood(srcs, im)
+  print "length after adding: ", len(srcs)
 
-  print len(srcs)
   new_src, death_choice_prob = deathChoiceProb(srcs, im, src_to_kill=new_src, rand=rand)
 
+  print "new probability: ", new_prob
+  print "orig probability: ", orig_prob
+  print "birth probability: ", birth_choice_prob
+  print "death probability: ", death_choice_prob
+
   log_alpha = min(0, new_prob - orig_prob + np.log(death_choice_prob) - np.log(birth_choice_prob))
-  print "acceptance level for birth", log_alpha
+  print "acceptance level for birth", exp(log_alpha)
   if np.log(rand.rand()) >= log_alpha:
     print "reverting birth"
-    removeObjFromArray(srcs, new_src)
+    srcs = removeObjFromArray(srcs, new_src)
   else:
     print "accepted birth"
   print "length of tractor at end of birth:", len(srcs) 
@@ -468,21 +485,29 @@ def deathStar(srcs, im, rand=None):
     return
 
   orig_prob = celeste_likelihood(srcs, im)
+  print "orig probability: ", orig_prob
   src_to_kill, death_choice_prob = deathChoiceProb(srcs, im, rand=rand)
 
-  removeObjFromArray(srcs, src_to_kill)
+  srcs = removeObjFromArray(srcs, src_to_kill)
+  print "length after removing source: ", len(srcs)
   new_prob = celeste_likelihood(srcs, im)
+  print "new probability: ", new_prob
 
   src_to_kill, birth_choice_prob = birthChoiceProb(srcs, im, new_src=src_to_kill, rand=rand)
 
+  print "birth choice prob: ", birth_choice_prob
+  print "death choice prob: ", death_choice_prob
+
   # accept or reject?
   log_alpha = min(0, new_prob - orig_prob + np.log(birth_choice_prob) - np.log(death_choice_prob))
-  print "acceptance level for death", log_alpha
+  print "acceptance level for death", exp(log_alpha)
   if np.log(rand.rand()) >= log_alpha:
     print "rejected death"
-    np.append(srcs, src_to_kill)
+    srcs = np.append(srcs, src_to_kill)
   else:
     print "accepted death"
+  
+  print "catalog length is ", len(srcs)
   return srcs
 
 
