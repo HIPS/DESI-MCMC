@@ -1,0 +1,112 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 9.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       157,          7]
+NotebookDataLength[      2731,        103]
+NotebookOptionsPosition[      2408,         86]
+NotebookOutlinePosition[      2762,        102]
+CellTagsIndexPosition[      2719,         99]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+
+Cell[CellGroupData[{
+Cell[BoxData[
+ RowBox[{"Det", "[", 
+  RowBox[{"(", GridBox[{
+     {"1", "0", "1", "0", "0", "0", "0", "0"},
+     {"0", "1", "0", "1", "0", "0", "0", "0"},
+     {
+      RowBox[{
+       RowBox[{"(", 
+        RowBox[{"1", "-", "g"}], ")"}], "b"}], "0", 
+      RowBox[{
+       RowBox[{"-", "g"}], " ", "b"}], "0", "0", "0", "0", "0"},
+     {"0", 
+      RowBox[{
+       RowBox[{"(", 
+        RowBox[{"1", "-", "g"}], ")"}], "b"}], "0", 
+      RowBox[{
+       RowBox[{"-", "g"}], " ", "b"}], "0", "0", "0", "0"},
+     {
+      RowBox[{
+       RowBox[{"(", 
+        RowBox[{"1", "-", "g"}], ")"}], "m0"}], 
+      RowBox[{
+       RowBox[{"(", 
+        RowBox[{"1", "-", "g"}], ")"}], "m1"}], 
+      RowBox[{
+       RowBox[{"-", "g"}], " ", "m0"}], 
+      RowBox[{
+       RowBox[{"-", "g"}], " ", "m1"}], "g", 
+      RowBox[{"1", "-", "g"}], 
+      RowBox[{
+       RowBox[{"(", 
+        RowBox[{"1", "-", "g"}], ")"}], "h"}], 
+      RowBox[{
+       RowBox[{"-", "g"}], " ", "h"}]},
+     {
+      RowBox[{
+       RowBox[{"-", "b"}], " ", "m0"}], 
+      RowBox[{
+       RowBox[{"-", "b"}], " ", "m1"}], 
+      RowBox[{
+       RowBox[{"-", "b"}], " ", "m0"}], 
+      RowBox[{
+       RowBox[{"-", "b"}], " ", "m1"}], "b", 
+      RowBox[{"-", "b"}], 
+      RowBox[{
+       RowBox[{"-", "b"}], " ", "h"}], 
+      RowBox[{
+       RowBox[{"-", "b"}], " ", "h"}]},
+     {"0", "0", "0", "0", "0", "0", "1", "1"},
+     {"0", "0", "0", "0", "0", "0", 
+      RowBox[{
+       RowBox[{"(", 
+        RowBox[{"1", "-", "g"}], ")"}], "b"}], 
+      RowBox[{
+       RowBox[{"-", "g"}], " ", "b"}]}
+    }], ")"}], "]"}]], "Input",
+ CellChangeTimes->{{3.6262091679573717`*^9, 3.626209277998543*^9}, {
+  3.626209320364046*^9, 3.6262094011599503`*^9}}],
+
+Cell[BoxData[
+ SuperscriptBox["b", "4"]], "Output",
+ CellChangeTimes->{3.626209445324396*^9}]
+}, Open  ]]
+},
+WindowSize->{740, 701},
+WindowMargins->{{4, Automatic}, {Automatic, 4}},
+FrontEndVersion->"9.0 for Mac OS X x86 (32-bit, 64-bit Kernel) (January 25, \
+2013)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[CellGroupData[{
+Cell[579, 22, 1717, 57, 149, "Input"],
+Cell[2299, 81, 93, 2, 66, "Output"]
+}, Open  ]]
+}
+]
+*)
+
+(* End of internal cache information *)

@@ -540,18 +540,21 @@ derivative of each column by each row is as follows:
 \hline 
 $u_{j_{*}}$ & $I$ & $I$ & $0$ & $0$ & 0 & 0\tabularnewline
 \hline 
-$m$ & $\left(1-g\right)b_{j_{*}}$ & $-g b_{j_{*}}$ & $0$ & $0$ & 0 & 0\tabularnewline
+$m$ & $\left(1-g\right)b_{j_{*}} I$ & $-g b_{j_{*}} I$ & $0$ & $0$ & 0 & 0\tabularnewline
 \hline 
 $b_{j_{*}}$ & $\left(1-g\right)m^{T}$ & $-gm^{T}$ & $g$ & $1-g$ & $\left(1-g\right)h$ & $-gh$\tabularnewline
 \hline 
 $g$ & $-b_{j_{*}}m^{T}$ & $-b_{j_{*}}m^{T}$ & $b_{j^*}$ & $-b_{j^*}$ & $-b_{j_{*}}h$ & $-b_{j_{*}}h$ \tabularnewline
+\hline
+$t_{j_{*}}$ & $0$ & $0$ & $0$ & $0$ & $1$ & $1$\tabularnewline
 \hline
 $h$ & $0$ & $0$ & $0$ & $0$ &$(1 - g)b_{j^*}$ & $-g b_{j^*}$\tabularnewline
 \hline
 \end{tabular}
 \par\end{center}
 
-\todo{Do we want a closed-form of the determinant?}
+It turns out (from some computation in Mathematica), that the determinant of this is $b^4$.
+\todo{verify this?}
 
 
 \subsubsection{Birth-death intuition and notation}
