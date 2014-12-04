@@ -63,7 +63,6 @@ def test_multivariate_normal_log_pdf():
       print "Faster (with inv cov caching) MVN log pdf fails!!!!", np.mean(np.abs(ll_slow - ll_fast))
 
 
-
 def test_gmm_like():
     np.random.seed(41)
     K = 10

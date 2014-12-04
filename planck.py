@@ -41,6 +41,9 @@ def load_filter_curves():
     for b in bands: 
         wavelength_lookup[b] = np.array(wavelength_lookup[b])
         sensitivity_lookup[b] = np.array(sensitivity_lookup[b])
+        worder = wavelength_lookup[b].argsort()
+        wavelength_lookup[b] = wavelength_lookup[b][worder]
+        sensitivity_lookup[b] = sensitivity_lookup[b][worder]
 
     # pre-compute filter curve vectors
     # number of photons/Joule that make it through the filter at each energy level
