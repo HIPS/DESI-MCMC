@@ -157,6 +157,9 @@ def photons_expected_brightness(T, b, band):
     lens_watts = lens_area * b * sun_wattage / (m_per_ly**2) # Joules/Seconds of source => lens
     return photons_per_joule(T, band) * lens_watts * exposure_duration 
 
+def flux_to_suns(T, b, band):
+    pass
+
 def plancks_law(t, W):
     """ Planck's law, defines spectral radiance 
         Returns in units of Watts / m^2 / sec / steradian
