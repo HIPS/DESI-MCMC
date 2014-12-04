@@ -180,6 +180,10 @@ def gibbsSampleBrightnesses(srcs, img, aPrior, bPrior, eta, rand=None):
 
 # reversible-jump
 
+def splitRandomParamsLogProb(m, g1, g2):
+  m_ll = normal.logpdf(m[0] / SPLIT_THROW_SD) + normal.logpdf(m[1] / SPLIT_THROW_SD)
+  return m_ll
+
 def splitChoiceProb(srcs, im, src_to_split=None, rand=None):
   rand = rand or np.random.RandomState()
   num_srcs = len(srcs)
@@ -190,6 +194,31 @@ def splitChoiceProb(srcs, im, src_to_split=None, rand=None):
 
   choice_prob = 1./num_srcs
   return src_to_split, choice_prob
+
+def createSplit(src, im):
+  pos = np.array(src.u)
+  b = src.b
+  t = src.t
+
+  # Create random parameters (u in Green 2009's notation) controlling the split.
+  m = rand.normal(0, SPLIT_THROW_SD, size=2) # should be a 1D vector
+  g1 = rand.rand()
+  g2 = rand.rand()
+
+  b1 = b * g1
+  b2 = b * (1-g1)
+  pos1 = pos + m
+  pos2 = pos - m
+  t1 = 2 * g2 * t
+  t2 = 2 * (1-g2) * t
+
+  p1 = np.array(pos1)
+  p2 = np.array(pos2)
+
+  src1 = PointSrcParams(p1, t=t1, b=b1)
+  src2 = PointSrcParams(p2, t=t2, b=b2)
+
+  return src1, src2, splitRandomParamsLogProb(m, g1, g2)
 
 def mergeChoiceProb(srcs, im, srcs_to_merge=None, rand=None):
   rand = rand or np.random.RandomState()
@@ -231,18 +260,37 @@ def mergeChoiceProb(srcs, im, srcs_to_merge=None, rand=None):
 
   return sm1, sm2, choice_prob
 
+def createMerge(src1, src2, im):
+  # Create src, which is the source formed by deterministically merging src1 and src2
+  b1 = src1.b
+  b2 = src2.b
+  pos1 = src1.u
+  pos2 = src2.u
+  t1 = src1.t
+  t2 = src2.t
+
+  # Form updated brightnesses and positions for the merger by copying prototype from src1
+  b = b1 + b2
+  pos = 0.5 * (pos1 + pos2)
+  t = 0.5 * (t1 + t2)
+
+  src = PointSrcParams(u, t=t, b=b)
+
+  # Bookkeeping: this is the value for m that would be needed to split src into src1 and src2
+  # if we were going in the split direction.
+  g1 = b1 / b
+  m = (pos1 - pos2) / 2
+  g2 = t1 / (2 * t)
+  return src, params_prob, splitRandomParamsLogProb(m, g1, g2)
+
 # construct Jacobian matrix and calculate its determinant
 def jacobianForSplit(src, src1, src2):
-  return src.b**4
+  return 16 * src.b * src.t
 
 SPLIT_THROW_SD = 1e-7
 SPLIT_TEMP_SD = 50
 
 START_TEMP = 5000
-
-def splitRandomParamsLogProb(m, g1, g2):
-  m_ll = normal.logpdf(m[0] / SPLIT_THROW_SD) + normal.logpdf(m[1] / SPLIT_THROW_SD)
-  return m_ll
 
 def splitStar(srcs, ims, rand=None):
   rand = rand or np.random.RandomState()
@@ -258,29 +306,8 @@ def splitStar(srcs, ims, rand=None):
 
   print "split_choice_prob %s" % split_choice_prob
 
-  pos = np.array(src.u)
-  b = src.b
-  t = src.t
-
-  # Create random parameters (u in Green 2009's notation) controlling the split.
-  m = rand.normal(0, SPLIT_THROW_SD, size=2) # should be a 1D vector
-  g1 = rand.rand()
-  g2 = rand.rand()
-
-  b1 = b * g1
-  b2 = b * (1-g1)
-  pos1 = pos + m
-  pos2 = pos - m
-  t1 = 2 * g2 * t
-  t2 = 2 * (1-g2) * t
-
+  src1, src2, proposal_prob = createSplit(src, ims[0])
   print "New positions: %s %s" % (pos1, pos2)
-
-  p1 = np.array(pos1)
-  p2 = np.array(pos2)
-
-  src1 = PointSrcParams(p1, t=t1, b=b1)
-  src2 = PointSrcParams(p2, t=t2, b=b2)
 
   # consider transition
   srcs = removeObjFromArray(srcs, src)
@@ -302,7 +329,7 @@ def splitStar(srcs, ims, rand=None):
   # This is alpha(x -> x') so g(u) which is params_prob is on the bottom, 
   # and the jacobian is not inverted.
   # split_choice_prob is pi(x) and merge_choice_prob is pi(x')
-  log_alpha = min(0, new_prob - orig_prob - params_prob + np.log(jacob) \
+  log_alpha = min(0, new_prob - orig_prob - proposal_prob + np.log(jacob) \
                   + np.log(merge_choice_prob) - np.log(split_choice_prob))
   
   print "Split alpha: %s" % log_alpha
@@ -324,23 +351,9 @@ def mergeStar(srcs, ims, rand=None):
     return
 
   orig_prob = celeste_likelihood_multi_image(srcs, ims)
-  src1, src2, merge_choice_prob = mergeChoiceProb(srcs, ims[0], rand=rand)
+  src1, src2, params_prob = mergeChoiceProb(srcs, ims[0], rand=rand)
 
-  # Create src, which is the source formed by deterministically merging src1 and src2
-  b1 = src1.b
-  b2 = src2.b
-  pos1 = src1.u
-  pos2 = src2.u
-  t1 = src1.t
-  t2 = src2.t
-
-  # Form updated brightnesses and positions for the merger by copying prototype from src1
-  b = b1 + b2
-  pos = 0.5 * (pos1 + pos2)
-  t = 0.5 * (t1 + t2)
-
-  src = PointSrcParams(u, t=t, b=b)
-
+  src, split_prob = createMerge(src1, src2, ims[0]);
   srcs = removeObjFromArray(srcs, src1)
   srcs = removeObjFromArray(srcs, src2)
   srcs = np.append(srcs, src)
@@ -349,13 +362,6 @@ def mergeStar(srcs, ims, rand=None):
   src, split_choice_prob = splitChoiceProb(srcs, ims[0], src_to_split=src, rand=rand)
 
   jacob = jacobianForSplit(src)
-
-  # Bookkeeping: this is the value for m that would be needed to split src into src1 and src2
-  # if we were going in the split direction.
-  g1 = b1 / b
-  m = (pos1 - pos2) / 2
-  g2 = t1 / (2 * t)
-  params_prob = splitRandomParamsLogProb(m, g1, g2)
 
   # This is alpha(x' -> x) so g(u) which is params_prob is on the top,
   # and the jacobian is inverted.
@@ -426,7 +432,7 @@ def birthChoiceProb(srcs, im, new_src=None, rand=None):
     # TODO: If we want to randomly choose brightnesses, include that probability
     new_src = PointSrcParams(pos,
                              t=START_TEMP,
-                             b=data_diff[i,j])
+                             b=flux_to_suns(START_TEMP, data[i,j], im.band)
 
   j, i = im.equa2pixel(new_src.u)
   new_src_prob = data_diff[i,j] / data_diff_sum
@@ -508,40 +514,3 @@ def deathStar(srcs, im, rand=None):
   print "catalog length is ", len(srcs)
   return srcs
 
-
-# Some utility functions for loops
-
-def doMCMC(srcs, im, allowMergeSplit=False, allowBirthDeath=False, iters=1,
-           aPrior=1./3, bPrior=1e-4, eta=1e-1,
-           sliceW=3e-5, sliceM=20,
-           rand=None, cb=None, cb_memo=None):
-  rand = rand or np.random.RandomState()
-  cb = cb or (lambda srcs, it, logprob, memo: None)
-
-  logprob = celeste_likelihood(srcs, im)
-
-  cb(srcs, 0, logprob, cb_memo)
-
-  for it in xrange(iters):
-    with Timing("gibbs") as t:
-      gibbsSampleBrightnesses(srcs, im, aPrior=aPrior, bPrior=bPrior, eta=eta, rand=rand)
-
-    with Timing("slice") as t:
-      for i in xrange(len(srcs)):
-        sliceSampleSourceSingleAxis(srcs, im, i, 0, m=sliceM, w=sliceW, rand=rand)
-        sliceSampleSourceSingleAxis(srcs, im, i, 1, m=sliceM, w=sliceW, rand=rand)
-
-    #if allowMergeSplit:
-    #  if rand.rand() > 0.5:
-    #    splitStar(srcs, im, rand=rand)
-    #  else:
-    #    mergeStar(srcs, im, rand=rand)
-
-    #if allowBirthDeath:
-    #  if rand.rand() > 0.5:
-    #    birthStar(srcs, im, rand=rand)
-    #  else:
-    #    deathStar(srcs, im, rand=rand)
-
-    logprob = celeste_likelihood(srcs, im)
-    cb(srcs, it+1, logprob, cb_memo)
