@@ -58,7 +58,7 @@ def testBirth():
 
         # fresh new universe model
         srcs = copy.deepcopy(srcs)
-        srcs = birthStar(srcs, imgs[0], rand=rand)
+        srcs = birthStar(srcs, imgs, rand=rand)
 
         # keep track of universe model and image specific noise params
         post_samps.append(srcs)
@@ -117,7 +117,7 @@ def testDeath():
 
         print "number of sources: ", len(srcs)
         # fresh new universe model
-        srcs = deathStar(srcs, imgs[0], rand=rand)
+        srcs = deathStar(srcs, imgs, rand=rand)
 
         # keep track of universe model and image specific noise params
         post_samps.append(srcs)

@@ -240,12 +240,11 @@ SPLIT_TEMP_SD = 50
 
 START_TEMP = 5000
 
-def splitRandomParamsLogProb(m, h, g):
+def splitRandomParamsLogProb(m, g1, g2):
   m_ll = normal.logpdf(m[0] / SPLIT_THROW_SD) + normal.logpdf(m[1] / SPLIT_THROW_SD)
-  h_ll = normal.logpdf(h / SPLIT_TEMP_SD)
-  return m_ll + h_ll
+  return m_ll
 
-def splitStar(srcs, im, rand=None):
+def splitStar(srcs, ims, rand=None):
   rand = rand or np.random.RandomState()
 
   print "Proposing star split"
@@ -254,8 +253,8 @@ def splitStar(srcs, im, rand=None):
     print "Catalog empty!"
     return
 
-  orig_prob = celeste_likelihood(srcs, im) # log likelihood
-  src, split_choice_prob = splitChoiceProb(srcs, im)
+  orig_prob = celeste_likelihood_multi_image(srcs, ims) # log likelihood
+  src, split_choice_prob = splitChoiceProb(srcs, ims[0])
 
   print "split_choice_prob %s" % split_choice_prob
 
@@ -265,18 +264,15 @@ def splitStar(srcs, im, rand=None):
 
   # Create random parameters (u in Green 2009's notation) controlling the split.
   m = rand.normal(0, SPLIT_THROW_SD, size=2) # should be a 1D vector
-  g = rand.rand()
-  h = rand.normal(0, SPLIT_TEMP_SD);
+  g1 = rand.rand()
+  g2 = rand.rand()
 
-  b1 = b * g
-  b2 = b * (1-g)
-  pos1 = pos + b * m
-  pos2 = pos - b * m
-  t1 = t + b * h
-  t2 = t - b * h
-
-  if t1 < 0 or t2 < 0:
-    return srcs
+  b1 = b * g1
+  b2 = b * (1-g1)
+  pos1 = pos + m
+  pos2 = pos - m
+  t1 = 2 * g2 * t
+  t2 = 2 * (1-g2) * t
 
   print "New positions: %s %s" % (pos1, pos2)
 
@@ -291,13 +287,13 @@ def splitStar(srcs, im, rand=None):
   src = np.append(srcs, src1)
   srcs = np.append(srcs, src2)
 
-  new_prob = celeste_likelihood(srcs, im)
-  src1, src2, merge_choice_prob = mergeChoiceProb(srcs, im, srcs_to_merge=(src1, src2), rand=rand)
+  new_prob = celeste_likelihood_multi_image(srcs, ims)
+  src1, src2, merge_choice_prob = mergeChoiceProb(srcs, ims[0], srcs_to_merge=(src1, src2), rand=rand)
 
   print "merge_choice_prob %s" % merge_choice_prob
 
   jacob = jacobianForSplit(src)
-  params_prob = splitRandomParamsLogProb(m, h, g)
+  params_prob = splitRandomParamsLogProb(m, g1, g2)
 
   print "jacob %4e, params %4e" % (np.log(jacob), params_prob)
 
@@ -318,7 +314,7 @@ def splitStar(srcs, im, rand=None):
     np.append(srcs, src)
   return srcs 
 
-def mergeStar(srcs, im, rand=None):
+def mergeStar(srcs, ims, rand=None):
   rand = rand or np.random.RandomState()
 
   print "Proposing star merge"
@@ -327,12 +323,12 @@ def mergeStar(srcs, im, rand=None):
     print "Catalog has fewer than 2 stars!"
     return
 
-  orig_prob = celeste_likelihood(srcs, im)
-  src1, src2, merge_choice_prob = mergeChoiceProb(srcs, im, rand=rand)
+  orig_prob = celeste_likelihood_multi_image(srcs, ims)
+  src1, src2, merge_choice_prob = mergeChoiceProb(srcs, ims[0], rand=rand)
 
   # Create src, which is the source formed by deterministically merging src1 and src2
   b1 = src1.b
-  b22 = src2.b
+  b2 = src2.b
   pos1 = src1.u
   pos2 = src2.u
   t1 = src1.t
@@ -340,8 +336,8 @@ def mergeStar(srcs, im, rand=None):
 
   # Form updated brightnesses and positions for the merger by copying prototype from src1
   b = b1 + b2
-  pos = 1./b * (b1 * pos1 + b2 * pos2)
-  t = 1./b * (b1 * t1 + b2 * t2)
+  pos = 0.5 * (pos1 + pos2)
+  t = 0.5 * (t1 + t2)
 
   src = PointSrcParams(u, t=t, b=b)
 
@@ -349,17 +345,17 @@ def mergeStar(srcs, im, rand=None):
   srcs = removeObjFromArray(srcs, src2)
   srcs = np.append(srcs, src)
 
-  new_prob = celeste_likelihood(srcs, im)
-  src, split_choice_prob = splitChoiceProb(srcs, im, src_to_split=src, rand=rand)
+  new_prob = celeste_likelihood_multi_image(srcs, ims)
+  src, split_choice_prob = splitChoiceProb(srcs, ims[0], src_to_split=src, rand=rand)
 
   jacob = jacobianForSplit(src)
 
   # Bookkeeping: this is the value for m that would be needed to split src into src1 and src2
   # if we were going in the split direction.
-  g = b1 / b
-  m = (pos1 - pos2) / b
-  h = (t1 - t2) / b
-  params_prob = splitRandomParamsLogProb(m, h, g)
+  g1 = b1 / b
+  m = (pos1 - pos2) / 2
+  g2 = t1 / (2 * t)
+  params_prob = splitRandomParamsLogProb(m, g1, g2)
 
   # This is alpha(x' -> x) so g(u) which is params_prob is on the top,
   # and the jacobian is inverted.
@@ -428,7 +424,9 @@ def birthChoiceProb(srcs, im, new_src=None, rand=None):
     pos = im.pixel2equa([j, i])
 
     # TODO: If we want to randomly choose brightnesses, include that probability
-    new_src = PointSrcParams(pos, t=START_TEMP, b=data_diff[i,j])
+    new_src = PointSrcParams(pos,
+                             t=START_TEMP,
+                             b=data_diff[i,j])
 
   j, i = im.equa2pixel(new_src.u)
   new_src_prob = data_diff[i,j] / data_diff_sum
@@ -447,19 +445,19 @@ def deathChoiceProb(srcs, im, src_to_kill=None, rand=None):
   choice_prob = 1./num_srcs
   return src_to_kill, choice_prob
 
-def birthStar(srcs, im, rand=None):
+def birthStar(srcs, ims, rand=None):
   rand = rand or np.random.RandomState()
   
   print "Proposing birth starting with %d sources" % len(srcs)
-  orig_prob = celeste_likelihood(srcs, im)
+  orig_prob = celeste_likelihood_multi_image(srcs, ims)
 
-  new_src, birth_choice_prob = birthChoiceProb(srcs, im, rand=rand)
+  new_src, birth_choice_prob = birthChoiceProb(srcs, ims[0], rand=rand)
 
   srcs = np.append(srcs, new_src)
-  new_prob = celeste_likelihood(srcs, im)
+  new_prob = celeste_likelihood_multi_image(srcs, ims)
   print "length after adding: ", len(srcs)
 
-  new_src, death_choice_prob = deathChoiceProb(srcs, im, src_to_kill=new_src, rand=rand)
+  new_src, death_choice_prob = deathChoiceProb(srcs, ims[0], src_to_kill=new_src, rand=rand)
 
   print "new probability: ", new_prob
   print "orig probability: ", orig_prob
@@ -484,16 +482,16 @@ def deathStar(srcs, im, rand=None):
     print "Catalog empty!"
     return
 
-  orig_prob = celeste_likelihood(srcs, im)
+  orig_prob = celeste_likelihood_multi_image(srcs, ims)
   print "orig probability: ", orig_prob
-  src_to_kill, death_choice_prob = deathChoiceProb(srcs, im, rand=rand)
+  src_to_kill, death_choice_prob = deathChoiceProb(srcs, ims[0], rand=rand)
 
   srcs = removeObjFromArray(srcs, src_to_kill)
   print "length after removing source: ", len(srcs)
-  new_prob = celeste_likelihood(srcs, im)
+  new_prob = celeste_likelihood_multi_image(srcs, ims)
   print "new probability: ", new_prob
 
-  src_to_kill, birth_choice_prob = birthChoiceProb(srcs, im, new_src=src_to_kill, rand=rand)
+  src_to_kill, birth_choice_prob = birthChoiceProb(srcs, ims[0], new_src=src_to_kill, rand=rand)
 
   print "birth choice prob: ", birth_choice_prob
   print "death choice prob: ", death_choice_prob
