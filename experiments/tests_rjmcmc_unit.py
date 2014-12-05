@@ -125,6 +125,115 @@ def testDeath():
             e_samps[iter_n, n_img] = imgs[n_img].epsilon
         ll_samps[iter_n] = celeste.celeste_likelihood_multi_image(srcs, imgs)
 
+def testMerge():
+    np.random.seed(42)
+
+    ##
+    ## Generate some fake sources using real image data (PSF and stuff)
+    ##
+    cat_glob = glob('data/stamp_catalog/cat*.fits')[1:2]
+    srcs, imgs, teff_catalog, us = load_imgs_and_catalog(cat_glob)
+    print "initialized with %d sources and %d images"%(len(srcs), len(imgs))
+
+    ## pixel location of source in image 0
+    u_pixel = imgs[0].equa2pixel(srcs[0].u)
+
+    ## generate fake sources information
+    t_gt = np.array([5500, 8500])         # synthetic temperatures
+    b_gt = np.array([5e-10, 8e-10])       # synthetic brightnesses
+    gt_srcs = [celeste.PointSrcParams(u=u_pixel, b=6e-10, t=6500)]
+    srcs = []
+    for s in range(2):
+        us_pixel = u_pixel + 3*np.random.randn(2)
+        us_equa  = imgs[0].pixel2equa(us_pixel)
+        src_s = celeste.PointSrcParams(u = us_equa, b = b_gt[s], t = t_gt[s])
+        srcs.append(src_s)
+
+    # re-generate images using these source params
+    for img in imgs: 
+        mimg      = celeste.gen_model_image(gt_srcs, img)
+        img.nelec = np.random.poisson(mimg)
+
+    # check out the first image
+    compare_to_model(gt_srcs, imgs[0])
+    plt.show()
+
+    np.random.seed(42)
+    rand = np.random.RandomState()
+    e_samps  = np.zeros(100, len(imgs)))  # num images is fixed
+    ll_samps = np.zeros(100)
+    iter_n = 1
+    while len(srcs) >= 1:
+        print "Doing iteration", iter_n
+        srcs = copy.deepcopy(srcs)
+        srcs = mergeStar(srcs, imgs, rand=rand)
+
+        post_samps.append(srcs)
+        for n_img in range(len(imgs)):
+            e_samps[iter_n, n_img] = imgs[n_img].epsilon
+        ll_samps[iter_n] = celeste.celeste_likelihood_multi_image(srcs, imgs)
+        print "After iteration %s: %s, cat len %s" % (iter_n, ll_samps[iter_n], len(srcs))
+        print "Location: ", [src.u for src in srcs]
+        print "Brightness: ", [src.b for src in srcs]
+
+        iter_n += 1
+
+
+def testSplit():
+    np.random.seed(42)
+
+    ##
+    ## Generate some fake sources using real image data (PSF and stuff)
+    ##
+    cat_glob = glob('data/stamp_catalog/cat*.fits')[1:2]
+    srcs, imgs, teff_catalog, us = load_imgs_and_catalog(cat_glob)
+    print "initialized with %d sources and %d images"%(len(srcs), len(imgs))
+
+    ## pixel location of source in image 0
+    u_pixel = imgs[0].equa2pixel(srcs[0].u)
+
+    ## generate fake sources information
+    t_gt = np.array([5500, 8500])         # synthetic temperatures
+    b_gt = np.array([5e-10, 8e-10])       # synthetic brightnesses
+    gt_srcs = []
+    for s in range(2):
+        us_pixel = u_pixel + 3*np.random.randn(2)
+        us_equa  = imgs[0].pixel2equa(us_pixel)
+        src_s = celeste.PointSrcParams(u = us_equa, b = b_gt[s], t = t_gt[s])
+        gt_srcs.append(src_s)
+    srcs = [celeste.PointSrcParams(u=u, b=6e-10, t=6500)]
+
+    # re-generate images using these source params
+    for img in imgs: 
+        mimg      = celeste.gen_model_image(gt_srcs, img)
+        img.nelec = np.random.poisson(mimg)
+
+    # check out the first image
+    compare_to_model(gt_srcs, imgs[0])
+    plt.show()
+
+    np.random.seed(42)
+    rand = np.random.RandomState()
+    e_samps  = np.zeros(100, len(imgs)))  # num images is fixed
+    ll_samps = np.zeros(100)
+    iter_n = 1
+    while len(srcs) == 1:
+        print "Doing iteration", iter_n
+        srcs = copy.deepcopy(srcs)
+        srcs = splitStar(srcs, imgs, rand=rand)
+
+        post_samps.append(srcs)
+        for n_img in range(len(imgs)):
+            e_samps[iter_n, n_img] = imgs[n_img].epsilon
+        ll_samps[iter_n] = celeste.celeste_likelihood_multi_image(srcs, imgs)
+        print "After iteration %s: %s, cat len %s" % (iter_n, ll_samps[iter_n], len(srcs))
+        print "Location: ", [src.u for src in srcs]
+        print "Brightness: ", [src.b for src in srcs]
+
+        iter_n += 1
+
 if __name__=="__main__":
     testBirth()
     testDeath()
+    testMerge()
+    testSplit()
