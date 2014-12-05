@@ -493,12 +493,15 @@ sources $j_{1}$ and $j_{2}$. Let $u_{j^*}$, $b_{j^*}$, and $t_{j^*}$
 be the position, luminosity, and temperature of source $j$,
 respectively:
 
-What are our invariants? In some sense, we are preserving the {}``moments,''
-loosely defined, of our sources.
+What are our invariants?
+%In some sense, we are preserving the {}``moments,''
+%loosely defined, of our sources.
 \begin{itemize}
 \item $b_{j_{*}}=b_{j_{1}}+b_{j_{2}}$
-\item $t_{j_{*}}=\frac{1}{b_{j^*}}\left(b_{j_1} t_{j_{1}}+ b_{j_2} t_{j_{2}}\right)$
-\item $u_{j_{*}}=\frac{1}{b_{j^*}}\left(b_{j_1} u_{j_{1}}+ b_{j_2} u_{j_{2}}\right)$
+\item $t_{j_{*}} = \frac{1}{2}(t_{j_1} + t_{j_2})$
+\item $u_{j_{*}} = \frac{1}{2}(u_{j_1} + u_{j_2})$
+%\item $t_{j_{*}}=\frac{1}{b_{j^*}}\left(b_{j_1} t_{j_{1}}+ b_{j_2} t_{j_{2}}\right)$
+%\item $u_{j_{*}}=\frac{1}{b_{j^*}}\left(b_{j_1} u_{j_{1}}+ b_{j_2} u_{j_{2}}\right)$
 \end{itemize}
 Then splitting, we can draw, from some known joint distribution, a
 $4$-dimension random variable whose components
@@ -507,23 +510,31 @@ are:
 \item $m\in\mathbb{R}^{2}$ indicating the direction and proposed distance
 to {}``throw'' the new components' mean. In practice, the proposal
 distribution $g\left(m\right)$ should be such that this distance
-is limited.
-\item $g\in\left(0,1\right)$. This can be a uniform distribution.
-\item $h \in \mathbb{R}^+$. Centered at 0, need to make sure temperatures
-don't go negative though.
+is limited, or something like a Gaussian distribution where density
+falls off with distance.
+\item $g_1 \in (0, 1)$. This can be a uniform distribution.
+\item $g_2 \in (0, 1)$. This can be a uniform or a beta distribution.
+%\item $g\in\left(0,1\right)$. This can be a uniform distribution.
+%\item $h \in \mathbb{R}^+$. Centered at 0, need to make sure temperatures
+%don't go negative though.
 \end{itemize}
 In order to find the Jacobian, we need to define the deterministic
 function $h$ where $x'=h\left(x,v\right)$, where $x$ are the set
 of state variables $u,b, t$ and $v$ are $3$ random variables
 from a known joint density.
-
 \begin{align*}
-b_{j_{1}} & \leftarrow g b_{j_{*}}\\
-b_{j_{2}} & \leftarrow\left(1-g\right)b_{j_{*}}\\
-t_{j_1} & \leftarrow (1-g) b_{j^*} h + t_{j^*} \\
-t_{j_2} & \leftarrow -g b_{j^*} h + t_{j^*} \\
-u_{j_{1}} & \leftarrow \left(1-g\right)b_{j_{*}} m+u_{j_{*}}\\
-u_{j_{2}} & \leftarrow-gb_{j_{*}} m+u_{j_{*}}
+u_{j_1} & \leftarrow u_s + m \\
+u_{j_1} & \leftarrow u_s - m \\
+b_{j_1} & \leftarrow g_1 b_s\\
+b_{j_2} & \leftarrow (1 - g_1) b_s \\
+t_{j_1} & \leftarrow 2 g_2 t_s \\
+t_{j_2} & \leftarrow 2 (1 - g_2) t_s
+%b_{j_{1}} & \leftarrow g b_{j_{*}}\\
+%b_{j_{2}} & \leftarrow\left(1-g\right)b_{j_{*}}\\
+%t_{j_1} & \leftarrow (1-g) b_{j^*} h + t_{j^*} \\
+%t_{j_2} & \leftarrow -g b_{j^*} h + t_{j^*} \\
+%u_{j_{1}} & \leftarrow \left(1-g\right)b_{j_{*}} m+u_{j_{*}}\\
+%u_{j_{2}} & \leftarrow-gb_{j_{*}} m+u_{j_{*}}
 \end{align*}
 
 
@@ -533,29 +544,47 @@ u_{j_{2}} & \leftarrow-gb_{j_{*}} m+u_{j_{*}}
 Let $J$ be the Jacobian for the split transition. The block partial
 derivative of each column by each row is as follows:
 
+%\begin{center}
+%\begin{tabular}{|c||c|c|c|c|c|c|}
+%\cline{2-7} 
+%\multicolumn{1}{c|}{} & $u_{j_{1}}$ & $u_{j_{2}}$ & $b_{j_{1}}$ & $b_{j_{2}}$ & $t_{j_1}$ & $t_{j_2}$\tabularnewline
+%\hline 
+%$u_{j_{*}}$ & $I$ & $I$ & $0$ & $0$ & 0 & 0\tabularnewline
+%\hline 
+%$m$ & $\left(1-g\right)b_{j_{*}} I$ & $-g b_{j_{*}} I$ & $0$ & $0$ & 0 & 0\tabularnewline
+%\hline 
+%$b_{j_{*}}$ & $\left(1-g\right)m^{T}$ & $-gm^{T}$ & $g$ & $1-g$ & $\left(1-g\right)h$ & $-gh$\tabularnewline
+%\hline 
+%$g$ & $-b_{j_{*}}m^{T}$ & $-b_{j_{*}}m^{T}$ & $b_{j^*}$ & $-b_{j^*}$ & $-b_{j_{*}}h$ & $-b_{j_{*}}h$ \tabularnewline
+%\hline
+%$t_{j_{*}}$ & $0$ & $0$ & $0$ & $0$ & $1$ & $1$\tabularnewline
+%\hline
+%$h$ & $0$ & $0$ & $0$ & $0$ &$(1 - g)b_{j^*}$ & $-g b_{j^*}$\tabularnewline
+%\hline
+%\end{tabular}
+%\par\end{center}
+
 \begin{center}
 \begin{tabular}{|c||c|c|c|c|c|c|}
 \cline{2-7} 
 \multicolumn{1}{c|}{} & $u_{j_{1}}$ & $u_{j_{2}}$ & $b_{j_{1}}$ & $b_{j_{2}}$ & $t_{j_1}$ & $t_{j_2}$\tabularnewline
 \hline 
-$u_{j_{*}}$ & $I$ & $I$ & $0$ & $0$ & 0 & 0\tabularnewline
+$u_{j_{*}}$ & $I_2$ & $I_2$ & $0$ & $0$ & 0 & 0\tabularnewline
 \hline 
-$m$ & $\left(1-g\right)b_{j_{*}} I$ & $-g b_{j_{*}} I$ & $0$ & $0$ & 0 & 0\tabularnewline
+$m$ & $I_2$ & $-I_2$ & $0$ & $0$ & 0 & 0\tabularnewline
 \hline 
-$b_{j_{*}}$ & $\left(1-g\right)m^{T}$ & $-gm^{T}$ & $g$ & $1-g$ & $\left(1-g\right)h$ & $-gh$\tabularnewline
+$b_{j_{*}}$ & $0$ & $0$ & $g_1$ & $1-g_1$ & $0$ & $0$\tabularnewline
 \hline 
-$g$ & $-b_{j_{*}}m^{T}$ & $-b_{j_{*}}m^{T}$ & $b_{j^*}$ & $-b_{j^*}$ & $-b_{j_{*}}h$ & $-b_{j_{*}}h$ \tabularnewline
+$g$ & $0$ & $0$ & $b_s$ & $-b_s$ & $0$ & $0$ \tabularnewline
 \hline
-$t_{j_{*}}$ & $0$ & $0$ & $0$ & $0$ & $1$ & $1$\tabularnewline
+$t_{j_{*}}$ & $0$ & $0$ & $0$ & $0$ & $2g_2$ & $2 (1-g_2)$\tabularnewline
 \hline
-$h$ & $0$ & $0$ & $0$ & $0$ &$(1 - g)b_{j^*}$ & $-g b_{j^*}$\tabularnewline
+$h$ & $0$ & $0$ & $0$ & $0$ &$2t_s$ & $-2t_s$\tabularnewline
 \hline
 \end{tabular}
 \par\end{center}
 
-It turns out (from some computation in Mathematica), that the determinant of this is $b_{j^*}^4$.
-\todo{verify this?}
-
+It turns out (from some computation in Mathematica), that the determinant of this is $16b_s t_s$.
 
 \subsubsection{Birth-death intuition and notation}
 
