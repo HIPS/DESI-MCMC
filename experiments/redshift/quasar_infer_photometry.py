@@ -107,7 +107,7 @@ if __name__=="__main__":
     else:
         Nsamps = 5000
 
-    print "Fitting SDSS pixel projection to test idx %d (%d samps)"%(n, Nsamps)
+    print "Fitting SDSS pixel projection to test idx %d of %d (%d mcmc samps)"%(n, qtest['Z'].shape[0], Nsamps)
     spec_n      = qtest['spectra'][n, :]
     spec_ivar_n = qtest['spectra_ivar'][n, :]
     z_n         = qtest['Z'][n]
