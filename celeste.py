@@ -28,7 +28,7 @@ def gen_src_image(src, image, pixel_grid = None):
     if src.b is not None and src.t is not None:
         expected_photons = photons_expected_brightness(src.t, src.b, image.band)
     elif src.fluxes is not None:
-        expected_photons = image.kappa * src.fluxes[image.band] / image.calib
+        expected_photons = image.kappa * src.fluxes[image.band] # / image.calib
     else:
         raise Exception("No way to compute expected photons without at least fluxes or brightness")
 

@@ -13,7 +13,15 @@ from slicesample import slicesample
 
 ## weighted loss function - observations have gaussian noise
 def loss_fun(th_mat, X, inv_var):
-    Xtilde = reconstruct(th_mat)
+    N = X.shape[0]
+    omegas = th_mat[:, 0:N].T
+    betas  = th_mat[:, N:]
+    # compute like
+    W = np.exp(omegas)
+    B = np.exp(betas)
+    B = B / np.sum(B, axis=1, keepdims=True)
+    Xtilde = np.dot(np.exp(omegas), B)
+    #Xtilde = reconstruct(th_mat)
     return np.sum( inv_var * np.square(X - Xtilde) )
 
 def reconstruct(th_mat):
@@ -28,7 +36,7 @@ def reconstruct(th_mat):
 loss_grad = grad(loss_fun)
 
 ## joint prior over parameters
-def prior_loss(th_mat, sig2_omega):
+def prior_loss(th_mat, sig2_omega, N):
     omegas = th_mat[:, 0:N].T
     betas  = th_mat[:, N:]
     return 1 / (100.) * np.sum(np.square(omegas)) + \
@@ -51,7 +59,7 @@ def loss_betas(betas, W, X):
 loss_betas_grad = grad(loss_betas)
 
 ## simple gradient based NMF w/ gaussian noise training function
-def train_model(th, X, Lam, max_iter = 1000):
+def train_model(th, X, Lam, cvx_iter=20000, sgd_iter = 1000):
     print "    Iter       |    Train err  |   step_size  "
     # Training parameters
     learning_rate = 1e-5
@@ -61,12 +69,12 @@ def train_model(th, X, Lam, max_iter = 1000):
     # mix/match loss and regularizers 
     def target_grad(th): 
         lgrad = loss_grad(th, X, Lam)
-        pgrad = prior_loss_grad(th, 1.)
+        pgrad = prior_loss_grad(th, 1., X.shape[0])
         return lgrad + pgrad
 
     cur_dir = np.zeros(th.shape)
-    lls     = np.zeros(max_iter)
-    for epoch in range(max_iter):
+    lls     = np.zeros(sgd_iter)
+    for epoch in range(sgd_iter):
         grad_th    = target_grad(th)
         cur_dir    = momentum * cur_dir + (1.0 - momentum) * grad_th
         th        -= learning_rate * cur_dir
@@ -85,23 +93,8 @@ def train_model(th, X, Lam, max_iter = 1000):
         return loss_grad(th_vec.reshape(th_shape), X, Lam).ravel()
     res = minimize(fun=lfun, jac=jfun, x0=th.ravel(), 
                     method = 'L-BFGS-B',
-                    options = {'gtol':1e-6, 'disp':True, 'maxiter':max_iter})
+                    options = {'gtol':1e-6, 'disp':True, 'maxiter':cvx_iter})
     th_fine = np.reshape(res.x, th_shape)
-
-    #### minimize w/ convex opt method
-    #print "Switching to CVX Optimization Method"
-    #B = np.exp(th[:, N:])
-    #B = B / B.sum(axis=1, keepdims=True)
-    #omegas_shape = omegas.shape
-    #def lfun(omega_vec): 
-    #    return loss_omegas(omega_vec.reshape(omegas_shape), B, X, Lam)
-    #def jfun(omega_vec):
-    #    return loss_omegas_grad(omega_vec.reshape(omegas_shape), B, X, Lam).ravel()
-    #res = minimize(fun=lfun, jac=jfun, x0=omegas.ravel(), 
-    #                method = 'L-BFGS-B',
-    #                options = {'gtol':1e-6, 'disp':True, 'maxiter':1000})
-    #omegas = np.reshape(res.x, omegas_shape)
-    ## finish off with a convex opt method
     return th_fine, lls
 
 if __name__=="__main__":
@@ -109,7 +102,7 @@ if __name__=="__main__":
     ## load a handful of quasar spectra
     lam_obs, qtrain, qtest = \
         load_data_clean_split(spec_fits_file = 'quasar_data.fits', 
-                              Ntrain = 200)
+                              Ntrain = 400)
 
     ## first find a positive decomposition of quasar spectra on training data
     quasar_spectra = qtrain['spectra']
@@ -178,37 +171,18 @@ if __name__=="__main__":
     print "Checking grads. Relative diff is: {0}".format((nd - ad)/np.abs(nd))
 
     ## train model
-    th, lls = train_model(th, X, Lam, max_iter = 2000)
+    th, lls = train_model(th, X, Lam, cvx_iter=20000, sgd_iter=10)
     print "Fit loss: ", loss_fun(th, X, Lam)
+    dth = loss_grad(th, X, Lam)
+    print "Gradient mag: ", np.sqrt((dth*dth).sum())
     omegas = th[:, 0:N].T
     betas  = th[:, N:]
     W = np.exp(omegas).T
     B = np.exp(betas)
     B = B / B.sum(axis=1, keepdims=True)
-
-    # depict frequency spatial basis
-    fig = plt.figure()
-    plt.plot(Bfit.T)
-    plt.title("Rest frame basis")
-    plt.show()
-
-    # show a bunch of reconstructions
-    to_show = [0, 10, 25, 199]
-    fig, axarr = plt.subplots(len(to_show), 1)
-    Xtilde = reconstruct(th)
-    Xtilde = np.exp(omegas).dot(B)
-    for i, n in enumerate(to_show):
-        axarr[i].plot(Xtilde[n,:], label='$\hat x$', linewidth=2)
-        axarr[i].plot(X[n,:], label='$X$', linewidth=2)
-        axarr[i].plot(Lam[n, :], alpha = .5, color = 'grey', label='inv var(X)')
-        axarr[i].set_title("Example reconstruction")
-    plt.legend()
-    plt.show()
-
-    fig = plt.figure()
-    plt.plot(lls[::100])
-    plt.xlabel("iteration")
-    plt.show()
+    np.save("cache/basis_th.npy", th)
+    np.save("cache/lls.npy", lls)
+    np.save("cache/lam0.npy", lam0)
 
     ## compute the likelihood redshift for one example
     def z_likelihood(z, w, spec, spec_ivar, lam_obs): 
@@ -315,7 +289,7 @@ if __name__=="__main__":
     plt.ylabel("$\log p(z | obs)$")
     plt.show()
 
-    Nsamps = 1000
+    Nsamps = 5000
     ll_samps = np.zeros(Nsamps)
     th_samps = np.zeros((Nsamps, len(w_n) + 1))
     th_curr  = np.concatenate((w_n, [quasar_z[n]]))
@@ -335,9 +309,13 @@ if __name__=="__main__":
     cnts, bins, patches = plt.hist(th_samps[(Nsamps/2):, -1], 20, alpha=.5, normed=True)
     plt.xlabel("$z$ (red-shift)")
     plt.ylabel("$p(z | X, B)$")
-    plt.vlines(quasar_z[n], 0,  cnts.max(), linewidth=2)
-    plt.vlines(quasar_z[n] - 2*quasar_zerr[n], 0, cnts.max(), linewidth=1)
-    plt.vlines(quasar_z[n] + 2*quasar_zerr[n], 0, cnts.max(), linewidth=1)
+    plt.vlines(quasar_z[n], 0,  cnts.max(), linewidth=2, color="black", label="$z_{full}$")
+    plt.vlines(th_samps[(Nsamps/2):,-1].mean(), 0, cnts.max(), linewidth=2, color='red', label="$E[z | x]$")
+    plt.legend()
+    plt.title("Quasar %d: red-shift posterior"%151)
+    plt.xlim(th_samps[:,-1].min() - .25, th_samps[:, -1].max() + .25)
+    #plt.vlines(quasar_z[n] - 2*quasar_zerr[n], 0, cnts.max(), linewidth=1)
+    #plt.vlines(quasar_z[n] + 2*quasar_zerr[n], 0, cnts.max(), linewidth=1)
     plt.show()
 
 
