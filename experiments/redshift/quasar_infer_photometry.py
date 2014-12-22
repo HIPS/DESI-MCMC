@@ -9,7 +9,7 @@ from redshift_utils import load_data_clean_split, project_to_bands
 from slicesample import slicesample
 import matplotlib.pyplot as plt
 import seaborn as sns
-import sys
+import sys, os
 sns.set_style("white")
 current_palette = sns.color_palette()
 npr.seed(42)
@@ -108,7 +108,8 @@ if __name__=="__main__":
         Nsamps = 5000
 
     print "Fitting SDSS pixel projection to test idx %d of %d (%d mcmc samps)"%(n, qtest['Z'].shape[0], Nsamps)
-    spec_n      = qtest['spectra'][n, :]
+    spec_n             = qtest['spectra'][n, :]
+    spec_n[spec_n < 0] = 0
     spec_ivar_n = qtest['spectra_ivar'][n, :]
     z_n         = qtest['Z'][n]
     mu_n        = project_to_bands(np.atleast_2d(spec_n), lam_obs)
@@ -118,7 +119,7 @@ if __name__=="__main__":
     ## sample W's and Z's for this test example
     ll_samps = np.zeros(Nsamps)
     th_samps = np.zeros((Nsamps, len(w_n) + 1))
-    th_curr  = np.concatenate((w_n, [z_n]))
+    th_curr  = np.concatenate((w_n, [2.5]))
     lnpdf    = lambda th: pixel_likelihood(th[-1], th[:-1], x_n, lam0) + prior_w(th[:-1])
     ll_curr  = lnpdf(th_curr)
     print "{0:15} | {1:15} | {2:15} | {3:15} ".format("iter", "log like", "z value (true z)", "weight0")
@@ -131,16 +132,19 @@ if __name__=="__main__":
                                        lb = -np.Inf, ub = np.Inf)
         th_samps[samp_i,:] = th_curr
         ll_samps[samp_i] = ll_curr
-        if samp_i % 50 == 0:
+        if samp_i % 100 == 0:
             print "{0:15} | {1:15} | {2:15} | {3:15} ".format(
                 samp_i, ll_curr, "%2.2f (%2.2f)"%(th_curr[-1], z_n), th_curr[0])
+        if samp_i % 1000 == 0:
+            np.save("cache/ll_samps_train_idx_%d.npy"%n, ll_samps)
+            np.save("cache/th_samps_train_idx_%d.npy"%n, th_samps)
     np.save("cache/ll_samps_train_idx_%d.npy"%n, ll_samps)
     np.save("cache/th_samps_train_idx_%d.npy"%n, th_samps)
 
 
     ################# for interactive use ###################################
     if False:
-        n = 2
+        n = 144
         z_n = qtest['Z'][n]
         spec_n = qtest['spectra'][n, :]
         ll_samps = np.load("cache/ll_samps_train_idx_%d.npy"%n)
@@ -159,6 +163,8 @@ if __name__=="__main__":
 
     ## save some sample plots
     out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/figs/"
+    if not os.path.exists(out_dir) or not os.path.isdir(out_dir):
+        out_dir = "figs/"
 
     fig = plt.figure(figsize=(18,6))
     plt.plot(lam_obs, spec_n, alpha = .5)
