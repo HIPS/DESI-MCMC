@@ -23,7 +23,7 @@ out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/figs/"
 ## load a handful of quasar spectra
 lam_obs, qtrain, qtest = \
     load_data_clean_split(spec_fits_file = 'quasar_data.fits', 
-                          Ntrain = 300)
+                          Ntrain = 400)
 
 ## first find a positive decomposition of quasar spectra on training data
 quasar_spectra = qtrain['spectra']
@@ -75,7 +75,7 @@ fig = plt.figure(figsize=(18, 6))
 plt.plot(lam_obs, quasar_ivar[0, :].T, alpha=.5, color="grey", label="inverse variance")
 plt.plot(lam_obs, quasar_spectra[0, :].T, label="spectra", linewidth=2)
 plt.ylim(0, quasar_spectra[0, :].max())
-plt.legend()
+plt.legend(fontsize='xx-large')
 plt.title("Quasar full spectrum")
 plt.xlabel("wavelength")
 plt.ylabel("$f(\lambda)$")
@@ -86,12 +86,27 @@ fig = plt.figure(figsize=(18, 6))
 for idx in idxs:
     plt.plot(lam_obs, quasar_spectra[idx, :].T, label="$z = %2.2f$"%quasar_z[idx])
 plt.ylim(0, quasar_spectra[idxs, :].max())
-plt.legend()
+plt.legend(fontsize='xx-large')
 plt.title("Red-shift comparison of quasar spectra")
 plt.xlabel("wavelength")
 plt.ylabel("$f(\lambda)$")
 plt.savefig(out_dir + "quasar_redshift_obs_frame.pdf", bbox_inches = 'tight')
 
+
+## plot a bunch in it's own directory
+full_out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/quasar_specs/" 
+full_idx = np.arange(0, qtrain['spectra'].shape[0], 5)
+for idx in full_idx: 
+    fig = plt.figure(figsize=(24,8))
+    plt.plot(lam_obs, qtrain['spectra'][idx, :].T, label="z = %2.2f"%qtrain['Z'][idx], linewidth=1)
+    plt.plot(lam_obs, qtrain['spectra_ivar'][idx, :].T, label="inv var", color='grey', alpha=.5, linewidth=.3)
+    plt.title("Quasar (training # %d)"%idx)
+    plt.xlabel("wavelength")
+    plt.ylabel("$f(\lambda)$")
+    plt.legend()
+    plt.savefig(full_out_dir + "quasar_spectra_%d.png"%idx, bbox_inches = 'tight')
+    plt.close('all')
+ 
 ## re-sample into rest frame
 #header      = fitsio.read_header('../../data/eigen_specs/spEigenQSO-55732.fits')
 #eigQSOfits  = fitsio.FITS('../../data/eigen_specs/spEigenQSO-55732.fits')
@@ -123,7 +138,7 @@ for idx in idxs:
     lam_rest = lam_obs / (1 + quasar_z[idx])
     plt.plot(lam_rest, quasar_spectra[idx, :], label="$z = %2.2f$"%quasar_z[idx])
 plt.ylim(0, quasar_spectra[idxs, :].max())
-plt.legend()
+plt.legend(fontsize='xx-large')
 plt.title("Red-shift comparison of quasar spectra")
 plt.xlabel("wavelength")
 plt.ylabel("$f(\lambda)$")
@@ -145,9 +160,9 @@ for n, b in enumerate(planck.bands):
     plt.fill_between(planck.wavelength_lookup[b] * 1e10, 
                      planck.sensitivity_lookup[b], 
                      alpha=.5, color=colors[n], label="%s band"%b)
-plt.plot(lam_obs, quasar_spectra[0, :]/normalizer, label="normed spectrum", linewidth=2)
+plt.plot(lam_obs, quasar_spectra[0, :]/normalizer, label="(scaled) spectrum", linewidth=2)
 plt.xlim(3000, 10500)
-plt.legend(fontsize=14)
+plt.legend(fontsize='xx-large')
 plt.savefig(out_dir + "quasar_spectrum_sdss_filters.pdf", bbox_inches = 'tight')
 
 

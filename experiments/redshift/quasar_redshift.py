@@ -38,31 +38,75 @@ loss_grad = grad(loss_fun)
 def prior_loss(th_mat, sig2_omega, N):
     omegas = th_mat[:, 0:N].T
     betas  = th_mat[:, N:]
-    return 1 / (100.) * np.sum(np.square(omegas)) + \
+    return 1 / (100.) * np.sum(np.abs(omegas)) + \
            1 * np.sum(np.square(betas))
 prior_loss_grad = grad(prior_loss)
 
-## fixed point updates -
-def loss_omegas(omegas, B, X, inv_var): 
-    ll_omega = 1 / (100.) * np.sum(np.square(omegas))
-    Xtilde   = np.dot(np.exp(omegas), B)
-    return np.sum( inv_var * np.square(X - Xtilde) ) + ll_omega
-loss_omegas_grad = grad(loss_omegas)
 
-def loss_betas(betas, W, X):
-    ll_beta = np.sum(np.dot(np.dot(betas, KB_inv), betas.T))
-    B = np.exp(betas)
-    B = B / np.sum(B, axis = 1)[:, np.newaxis]
-    Xtilde = np.dot(W, np.exp(betas))
-    return np.sum(np.square(X - Xtilde)) + ll_beta
-loss_betas_grad = grad(loss_betas)
+## iteratively minimize weight/basis pairs
+def train_iterative(th, X, Lam, max_iter=100): 
+
+    def loss_omegas(omegas, B):
+        ll_omega = 1 / (100.) * np.sum(np.square(omegas))
+        Xtilde   = np.dot(np.exp(omegas), B)
+        return np.sum( Lam * np.square(X - Xtilde) ) + ll_omega
+    loss_omegas_grad = grad(loss_omegas)
+
+    def loss_betas(betas, W):
+        #ll_beta = np.sum(np.dot(np.dot(betas, KB_inv), betas.T))
+        ll_beta = np.sum(np.square(betas))
+        B = np.exp(betas)
+        B = B / np.sum(B, axis = 1, keepdims=True)
+        Xtilde = np.dot(W, np.exp(betas))
+        return np.sum( Lam * np.square(X - Xtilde)) + ll_beta
+    loss_betas_grad = grad(loss_betas)
+
+    #### minimize w/ convex opt method
+    print "    Iter       |    Train err  |   grad_mag  "
+    N = X.shape[0]
+    omegas = th[:, 0:N]
+    betas  = th[:, N:]
+    curr_loss = loss_fun(np.column_stack((omegas, betas)), X, Lam)
+    lls = []
+    for iter_i in range(max_iter):
+
+        ## fix weights and minimize w.r.t basis
+        W = np.exp(omegas).T
+        res = minimize( x0 = betas.ravel(),
+                        fun = lambda b: loss_betas(b.reshape(betas.shape), W),
+                        jac = lambda b: loss_betas_grad(b.reshape(betas.shape), W).ravel(),
+                        method = 'L-BFGS-B',
+                        options = {'gtol':1e-6, 'disp':False, 'maxiter':30})
+        betas = res.x.reshape(betas.shape)
+
+        ## debug compute marignal loss
+        print " post-basis opt loss: ", loss_fun(np.column_stack((omegas, betas)), X, Lam)
+
+        ## now fix basis and minimize w.r.t. weights
+        B = np.exp(betas)
+        B = B / np.sum(B, axis=1, keepdims=True)
+        res = minimize( x0 = omegas.ravel(),
+                        fun = lambda o: loss_omegas(o.reshape(omegas.shape).T, B),
+                        jac = lambda o: loss_omegas_grad(o.reshape(omegas.shape).T, B).ravel(),
+                        method = 'L-BFGS-B',
+                        options = {'gtol':1e-6, 'disp':False, 'maxiter':30})
+        omegas = res.x.reshape(omegas.shape)
+
+        ## compute marginal loss
+        th = np.column_stack((omegas, betas))
+        lls.append(loss_fun(th, X, Lam))
+        th_grad = loss_grad(th, X, Lam)
+        print "{0:15}|{1:15}|{2:15}".format(iter_i, "%5g"%lls[-1], np.sqrt(np.sum(th_grad*th_grad)))
+
+    th_fine = np.column_stack((omegas, betas))
+    return th_fine, lls
+
 
 ## simple gradient based NMF w/ gaussian noise training function
-def train_model(th, X, Lam, cvx_iter=20000, sgd_iter = 1000):
+def train_model(th, X, Lam, cvx_iter=20000, sgd_iter = 1000,
+                learning_rate = 1e-5, momentum = .9):
     print "    Iter       |    Train err  |   step_size  "
     # Training parameters
-    learning_rate = 1e-5
-    momentum = 0.9
     batch_size = 256
 
     # mix/match loss and regularizers 
@@ -81,7 +125,7 @@ def train_model(th, X, Lam, cvx_iter=20000, sgd_iter = 1000):
 
         step_mag = np.sqrt(np.sum(np.square(learning_rate*cur_dir)))
         if epoch % 100 == 0:
-            print "{0:15}|{1:15}|{2:15}".format(epoch, lls[epoch], step_mag)
+            print "{0:15}|{1:15}|{2:15}".format(epoch, "%5g"%lls[epoch], "%2.4f"%step_mag)
 
     #### minimize w/ convex opt method
     print "Switching to CVX Optimization Method"
@@ -91,7 +135,7 @@ def train_model(th, X, Lam, cvx_iter=20000, sgd_iter = 1000):
     def jfun(th_vec):
         return loss_grad(th_vec.reshape(th_shape), X, Lam).ravel()
     res = minimize(fun=lfun, jac=jfun, x0=th.ravel(), 
-                    method = 'L-BFGS-B',
+                    method = 'BFGS',
                     options = {'gtol':1e-6, 'disp':True, 'maxiter':cvx_iter})
     th_fine = np.reshape(res.x, th_shape)
     return th_fine, lls
@@ -114,7 +158,8 @@ if __name__=="__main__":
     header      = fitsio.read_header('../../data/eigen_specs/spEigenQSO-55732.fits')
     eigQSOfits  = fitsio.FITS('../../data/eigen_specs/spEigenQSO-55732.fits')
     lam0        = 10.**(header['COEFF0'] + np.arange(header['NAXIS1']) * header['COEFF1'])
-    eigQSO      = eigQSOfits[0].read()
+    lam0 = lam0[::5]
+    eigQSO      = eigQSOfits[0].read()[:, ::5]
     K           = eigQSO.shape[0]
 
     ## resample to lam0 => rest frame basis 
@@ -168,7 +213,9 @@ if __name__=="__main__":
     print "Checking grads. Relative diff is: {0}".format((nd - ad)/np.abs(nd))
 
     ## train model
-    th, lls = train_model(th, X, Lam, cvx_iter=20000, sgd_iter=20000)
+    th, lls = train_model(th, X, Lam, cvx_iter=10000, sgd_iter=200, 
+                          learning_rate = 1e-5, momentum=.98)
+    #th, lls = train_iterative(th, X, Lam, max_iter = 20)
     print "Fit loss: ", loss_fun(th, X, Lam)
     dth = loss_grad(th, X, Lam)
     print "Gradient mag: ", np.sqrt((dth*dth).sum())

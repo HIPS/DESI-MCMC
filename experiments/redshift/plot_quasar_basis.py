@@ -11,11 +11,10 @@ current_palette = sns.color_palette()
 
 #######################################################################
 out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/figs/"
-
-## plot the basis
-th  = np.load("cache/basis_th.npy")
-lls = np.load("cache/lls.npy")
-lam0 = np.load("cache/lam0.npy")
+ 
+th  = np.load("cache/basis_th_K-4_V-2728.npy")
+lls = np.load("cache/lls_K-4_V-2728.npy")
+lam0 = np.load("cache/lam0_V-2728.npy")
 N    = th.shape[1] - lam0.shape[0]
 omegas = th[:,:N]
 betas  = th[:, N:]
@@ -53,7 +52,7 @@ for idx in idxs:
     plt.ylim(0, quasar_spectra[idx,:].max())
     plt.xlabel("wavelength")
     plt.ylabel("spectrum")
-    plt.legend()
+    plt.legend(fontsize='xx-large')
     plt.savefig(out_dir + "idx_%d_rank_%d_reconstruction.pdf"%(idx, W.shape[0]), bbox_inches='tight')
 
 
@@ -64,4 +63,15 @@ Wproj = pca.fit_transform(np.log(W.T))
 fig = plt.figure()
 plt.scatter(Wproj[:, 0], Wproj[:, 1])
 plt.savefig(out_dir + "weight_pca_rank_%d.pdf"%W.shape[0], bbox_inches='tight')
+
+
+## print the two distributions of z scores
+fig, axarr = plt.subplots(2, 1, figsize=(10, 5))
+n, bins, patches = axarr[0].hist(qtrain['Z'], 20)
+axarr[1].hist(qtest['Z'], bins)
+plt.savefig(out_dir + "train_test_z_scores.pdf")
+
+
+
+
 
