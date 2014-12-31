@@ -45,11 +45,35 @@ We define notation:
 
 We note that the number of sources, $S$, is unknown a priori and modeled as a random variable.  For each source, we define the following \emph{intrinsic} properties, which are the estimands of interest: 
 \begin{align*}
-  u_s &= (u_{s,ra}, u_{s,dec}) = \text{right ascension and declination of source $s$} \\
+  c_s &= \text{ class of source } \in \{ \text{star}, \text{galaxy}, \text{quasar} \} \\
+  u_s &= (u_{s,ra}, u_{s,dec}) = \text{right ascension and declination of source $s$} 
+\end{align*}
+
+For stars (point sources), we are interested in estimating the following properties 
+\begin{align*}
   t_s &= \text{temperature of source $s$ (kelvin)} \\
   d_s &= \text{distance to source $s$ (meters)} \\
   \ell_s &= \text{luminosity of source $s$ (Joules/second)} 
 \end{align*}
+
+For galaxies, we define the following intrinsic properties 
+\begin{align*}
+  \theta &= \text{mixing proportion between De Vaucouleurs and Exponential profiles} \\
+  b_s    &= (b_{s,u}, \dots, b_{s,z}) \text{ band-wise brightnesses } \\
+  R_s    &= \text{matrix encoding shape and rotation} \\
+  z_s    &= \text{red shift}
+\end{align*}
+
+For quasars, we want to characterize the following properties 
+\begin{align*}
+  z_s &= \text{red shift} \\
+  b_s &= (b_{s,u}, \dots, b_{s, z}) \text{band-wise brightnesses?}
+\end{align*}
+
+In all cases, source properties will be inferred by the intensity (amount) and color (distribution across bands) of photons captured in imagery.  An example of such photometric observations are depicted in Figure~\ref{fig:bands}.  
+
+
+
 
 This paper describes a probabilistic model-based approach to inferring these quantities of interest.  We treat the observed pixel values as random variables, and describe a (stochastic) forward generating procedure based on the properties of these sources (the likelihood), as well as an a priori distribution over the properties themselves (the prior), and use Bayesian inference and Markov Chain Monte Carlo techniques to draw simulations from the posterior.  To understand the likelihood, we first outline the physical motivation underlying our model.  
 
@@ -77,10 +101,11 @@ This paper describes a probabilistic model-based approach to inferring these qua
 \end{subfigure}
 \end{center}
 \caption{SDSS photon count images.  Each image corresponds to one band These five images have been aligned - each corresponding to the same viewing frame, among 5 bands. Five sources are visible - their intensity/number of photon observations are a function of their temperature, luminosity, and distance to earth.}
+\label{fig:bands}
 \end{figure}
 
 
-\section{Computing the expected number of photons}
+\section{Modeling stars}
 The random variable that gives rise to our likelihood and motivates probabilistic inference in this problem is the number of photons detected by an instrument with a lens of a fixed area over a fixed exposure duration.  According to our idealized model, this random variable is Poisson distributed conditioned on the intrinsic properties of a source.  To describe our observations, we need to outline the procedure by which the band-specific flux images are generated.  
 
 To compute how many photo-electrons we expect to be captured by a lens of size $A$ over exposure duration $\Delta$, we must compute the number of photons that will eventually be intercepted by the instrument as a function of the source's distance, luminosity, and temperature.  Geometrically, we can view the source as a single point in space at a distance $d_s$, which radiates energy uniformly outward, such that the level sets of equal radiation form a sphere.  We can think of the area of the lens of the instrument as some fraction of the total surface area of this sphere, which is, roughly
@@ -180,8 +205,7 @@ giving us the expected number of photons that source $s$ contributes to image $n
 \label{fig:sensitivity}
 \end{figure}
 
-
-\section{From Sources to Pixel Observations}
+\subsection{From Sources to Pixel Observations}
 An image $n$ corresponds to measurements in one band, $\beta_n$, and consists of pixels locations denoted by $m = (w,h)$.  The total number of photons we expect to observe in image $n$ is simply the sum of the contribution we expect to see from each source, described above.  However, this total number is distributed about the pixels of the image according to the image's point spread function (PSF), due to atmospheric turbulence.  For image $n$ (with only point source contributions) and pixel $m = (w,h)$, where $m \in \mathcal{P}_n$ denotes a pixel in the set of pixels associated with image $n$, the distribution over photon count is modeled
 \begin{align}
   x_{n,m} | \{(u_s, t_s, \ell_s, d_s)\}_{s=1}^S &\sim \textrm{Poisson}( \epsilon_n + \sum_{s=1}^S F_{n,m,s} ) \\
@@ -224,6 +248,47 @@ and the log likelihood, over all images, as
     &= \sum_{n,m} x_{n,m} \log F_{n,m} - F_{n,m} + const.
 \end{align}
 One problematic aspect of the likelihood is the $\log F_{n,m}$ term, which is difficult to directly optimize and compute with multiple cores.  We can simplify this by using a natural latent variable representation of additive Poisson intensity functions.  
+
+\section{Galaxies}
+This section will describe the likelihood of a source conditioned on it being of class $c_s = 1$ (Galaxies).  Galaxies differ from point sources in that photometric observations have spatial extent that is not solely due to the point spread function.  There is both a shape and function that describes the spatial distribution of light due to the galactic source as observed from Earth.  This shape is then further convolved with the point spread function in a similar way to stars.  
+
+The three appearance elements of a galaxy in our model are due to 
+\begin{itemize}
+\item Galactic profile (De Vaucouleurs vs Exponential profiles)
+\item Rotation and scaling 
+\item Point spread function 
+\item Total intensity and color distribution 
+\end{itemize}
+
+This section outlines a probabilistic model to describe how those four components generate the photometric Poisson distributed observations. Firstly, we employ the use of a mixture of Gaussians method of \todo{cite Hogg and Lang} to describe the galaxy's profile, rotation and scaling, and straightforward convolution with the point spread function to describe the spatial observation of galaxies.  The total intensity and color distribution are then generated from prior distribution (left generic for now).
+
+\todo{At the moment there is no red-shift inference for Galaxies}
+
+The galactic profiles are simply isotropic, concentric mixtures of Gaussians with known parameters.  For a pixel $m$, spatial distribution of photons from a source centered on pixel $(0,0)$ for De Vaucouleurs and Exponential would be
+\begin{align}
+  p_{dev}(m) &= \sum_{k=1}^{K_{dev}} w_{dev, k} \mathcal{N}\left(m | 0, \sigma^2_{dev, k} I \right) \\
+  p_{exp}(m) &= \sum_{k=1}^{K_{dev}} w_{exp, k} \mathcal{N}\left(m | 0, \sigma^2_{exp, k} I \right)
+\end{align}
+
+The rotation matrix $R_s$ defines a covariance for each of the mixtures, $\sigma_{\cdot, k} R_s R_s^\trans$. 
+
+Denoting $theta_{s,1} \equiv \theta_{s}$ and $\theta_{s,2} \equiv 1-\theta_{s}$, and $K_1 \equiv K_{dev}$, $K_2 \equiv K_{exp}$ for convenience, the generative model for an image patch depicting only galaxies is 
+\begin{align}
+  \theta_s &\sim p_\theta \\
+  b_s      &\sim F_{gal-bright} \\
+  R_s      &\sim F_{R} \\
+  x_{n,m} | \{ \theta_s, b_s,...\}_{s=1}^S &\sim \textrm{Poisson}\left( \epsilon_n + \sum_{s=1}^S F_{n,m,s} \right) \\
+  F_{n,m,s} &= b_{s, \beta_n} f_{n,m,s} \\
+  f_{n,m,s} 
+    &= \sum_{k=1}^{K_{psf}} w^{(ps)}_{n,k} 
+       \sum_{i=1}^2 \theta_{s,i} 
+       \sum_{j=1}^{K_i} w_{i, j} \mathcal{N} \left( u_s + \mu^{(psf)}_{n,k} | \Sigma^{(psf)}_{n,k} + \sigma_{i,j} R_s R_s^\trans \right)
+\end{align}
+
+The giant mixture of Gaussians is the result of convolving the image's PSF (mixture of 3 Gaussians) with the mixture of both profiles (essentially a mixture of $K_1 + K_2$ Gaussians), yielding a mixture of $3(K_1 + K_2)$ Gaussians.  \todo{I think it's $3 \cdot (8 + 8)$}
+ 
+Note that the PSF mixture weights, means and covariances are image (and therefore band) specific. 
+
 
 \section{Inference}
 
