@@ -717,7 +717,9 @@ beta distribution with parameters $\alpha,\beta<1$) may be used.%
 
 For a new galaxy, we need to choose $\theta$, the DeVaucoleurs-Exponential
 mixing proportion; $b_s$, the vector of band-wise brightnesses,
-$R_s$, the matrix encoding shape and rotation, and $z_s$, the red shift.
+$R_s$, the matrix encoding shape and rotation, $z_s$, the red shift,
+and $w_{dev}$, $w_{exp}$.
+From the notation in Green's paper,
 
 \[
 \begin{bmatrix}x'\\
@@ -729,47 +731,59 @@ v
 \end{bmatrix}\mbox{ so the Jacobian is }1.
 \]
 
-Now, we have the issue of where we should choose to birth a galaxy,
-and on the flip side, which galaxy to choose to kill. Furthermore, we want
-to choose reasonable values for each of the fluxes: perhaps, we should
-be choosing this from some sort of prior.
+For now, we can propose births and deaths the same
+way we do for stars. We will birth a galaxy at a given pixel
+from a probability distribution
+proportional to the residual images. We will propose
+the death of a galaxy uniformly at random from the catalog
+of all galaxies.
+
+Some preliminary ways we can generate values for parameters are:
+\begin{align*}
+\theta \sim U(0, 1)
+\end{align*}
+
+\textbf{TODO}:
+We want to choose values for $b_s$, $R_s$, $z_s$, $w_{dev}$,
+and $w_{exp}$ based on priors (from astronomy). Andy,
+do you have ideas / astronomically knowledge to randomly initialize these?
 
 \subsubsection{Merge-split for galaxies}
 
-We derive each of the parameters.
+We derive each of the transitions.
 For merging galaxy-mixing proportions, we set:
 \begin{equation*}
-\theta_s = \frac{1}{2}(\theta_1 + \theta_2)
+\theta_s \leftarrow \frac{1}{2}(\theta_1 + \theta_2)
 \end{equation*}
 
 When splitting, we sample random variable $g_1 \in [0, 1]$ and then
 \begin{align*}
-\theta_1 &= 2 g_1 \theta_s \\
-\theta_2 &= 2(1 - g_1) \theta_s
+\theta_1 &\leftarrow 2 g_1 \theta_s \\
+\theta_2 &\leftarrow 2(1 - g_1) \theta_s
 \end{align*}
 
 When merging galaxies, we will make the band-wise brightnesses of the merged galaxy
 the sum of each galaxy's band-wise brightnesses, just as in stars:
 \begin{equation*}
-b_s = b_{j_1} + b_{j_2}
+b_s \leftarrow b_{1} + b_{2}
 \end{equation*}
 
 Similarly, when we split galaxies, we sample random variable $g_2 \in [0, 1]$ (uniformly) and then
 split the band-wise brightnesses accordingly between the galaxies.
 \begin{align*}
-b_{j_1} & \leftarrow g_2 b_s\\
-b_{j_2} & \leftarrow (1 - g_2) b_s
+b_{1} & \leftarrow g_2 b_s\\
+b_{2} & \leftarrow (1 - g_2) b_s
 \end{align*}
 
 For red-shift, when merging,
 \begin{equation*}
-z_s = \frac{1}{2}(\theta_1 + \theta_2)
+z_s \leftarrow \frac{1}{2}(z_1 + z_2)
 \end{equation*}
 
 When splitting, we sample random variable $g_3 \in [0, 1]$ and then
 \begin{align*}
-z_1 &= 2 g_3 z_s \\
-z_2 &= 2(1 - g_3) z_s
+z_1 &\leftarrow 2 g_3 z_s \\
+z_2 &\leftarrow 2(1 - g_3) z_s
 \end{align*}
 
 For the merge and splits, we can transform the weights $w_{dev, k}$ and $w_{exp, k}$
@@ -778,9 +792,18 @@ and when we split, we create vectors of random variables $g_{dev}$ and $g_{exp}$
 that allow us to make the reverse
 transformation.
 
-TODO: How should we parametrize $R_s$ and merge/split it?
+For the location, we can average locations during merging, and ``throw'' them out during
+splits, just as we do for stars. We pick a pair of galaxies to merge uniformly randomly from
+the set of galaxies that are close to each other. We uniformly
+randomly choose a galaxy to split during the splitting step.
 
-TODO: Calculate Jacobian
+\textbf{TODO}.
+How should we parametrize $R_s$ and merge/split it? One way I can think of is to think of $R_s$
+as a two-dimensional radius (in each direction) and an angle of rotation. Then, we can do the
+same averaging of the radii and angles for merging and the opposite for splitting, as we
+see above.
+
+\textbf{TODO}. Calculate Jacobian.
 
 \subsubsection{Star-to-galaxy and galaxy-to-star transitions}
 
@@ -788,16 +811,29 @@ It is currently not clear to me exactly how these transitions will work, but the
 the star and galaxy in the transition should have somewhat similar appearances. Furthermore,
 transitions must be reversible.
 
-First, let us consider the star-to-galaxy transition. We randomly choose a mixing proportion $\theta \in [0, 1]$,
-either uniformly or based on some other prior. We do the same for red-shift. The band-wise brightnesses
+First, let us consider proposing a star-to-galaxy transition:
+\begin{enumerate}
+\item Keep the same location
+\item Uniformly randomly choose a mixing proportion $\theta \in [0, 1]$
+\item Choose red-shift from some prior distribution
+\item Choose $R_s$ randomly from the space of transformation matrices (from some prior)
+\item Choose weights $w_{dev}$ and $w_{exp}$ uniformly from the space of possible mixing weights.
+\item The band-wise brightnesses
 should be some function of the star's luminosity and temperature, perhaps, something like Planck's law
 plus some randomness. The weights of the mixture components should also be chosen from a prior
-to be decided. The matrix $R_s$ should be chosen randomly from the space of transformation matrices.
-
-The important thing for the reverse transition is to make the reverse transition from band-wise brightnesses
+to be decided. The important thing for the reverse transition is to make the reverse transition from band-wise brightnesses
 to star brightness-temperature reversible.
+\end{enumerate}
 
-TODO: Discuss and work out the math.
+Note that (2) - (5) do not depend at all on the star's properties and are completely random. Furthermore, (1)
+is exactly the identity transformation. So, for the reverse galaxy-to-star transition, we once again keep the location the same,
+discard parameters (2) - (5), and apply the reverse $b_{giruz} \to (b_s, t_s)$ transformation.
+
+\textbf{TODO}. Work out the reversible $b_{girl} \iff (b_s, t_s)$ transformations.
+
+\textbf{TODO}. Calculate the Jacobian. This should be easy after figuring out the brightness transformation because
+most of the galaxy parameters do not depend on the star's parameters.
+
 
 \subsection{Posterior sampling summary}
 \todo{Might be a good idea to have the whole algorithm laid out here}
