@@ -267,12 +267,12 @@ This section outlines a probabilistic model to describe how those four component
 The galactic profiles are simply isotropic, concentric mixtures of Gaussians with known parameters.  For a pixel $m$, spatial distribution of photons from a source centered on pixel $(0,0)$ for De Vaucouleurs and Exponential would be
 \begin{align}
   p_{dev}(m) &= \sum_{k=1}^{K_{dev}} w_{dev, k} \mathcal{N}\left(m | 0, \sigma^2_{dev, k} I \right) \\
-  p_{exp}(m) &= \sum_{k=1}^{K_{dev}} w_{exp, k} \mathcal{N}\left(m | 0, \sigma^2_{exp, k} I \right)
+  p_{exp}(m) &= \sum_{k=1}^{K_{exp}} w_{exp, k} \mathcal{N}\left(m | 0, \sigma^2_{exp, k} I \right)
 \end{align}
 
 The rotation matrix $R_s$ defines a covariance for each of the mixtures, $\sigma_{\cdot, k} R_s R_s^\trans$. 
 
-Denoting $theta_{s,1} \equiv \theta_{s}$ and $\theta_{s,2} \equiv 1-\theta_{s}$, and $K_1 \equiv K_{dev}$, $K_2 \equiv K_{exp}$ for convenience, the generative model for an image patch depicting only galaxies is 
+Denoting $\theta_{s,1} \equiv \theta_{s}$ and $\theta_{s,2} \equiv 1-\theta_{s}$, and $K_1 \equiv K_{dev}$, $K_2 \equiv K_{exp}$ for convenience, the generative model for an image patch depicting only galaxies is 
 \begin{align}
   \theta_s &\sim p_\theta \\
   b_s      &\sim F_{gal-bright} \\
@@ -526,7 +526,7 @@ numbers of sources, by initializing to a specific number of sources
 and proposing increases and decreases.
 
 
-\subsubsection{Merge-split intuition}
+\subsubsection{Merge-split intuition for stars}
 
 A star has position (2 dimensions), temperature, and luminosity.
 When two nearby sources with distinct positions are merged:
@@ -551,7 +551,7 @@ forward transition and a merge to be reverse, this satisfies dimension
 matching $n+r=n'+r'$ with $r=4$ and $r'=0$.
 
 
-\subsubsection{Merge-split specification\label{sub:merge-split-specification}}
+\subsubsection{Merge-split specification for stars\label{sub:merge-split-specification}}
 
 Let source $j_{*}$ be a merged source corresponding to component
 sources $j_{1}$ and $j_{2}$. Let $u_{j^*}$, $b_{j^*}$, and $t_{j^*}$
@@ -604,7 +604,7 @@ t_{j_2} & \leftarrow 2 (1 - g_2) t_s
 
 
 
-\subsubsection{Jacobian for split transition}
+\subsubsection{Jacobian for merge-split transition}
 
 Let $J$ be the Jacobian for the split transition. The block partial
 derivative of each column by each row is as follows:
@@ -651,9 +651,9 @@ $h$ & $0$ & $0$ & $0$ & $0$ &$2t_s$ & $-2t_s$\tabularnewline
 
 It turns out (from some computation in Mathematica), that the determinant of this is $16b_s t_s$.
 
-\subsubsection{Birth-death intuition and notation}
+\subsubsection{Birth-death intuition and notation for stars}
 
-For a new source, we need to choose location $u_{j'}$, brightness
+For a new star, we need to choose location $u_{j'}$, brightness
 $b_{j'}$, temperature $t_{j'}$, and as above, with $r=3$ and $r'=0$. If a source is
 born and immediately killed, the state is reverted trivially, satisfying
 detailed balance. In other words:
@@ -712,6 +712,92 @@ type of composite galaxy which encompasses the fully-exponential and
 fully-deVaucouleurs types. If classification into these extremes is
 desired, a bimodal prior on the composite mixing parameter (i.e. a
 beta distribution with parameters $\alpha,\beta<1$) may be used.%
+
+\subsubsection{Birth-death for galaxies}
+
+For a new galaxy, we need to choose $\theta$, the DeVaucoleurs-Exponential
+mixing proportion; $b_s$, the vector of band-wise brightnesses,
+$R_s$, the matrix encoding shape and rotation, and $z_s$, the red shift.
+
+\[
+\begin{bmatrix}x'\\
+v'
+\end{bmatrix}=h\left(\begin{bmatrix}x\\
+v
+\end{bmatrix}\right)=\begin{bmatrix}x\\
+v
+\end{bmatrix}\mbox{ so the Jacobian is }1.
+\]
+
+Now, we have the issue of where we should choose to birth a galaxy,
+and on the flip side, which galaxy to choose to kill. Furthermore, we want
+to choose reasonable values for each of the fluxes: perhaps, we should
+be choosing this from some sort of prior.
+
+\subsubsection{Merge-split for galaxies}
+
+We derive each of the parameters.
+For merging galaxy-mixing proportions, we set:
+\begin{equation*}
+\theta_s = \frac{1}{2}(\theta_1 + \theta_2)
+\end{equation*}
+
+When splitting, we sample random variable $g_1 \in [0, 1]$ and then
+\begin{align*}
+\theta_1 &= 2 g_1 \theta_s \\
+\theta_2 &= 2(1 - g_1) \theta_s
+\end{align*}
+
+When merging galaxies, we will make the band-wise brightnesses of the merged galaxy
+the sum of each galaxy's band-wise brightnesses, just as in stars:
+\begin{equation*}
+b_s = b_{j_1} + b_{j_2}
+\end{equation*}
+
+Similarly, when we split galaxies, we sample random variable $g_2 \in [0, 1]$ (uniformly) and then
+split the band-wise brightnesses accordingly between the galaxies.
+\begin{align*}
+b_{j_1} & \leftarrow g_2 b_s\\
+b_{j_2} & \leftarrow (1 - g_2) b_s
+\end{align*}
+
+For red-shift, when merging,
+\begin{equation*}
+z_s = \frac{1}{2}(\theta_1 + \theta_2)
+\end{equation*}
+
+When splitting, we sample random variable $g_3 \in [0, 1]$ and then
+\begin{align*}
+z_1 &= 2 g_3 z_s \\
+z_2 &= 2(1 - g_3) z_s
+\end{align*}
+
+For the merge and splits, we can transform the weights $w_{dev, k}$ and $w_{exp, k}$
+the same way we do $\theta_s$ and $z_s$. When merging, we take the average,
+and when we split, we create vectors of random variables $g_{dev}$ and $g_{exp}$, respectively,
+that allow us to make the reverse
+transformation.
+
+TODO: How should we parametrize $R_s$ and merge/split it?
+
+TODO: Calculate Jacobian
+
+\subsubsection{Star-to-galaxy and galaxy-to-star transitions}
+
+It is currently not clear to me exactly how these transitions will work, but the intuition is that that
+the star and galaxy in the transition should have somewhat similar appearances. Furthermore,
+transitions must be reversible.
+
+First, let us consider the star-to-galaxy transition. We randomly choose a mixing proportion $\theta \in [0, 1]$,
+either uniformly or based on some other prior. We do the same for red-shift. The band-wise brightnesses
+should be some function of the star's luminosity and temperature, perhaps, something like Planck's law
+plus some randomness. The weights of the mixture components should also be chosen from a prior
+to be decided. The matrix $R_s$ should be chosen randomly from the space of transformation matrices.
+
+The important thing for the reverse transition is to make the reverse transition from band-wise brightnesses
+to star brightness-temperature reversible.
+
+TODO: Discuss and work out the math.
 
 \subsection{Posterior sampling summary}
 \todo{Might be a good idea to have the whole algorithm laid out here}
