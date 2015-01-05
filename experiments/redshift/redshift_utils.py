@@ -5,6 +5,9 @@ sys.path.append("../..")
 import planck
 import scipy.integrate as integrate
 from scipy import interpolate
+from scipy.optimize import minimize
+from funkyyak import grad, numpy_wrapper as np
+import matplotlib.pyplot as plt
 
 def sinc_interp(new_samples, samples, fvals, left=None, right=None):
     """
@@ -93,5 +96,75 @@ def project_to_bands(spectra, wavelengths):
             bright_mat[n, i] = integrate.simps(spectra[n,:]*filters[b],
                                                wavelengths)
     return bright_mat
+
+
+def fit_weights_given_basis(B, lam0, X, inv_var, z_n, lam_obs, return_loss=False, sgd_iter=100):
+    """ Weighted optimization routine to fit the values of \log w given 
+    basis B. 
+    """
+    #convert spec_n to lam0
+    spec_n_resampled = np.interp(lam0, lam_obs/(1+z_n), X, left=np.nan, right=np.nan)
+    ivar_n_resampled = np.interp(lam0, lam_obs/(1+z_n), inv_var, left=np.nan, right=np.nan)
+    spec_n_resampled[np.isnan(spec_n_resampled)] = 0.0
+    ivar_n_resampled[np.isnan(ivar_n_resampled)] = 0.0
+    def loss_omegas(omegas):
+        """ loss over weights with respect to fixed basis """
+        ll_omega = .5 / (100.) * np.sum(np.square(omegas))
+        Xtilde   = np.dot(np.exp(omegas), B)
+        return np.sum(ivar_n_resampled * np.square(spec_n_resampled - Xtilde)) + ll_omega
+    loss_omegas_grad = grad(loss_omegas)
+
+    # first wail on it with gradient descent/momentum
+    omegas        = .01*np.random.randn(B.shape[0])
+    momentum      = .9
+    learning_rate = 1e-4
+    cur_dir = np.zeros(omegas.shape)
+    lls     = np.zeros(sgd_iter)
+    for epoch in range(sgd_iter):
+        grad_th    = loss_omegas_grad(omegas)
+        cur_dir    = momentum * cur_dir + (1.0 - momentum) * grad_th
+        omegas    -= learning_rate * cur_dir
+        lls[epoch] = loss_omegas(omegas)
+
+        step_mag = np.sqrt(np.sum(np.square(learning_rate*cur_dir)))
+        if epoch % 20 == 0:
+            print "{0:15}|{1:15}|{2:15}".format(epoch, "%7g"%lls[epoch], "%2.4f"%step_mag)
+
+    # tighten it up w/ LBFGS
+    res = minimize(x0 = omegas,
+                   fun = loss_omegas,
+                   jac=loss_omegas_grad,
+                   method = 'L-BFGS-B',
+                   options = { 'disp': True, 'maxiter': 10000 })
+
+    # return the loss function handle as well - for debugging
+    if return_loss:
+        return np.exp(res.x), loss_omegas
+    return np.exp(res.x)
+
+def evaluate_random_direction(fun, x0, n=100, delta=.1):
+    """ plots a multivariate function over one (random) direction """
+    # random direciton w/ magnitude delta
+    param_scale = .1
+    rand_dir = np.random.randn(x0.size) * param_scale
+    rand_dir = delta * rand_dir / np.sqrt(np.dot(rand_dir, rand_dir))
+    # bounds
+    x_left  = x0 - n*rand_dir
+    ll_grid = np.zeros(2*n+1)
+    x = x_left
+    for n in range(len(ll_grid)):
+        x = x_left + n*rand_dir
+        ll_grid[n] = fun(x)
+    return ll_grid
+
+def check_grad(fun, jac, th):
+    """ check the gradient along a random direction """
+    param_scale = .1
+    rand_dir    = np.random.randn(th.size) * param_scale
+    rand_dir    = rand_dir / np.sqrt(np.dot(rand_dir, rand_dir))
+    test_fun    = lambda x : fun(th + x * rand_dir.reshape(th.shape))
+    nd          = (test_fun(1e-4) - test_fun(-1e-4)) / 2e-4
+    ad          = np.dot(jac(th).ravel(), rand_dir)
+    print "Checking grads. Relative diff is: {0}".format((nd - ad)/np.abs(nd))
 
 

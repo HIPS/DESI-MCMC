@@ -10,66 +10,22 @@ from slicesample import slicesample
 import matplotlib.pyplot as plt
 import seaborn as sns
 import sys, os
+from redshift_utils import fit_weights_given_basis
 sns.set_style("white")
 current_palette = sns.color_palette()
 npr.seed(42)
-
-## weighted loss function - observations have gaussian noise
-def loss_fun(th_mat, X, inv_var):
-    N = X.shape[0]
-    omegas = th_mat[:, 0:N].T
-    betas  = th_mat[:, N:]
-    # compute like
-    W = np.exp(omegas)
-    B = np.exp(betas)
-    B = B / np.sum(B, axis=1, keepdims=True)
-    Xtilde = np.dot(np.exp(omegas), B)
-    #Xtilde = reconstruct(th_mat)
-    return np.sum( inv_var * np.square(X - Xtilde) )
-
-def reconstruct(th_mat):
-    omegas = th_mat[:, 0:N].T
-    betas  = th_mat[:, N:]
-    # compute like
-    W = np.exp(omegas)
-    B = np.exp(betas)
-    B = B / np.sum(B, axis=1, keepdims=True)
-    Xtilde = np.dot(np.exp(omegas), B)
-    return Xtilde
-loss_grad = grad(loss_fun)
-
-## joint prior over parameters
-def prior_loss(th_mat, sig2_omega, N):
-    omegas = th_mat[:, 0:N].T
-    betas  = th_mat[:, N:]
-    return 1 / (100.) * np.sum(np.square(omegas)) + \
-           1 * np.sum(np.square(betas))
-prior_loss_grad = grad(prior_loss)
-
-## fixed point updates -
-def loss_omegas(omegas, B, X, inv_var): 
-    ll_omega = 1 / (100.) * np.sum(np.square(omegas))
-    Xtilde   = np.dot(np.exp(omegas), B)
-    return np.sum( inv_var * np.square(X - Xtilde) ) + ll_omega
-loss_omegas_grad = grad(loss_omegas)
-
 
 if __name__=="__main__":
 
     ## load a handful of quasar spectra
     lam_obs, qtrain, qtest = \
-        load_data_clean_split(spec_fits_file = 'quasar_data.fits', 
-                              Ntrain = 400)
-    quasar_spectra = qtrain['spectra']
-    quasar_z       = qtrain['Z']
-    quasar_ivar    = qtrain['spectra_ivar']
-    quasar_zerr    = qtrain['Z_err']
-    N              = quasar_spectra.shape[0]
+        load_data_clean_split(spec_fits_file = 'quasar_data.fits',
+                              Ntrain         = 400)
 
     ## load in basis
-    th  = np.load("cache/basis_th.npy")
-    lls = np.load("cache/lls.npy")
-    lam0 = np.load("cache/lam0.npy")
+    th   = np.load("cache/basis_th_K-4_V-2728.npy")
+    lls  = np.load("cache/lls_K-4_V-2728.npy")
+    lam0 = np.load("cache/lam0_V-2728.npy")
     N    = th.shape[1] - lam0.shape[0]
     omegas = th[:,:N]
     betas  = th[:, N:]
@@ -97,6 +53,16 @@ if __name__=="__main__":
             return -np.inf
         return 0
 
+    ### DEBUG PLOTS ###################
+    if False:
+        ## empirical prior for W....
+        fig, axarr = plt.subplots(1, W.shape[0])
+        for k in range(W.shape[0]):
+            axarr[k].hist(W[k,:], 40, normed=True)
+        plt.show()
+
+        ## plot all pairwise distribuitons
+
     ## load test example 
     if len(sys.argv) > 1:
         n = int(sys.argv[1])
@@ -110,16 +76,36 @@ if __name__=="__main__":
     print "Fitting SDSS pixel projection to test idx %d of %d (%d mcmc samps)"%(n, qtest['Z'].shape[0], Nsamps)
     spec_n             = qtest['spectra'][n, :]
     spec_n[spec_n < 0] = 0
-    spec_ivar_n = qtest['spectra_ivar'][n, :]
-    z_n         = qtest['Z'][n]
-    mu_n        = project_to_bands(np.atleast_2d(spec_n), lam_obs)
-    w_n         = W.mean(axis=1)
-    x_n         = npr.poisson(mu_n).ravel()
+    spec_ivar_n        = qtest['spectra_ivar'][n, :]
+    z_n                = qtest['Z'][n]
+    mu_n               = project_to_bands(np.atleast_2d(spec_n), lam_obs)
+    x_n                = npr.poisson(mu_n).ravel()
+    w_n                = .05*W.mean(axis=1)
+    #w_n                = fit_weights_given_basis(B, lam0, spec_n, spec_ivar_n, z_n, lam_obs)
+
+    #### DEBUG ##### 
+    # SANITY CHECK:  fit pixel likelihood fixed on w_n (taking the full spectrum - THIS IS CHEATING)
+    if False: 
+        ## these guys missed: 
+        bottom_right_misses = [ 13, 120,  94,  93,  19,  11,  89,  99, 151,  26, 166, 100,  81 ]
+        top_left_misses = [15, 83, 14, 122, 156]
+        n = 89
+        z_profile = lambda z: pixel_likelihood(z, w_n, x_n, lam0)
+        w_grid = np.linspace(0, 10, 100)
+        z_grid = np.array([z_profile(z) for z in w_grid])
+        z_grid = z_grid #- z_grid.max()
+        fig, axarr = plt.subplots(1, 2)
+        axarr[0].plot(w_grid, z_grid)
+        axarr[0].vlines(z_n, z_grid[np.isfinite(z_grid)].min(), z_grid[np.isfinite(z_grid)].max())
+        pz_grid = np.exp(z_grid - z_grid.max())
+        axarr[1].plot(w_grid, np.exp(z_grid - z_grid.max()))
+        axarr[1].vlines(z_n, pz_grid.min(), pz_grid.max())
+        plt.show()
 
     ## sample W's and Z's for this test example
     ll_samps = np.zeros(Nsamps)
     th_samps = np.zeros((Nsamps, len(w_n) + 1))
-    th_curr  = np.concatenate((w_n, [2.5]))
+    th_curr  = np.concatenate((w_n, [8]))
     lnpdf    = lambda th: pixel_likelihood(th[-1], th[:-1], x_n, lam0) + prior_w(th[:-1])
     ll_curr  = lnpdf(th_curr)
     print "{0:15} | {1:15} | {2:15} | {3:15} ".format("iter", "log like", "z value (true z)", "weight0")
@@ -138,28 +124,28 @@ if __name__=="__main__":
         if samp_i % 1000 == 0:
             np.save("cache/ll_samps_train_idx_%d.npy"%n, ll_samps)
             np.save("cache/th_samps_train_idx_%d.npy"%n, th_samps)
-    np.save("cache/ll_samps_train_idx_%d.npy"%n, ll_samps)
-    np.save("cache/th_samps_train_idx_%d.npy"%n, th_samps)
 
+    np.save("cache/ll_samps_train_idx_%d_V-2728.npy"%n, ll_samps)
+    np.save("cache/th_samps_train_idx_%d_V-2728.npy"%n, th_samps)
 
     ################# for interactive use ###################################
     if False:
         n = 144
         z_n = qtest['Z'][n]
-        spec_n = qtest['spectra'][n, :]
+        spec_n   = qtest['spectra'][n, :]
         ll_samps = np.load("cache/ll_samps_train_idx_%d.npy"%n)
         th_samps = np.load("cache/th_samps_train_idx_%d.npy"%n)
-        Nsamps = th_samps.shape[0]
+        Nsamps   = th_samps.shape[0]
     ##########################################################################
 
     ## reconstruct the basis from samples
     samp_idxs = np.arange(Nsamps/2, Nsamps)
-    recon_samps   = th_samps[samp_idxs, :-1].dot(B)
-    lam_obs_samps = np.outer(lam0, 1 + th_samps[samp_idxs, -1])
-    recon_mean = np.zeros(lam_obs.shape)
-    recon_samps_resampled = np.zeros((lam_obs_samps.shape[1], len(lam_obs)))
-    for i in range(lam_obs_samps.shape[1]):
-         recon_samps_resampled[i, :] += np.interp(lam_obs, lam_obs_samps[:, i], recon_samps[i,:])
+    recon_samps = np.zeros((lam_obs_samps.shape[1], len(lam_obs)))
+    for i in range(len(samp_idxs)):
+        idx = samp_idxs[i]
+        rest_samp    = th_samps[idx, 0:-1].dot(B)
+        lam_obs_samp = lam0 * (1 + th_samps[idx, -1])
+        recon_samps[i, :] = np.interp(lam_obs, lam_obs_samp, rest_samp)
 
     ## save some sample plots
     out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/figs/"
@@ -167,10 +153,11 @@ if __name__=="__main__":
         out_dir = "figs/"
 
     fig = plt.figure(figsize=(18,6))
+    pers = np.percentile(recon_samps, [1, 50, 99], axis=0)
     plt.plot(lam_obs, spec_n, alpha = .5)
-    plt.plot(lam_obs, recon_samps_resampled.mean(axis=0))
-    plt.plot(lam_obs, recon_samps_resampled.mean(axis=0) + 2*recon_samps_resampled.std(axis=0), color='grey')
-    plt.plot(lam_obs, recon_samps_resampled.mean(axis=0) - 2*recon_samps_resampled.std(axis=0), color='grey')
+    plt.plot(lam_obs, pers[1])
+    plt.plot(lam_obs, pers[0], color='grey')
+    plt.plot(lam_obs, pers[2], color='grey')
     plt.title("Quasar %d reconstruction from SDSS"%n)
     plt.xlabel("wavelength")
     plt.ylabel("$f(\lambda)$")
@@ -186,5 +173,28 @@ if __name__=="__main__":
     plt.title("Quasar %d: red-shift posterior"%n)
     plt.xlim(th_samps[(Nsamps/2):,-1].min() - .25, th_samps[(Nsamps/2):, -1].max() + .25)
     plt.savefig(out_dir + "quasar_%d_posterior_z.pdf"%n, bbox_inches='tight')
+
+    ########### DEBUG ################
+    if False:
+        #n=95
+        #z_n    = qtest['Z'][n]
+        #spec_n = qtest['spectra'][n, :]
+        #ivar_n = qtest['spectra_ivar'][n, :]
+        Nsamps = th_samps.shape[0]
+        w = fit_weights_given_basis(B, lam0, spec_n, spec_ivar_n, z_n, lam_obs)
+        plt.plot(lam_obs / (1 + z_n), spec_n)
+        plt.plot(lam0, w.dot(B))
+        plt.plot(lam_obs / (1 + z_n), np.sqrt(spec_ivar_n), color='grey', alpha=.5)
+        plt.xlim( min(lam_obs/(1+z_n)), max(lam_obs/(1+z_n)) )
+        plt.show()
+
+        # likelihood at map
+        print pixel_likelihood(z_n, w, x_n, lam0)
+
+        ## inspect w samples
+        fig, axarr = plt.subplots(1, 4)
+        for i, ax in enumerate(axarr.flatten()):
+            cnts, bins, patches = ax.hist(th_samps[(Nsamps/2):, i]; 20, alpha=.5, normed=True)
+            ax.vlines(w[i], cnts.max())
 
 
