@@ -178,7 +178,7 @@ which will be a convenient representation when we differentiate the likelihood w
 
 \subsection{Putting it together}
 We can now compute the number of photons from a source as observed in an image by combining Equation~\ref{eq:brightness} with Equation~\ref{eq:photojoules} to yield
-\begin{align}
+\begin{align}\label{eq:photosource}
   c(t_s, d_s, \ell_s, \beta_n) &= 
     \underbrace{I_{\beta_n}(t_s, S_\lambda)}_{
       \substack{ \text{\# photons detectable} \\
@@ -803,7 +803,28 @@ as a two-dimensional radius (in each direction) and an angle of rotation. Then, 
 same averaging of the radii and angles for merging and the opposite for splitting, as we
 see above.
 
-\textbf{TODO}. Calculate Jacobian.
+\textbf{TODO}. Calculate Jacobian. \textbf{This portion is not done}
+
+The block partial derivative is as follows:
+\begin{center}
+\begin{tabular}{|c||c|c|c|c|c|c|}
+\cline{2-7} 
+\multicolumn{1}{c|}{} & $u_{j_{1}}$ & $u_{j_{2}}$ & $b_{j_{1}}$ & $b_{j_{2}}$ & $t_{j_1}$ & $t_{j_2}$\tabularnewline
+\hline 
+$u_{j_{*}}$ & $I_2$ & $I_2$ & $0$ & $0$ & 0 & 0\tabularnewline
+\hline 
+$m$ & $I_2$ & $-I_2$ & $0$ & $0$ & 0 & 0\tabularnewline
+\hline 
+$b_{j_{*}}$ & $0$ & $0$ & $g_1$ & $1-g_1$ & $0$ & $0$\tabularnewline
+\hline 
+$g$ & $0$ & $0$ & $b_s$ & $-b_s$ & $0$ & $0$ \tabularnewline
+\hline
+$t_{j_{*}}$ & $0$ & $0$ & $0$ & $0$ & $2g_2$ & $2 (1-g_2)$\tabularnewline
+\hline
+$h$ & $0$ & $0$ & $0$ & $0$ &$2t_s$ & $-2t_s$\tabularnewline
+\hline
+\end{tabular}
+\par\end{center}
 
 \subsubsection{Star-to-galaxy and galaxy-to-star transitions}
 
@@ -818,18 +839,27 @@ First, let us consider proposing a star-to-galaxy transition:
 \item Choose red-shift from some prior distribution
 \item Choose $R_s$ randomly from the space of transformation matrices (from some prior)
 \item Choose weights $w_{dev}$ and $w_{exp}$ uniformly from the space of possible mixing weights.
-\item The band-wise brightnesses
-should be some function of the star's luminosity and temperature, perhaps, something like Planck's law
-plus some randomness. The weights of the mixture components should also be chosen from a prior
-to be decided. The important thing for the reverse transition is to make the reverse transition from band-wise brightnesses
-to star brightness-temperature reversible.
+\item The band-wise fluxes should be calculated using Planck's law through Equation~\ref{eq:photosource}
+in the DESI-MCMC repository. There should also be a noise term $\epsilon$, drawn from a large-variance Gaussian, giving us
+\begin{equation}
+b_{\beta_n} = c(t_s, d_s, \ell_s, \beta_n) + \epsilon
+\end{equation}
 \end{enumerate}
 
 Note that (2) - (5) do not depend at all on the star's properties and are completely random. Furthermore, (1)
 is exactly the identity transformation. So, for the reverse galaxy-to-star transition, we once again keep the location the same,
-discard parameters (2) - (5), and apply the reverse $b_{giruz} \to (b_s, t_s)$ transformation.
+discard parameters (2) - (5), and apply the reverse $b_{giruz} \to (b_s, t_s)$ transformation. This
+transformation must be reversible and differentiable (for the Jacobian). Possibly transformations are:
+\begin{enumerate}
+\item Use Planck's Law regression and use estimations of the gradients for the derivative, but this seems a bit unwieldy.
+\item Make the brightness the average of the $\{giruz\}$ fluxes and determine the temperature from \textbf{TODO}
+\end{enumerate}
 
-\textbf{TODO}. Work out the reversible $b_{girl} \iff (b_s, t_s)$ transformations.
+One possibility for
+the reverse transformation is a Planck's Law regression which takes spectral samples and gives the best $(b_s, t_s)$ pair
+matching that spectrum.
+
+\textbf{TODO}. Work out the reversible $b_{giruz} \iff (b_s, t_s)$ transformations.
 
 \textbf{TODO}. Calculate the Jacobian. This should be easy after figuring out the brightness transformation because
 most of the galaxy parameters do not depend on the star's parameters.
@@ -853,7 +883,8 @@ We can sample each source specific variable, $t_s, b_s$ and $u_s$ independently 
   
 \item Randomly propose a birth/death move
   \begin{itemize}
-  \item  
+  \item  Propose to birth a source $s$ at a randomly chosen pixel. Accept / reject.
+  \item Propose to kill an existing source $s$. Accept / reject.
   \end{itemize}
 \end{itemize}
 
