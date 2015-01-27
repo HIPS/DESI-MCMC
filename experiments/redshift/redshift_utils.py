@@ -1,6 +1,7 @@
 import numpy as np
 import fitsio
-import sys
+import sys, os
+from os.path import basename, splitext
 sys.path.append("../..")
 import planck
 import scipy.integrate as integrate
@@ -49,15 +50,19 @@ def load_data_clean_split(spec_fits_file = '../../andrew-qso.fits', Ntrain=500):
     log10lams   = fits_data[0].read()
     wavelengths = np.power(10, log10lams)
 
-    # load spectra samples
+    # load red shift and weed out stars/high error ones
     quasar_spectra = fits_data[1].read()
-    #quasar_spectra[quasar_spectra <= 0] = quasar_spectra[quasar_spectra > 0].min()
     quasar_ivar    = fits_data[2].read()
+    meta_data      = fits_data[3].read()
+    quasar_z       = meta_data['Z']
+    quasar_zerr    = meta_data['Z_ERR']
 
-    # load known red shift
-    meta_data = fits_data[3].read()
-    quasar_z = meta_data['Z']
-    quasar_zerr = meta_data['Z_ERR']
+    # remove stars/low red shift objs
+    bad_idx = (quasar_z < .01) | (np.abs(quasar_zerr) > 1e-2)
+    quasar_spectra = quasar_spectra[~bad_idx, :]
+    quasar_ivar    = quasar_ivar[~bad_idx, :]
+    quasar_z       = quasar_z[~bad_idx]
+    quasar_zerr    = quasar_zerr[~bad_idx]
 
     # split train/test
     np.random.seed(42)
@@ -78,6 +83,106 @@ def load_data_clean_split(spec_fits_file = '../../andrew-qso.fits', Ntrain=500):
     testObj['Z_err']        = quasar_zerr[test_idx]
     return wavelengths, trainObj, testObj
 
+def load_sdss_fluxes_clean_split(Ntest=500, seed=123):
+    """ Loads in the fluxes (which are stored in "Magnitudes",
+        from the dr7qso dump in data.  It then converts them to nanomaggies
+        and returns them.
+        TODO: add a flag for nanomaggie or photon count values...
+    """
+    acm_file = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/data/DR10QSO/DR10Q_v2.fits"
+    if os.path.exists(acm_file):
+        qso_file = acm_file
+    else: 
+        print "attempting relative path load"
+        qso_file = "../../data/DR10QSO/DR10Q_v2.fits"
+
+    ## load and read quasar fluxes
+    fits_data  = fitsio.FITS(qso_file)
+    qso_data   = fits_data[1].read()
+    mag_fields = ['UMAG', 'GMAG', 'RMAG', 'IMAG', 'ZMAG']
+    mag_errs   = [m + 'ERR' for m in mag_fields]
+    qso_mags   = np.column_stack([qso_data[m] for m in mag_fields])
+
+    # remove questionable mags
+    outlier_idx, outlier_field = np.where(qso_mags < 1)
+    mask              = np.ones(qso_mags.shape[0], dtype=bool)
+    mask[outlier_idx] = False
+    qso_mags          = qso_mags[mask, :]
+    Nquasar           = qso_mags.shape[0]
+
+    # magnitude values => nanomaggies
+    qso_nanomaggies = mags2nanomaggies(qso_mags)
+
+    ## split/train test
+    np.random.seed(seed)
+    perm = np.random.permutation(Nquasar)
+    train_idx = perm[:(Nquasar-Ntest)]
+    test_idx  = perm[(Nquasar-Ntest):]
+
+    ## return train/test objects
+    trainObj = {}
+    trainObj['sdss_fluxes'] = qso_nanomaggies[train_idx, :]
+    trainObj['sdss_mags']   = qso_mags[train_idx, :]
+    trainObj['Z'] = qso_data['z'][train_idx]
+
+    testObj = {}
+    testObj['sdss_fluxes'] = qso_nanomaggies[test_idx, :]
+    testObj['sdss_mags']   = qso_mags[test_idx, :]
+    testObj['Z'] = qso_data['z'][test_idx]
+    return trainObj, testObj
+
+def mags2nanomaggies(mags): 
+    return np.power(10., (mags - 22.5)/-2.5)
+
+
+def load_specs_from_disk(spec_files): 
+    # 0. load spectra from fits files
+    bad_ids    = []
+
+    unique_lams = np.array([])
+    spec_ids    = []
+    spec_fluxes = []
+    spec_lams   = []
+    spec_ivars  = []
+    spec_mods   = []
+    for i in range(len(spec_files)):
+        if i % 20 == 0: 
+            sys.stdout.write("\r  load_specs_from_disk ... (spec %d of %d)" % (i, len(spec_files)))
+            sys.stdout.flush()
+
+        # load spec info
+        try: 
+            sdf = fitsio.FITS(spec_files[i])
+        except:
+            bad_ids.append(i)
+            continue
+        spec_flux = sdf[1]['flux'].read()
+        spec_ivar = sdf[1]['ivar'].read()
+        spec_lam  = np.power(10., sdf[1]['loglam'].read())
+        spec_mod  = sdf[1]['model'].read()
+        unique_lams = np.unique(np.concatenate((unique_lams, spec_lam)))
+
+        # store list so we don't have to hit the disk again
+        spec_lams.append(spec_lam)
+        spec_fluxes.append(spec_flux)
+        spec_ivars.append(spec_ivar)
+        spec_mods.append(spec_mod)
+        spec_ids.append( basename( splitext(spec_files[i])[0] ) )
+
+    ## put everything in one big lam_obs
+    spec_grid = np.zeros((len(spec_fluxes), len(unique_lams)))
+    spec_ivar_grid = np.zeros((len(spec_fluxes), len(unique_lams)))
+    spec_mod_grid = np.zeros((len(spec_fluxes), len(unique_lams)))
+    for i in range(len(spec_fluxes)):
+        start_i = np.where(unique_lams==spec_lams[i][0])[0][0]
+        end_i   = np.where(unique_lams==spec_lams[i][-1])[0][0]+1
+        spec_grid[i, start_i:end_i]      = spec_fluxes[i]
+        spec_ivar_grid[i, start_i:end_i] = spec_ivars[i]
+        spec_mod_grid[i, start_i:end_i] = spec_ivars[i]
+
+    return spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, spec_ids, bad_ids
+
+
 def project_to_bands(spectra, wavelengths):
     # linearly interpolate filters to be sampled the same as the spectra
     bands = ['u', 'g', 'r', 'i', 'z']
@@ -87,6 +192,8 @@ def project_to_bands(spectra, wavelengths):
                                   planck.wavelength_lookup[b] * 1e10,
                                   planck.sensitivity_lookup[b],
                                   left = 0, right = 0)
+        # multiply each filter by the photon-energy relationship and 10^20 for erg conversion
+        filter_interp *= 1e-25 * wavelengths / (planck.h * planck.c)
         filters[b] = filter_interp
 
     # numerically integrate filter*observed spectra to get band brightness 
@@ -166,5 +273,28 @@ def check_grad(fun, jac, th):
     nd          = (test_fun(1e-4) - test_fun(-1e-4)) / 2e-4
     ad          = np.dot(jac(th).ravel(), rand_dir)
     print "Checking grads. Relative diff is: {0}".format((nd - ad)/np.abs(nd))
+
+class ParamParser(object):
+    """ Helper class to handle different slicing for different parameters
+    in one long vector """
+    def __init__(self):
+        self.idxs_and_shapes = {}
+        self.N = 0
+
+    def add_weights(self, name, shape):
+        start = self.N
+        self.N += np.prod(shape)
+        self.idxs_and_shapes[name] = (slice(start, self.N), shape)
+
+    def get(self, vect, name):
+        idxs, shape = self.idxs_and_shapes[name]
+        return np.reshape(vect[idxs], shape)
+
+    def set(self, vect, name, val):
+        idxs, shape = self.idxs_and_shapes[name]
+        vect[idxs] = val.ravel()
+
+    def get_slice(name):
+        return self.idxs_and_shapes[name][0]
 
 
