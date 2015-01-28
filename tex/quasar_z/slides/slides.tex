@@ -1,0 +1,277 @@
+\documentclass{beamer}
+\setbeamertemplate{navigation symbols}{}%remove navigation symbols
+\setbeamercovered{transparent}% Allow for shaded (transparent) covered items
+\usecolortheme{beaver}
+\usepackage{qtree}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{wrapfig}
+\usepackage{tikz}
+\usepackage{sidecap}
+\usepackage{tabularx}
+\usepackage{multicol}
+\usepackage{graphicx}
+\usepackage{animate}
+
+\newcommand{\todo}{ {\color{red}TODO: }\color{red} }
+\newcommand{\mb}{\mathbf}
+\newcommand{\mcN}{\mathcal{N}}
+\newcommand{\mcG}{\mathcal{G}}
+\newcommand{\mcX}{\mathcal{X}}
+\newcommand{\R}{\mathbb{R}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+%blank footnote
+\newcommand\blfootnote[1]{%
+  \begingroup
+  \renewcommand\thefootnote{}\footnote{#1}%
+  \addtocounter{footnote}{-1}%
+  \endgroup
+}
+
+%\AtBeginSection[]
+%{
+%\begin{frame}<beamer>{Outline}
+%\tableofcontents[currentsection,currentsubsection, 
+%    hideothersubsections, 
+%    sectionstyle=show/shaded,
+%    subsectionstyle=show/shaded,
+%]
+%\end{frame}
+%}
+
+
+%table images
+\def\imc#1{\raisebox{-.5\height}{#1}}
+
+\begin{document}
+\title{Notes on Photo-Z}
+\author{Andrew Miller}
+%\institute{Harvard University}
+%\date{} 
+\frame{\titlepage} 
+
+%\begin{frame}
+%\frametitle{Outline}
+%\tableofcontents 
+%\end{frame}
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+% Background
+%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Background / Related Work}
+
+
+%%%%%%%%%%% BENITEZ 2000 %%%%%%%%%%%%%%
+\frame{\frametitle{Bayesian photometric redshift estimation, Benitez (2000)}
+Overview of Bayesian methods for photometric red-shift.  
+  \begin{itemize}
+  \item Setup: given data $D = \{ C, m_0 \}$ (colors and magnitude of reference band), compute probability of red-shift (posterior distribution). 
+  \item Include information from a library of ``templates'' 
+  \begin{itemize}
+    \item Fully observed spectra (with spectroscopic red-shift)
+    \item Photometry data (with spectroscopic red-shift)
+  \end{itemize}
+  \item galaxy templates, $T$ (types/classes of galaxies, characterized by spectral density)
+  \item red-shift prior $p(z | m_0)$ is a function of magnitude of signal
+  \end{itemize}
+}
+
+\frame{\frametitle{Benitez (2000) (cont'd)}
+   \begin{itemize}
+   \item The fully Bayesian photo-z distribution averages over templates
+   \begin{align}
+  p(z | C, m_0) 
+    &= \sum_T p(z, T | C, m_0) \\
+    &\propto \sum_T \underbrace{p(z, T |m_0)}_{prior} \underbrace{p(C | z, T)}_{likelihood} \\
+    p(z, T | m_0) &= p(T | m_0) p(z | T, m_0)
+  \end{align}
+  
+  \item Can extend ``templates'' to parameterized spectral models characterized by $S$ (which is what I want to do)
+  \begin{align}
+    p(z | C, m_0) &= \int dS p(z, S | C, m_0) \\
+     &\propto \int dS \underbrace{ p(z, S | m_0) }_{prior} \underbrace{p(C | z, S)}_{likelihood}
+  \end{align}
+  (e.g. $S$ are PCA/NMF weights or spectra params)
+  %\todo{How is $p(C | z, S)$ defined - this is the important part of the likelihood}
+  %They discuss how to do this with the template idea, but not so much on the parameterization of spectra.  This is the key piece of information I'm missing, and would be the novel contribution of the paper.  
+  \end{itemize}
+}
+
+\frame{\frametitle{Benitez (2000) (cont'd)}
+\begin{itemize}
+  \item Their likelihood (if I understand it correctly) looks like this 
+  \begin{align}
+  p(C | z, T) &= p( f_{u}, f_{g}, \dots, f_{z} | z, T) \\
+    &\propto 
+    \frac{1}{\sqrt{F_{TT}(z)}} 
+    \exp \left( -\frac{1}{2} \sum_{\alpha} \frac{ (f_\alpha - a f_{T_\alpha})^2 }{\sigma^2_{f_\alpha}} \right)
+  \end{align}
+  \begin{itemize}
+  \item $f_{u}, \dots, f_{z}$ are the observed fluxes ($\alpha \in \{ugriz\}$)
+  \item $f_{T,\alpha}(z)$ is the vector of fluxes of template $T$ at red-shift $z$
+  \item $a$ is a magnitude parameter
+  \item $F_{TT}(z)$ is a normalizing factor they define
+  \end{itemize}
+\end{itemize}
+%\todo{How do you compute the function 
+%\begin{align}
+%  f_{T, \alpha(z)}
+%\end{align}
+%for a given spectral model, red-shift, and band $\alpha$?  Importantly, how do you relate the SDSS flux measurements in the DR7QSO sample and the spectral measurements?
+%}
+}
+
+\frame{\frametitle{Questions}
+\begin{itemize}
+\item None of the papers I've read so far go into specific detail about going from spectra to fluxes (for instance with SDSS filter responses).  
+  \begin{itemize}
+  \item Can we go from object characteristics (spectra, luminosity, distance, redshift, size, etc) all the way to the generation of an SDSS image featuring just that object (and to the fluxes in the DR7QSO catalog)?  Dimensional analysis (for my sake)? 
+  \item How are the fluxes in the DR7QSO dataset computed? 
+  \item How to deal with luminosity/distance and the SDSS fluxes?  Can I just assume a spectral density with arbitrary units $f(\cdot)$ that integrates to one, and this defines the distribution over colors (like normalized SDSS fluxes)?  %What's a simple physical model to go from object spectra to SDSS fluxes? 
+  \end{itemize}
+  
+\item How smooth are the spectra themselves (how much smoothing is done when deriving the PCA basis)?  Model spectra of quasars and galaxies?
+
+\item Clustering vs. Factor Analysis? 
+
+\item What kind of model of individual spectra makes sense?  What are desirable model properties?  
+
+\end{itemize}
+
+}
+
+%\frame{\frametitle{Benitez (2000) (cont'd)}
+%\begin{itemize}
+%  \item  Importantly,relationship between spectral template $T$ and likelihood $p(\text{fluxes} | z, T)$ is sort of empirical, based on how well individual template fluxes match the observed fluxes.  I think what I need is the function to go from spectral template and red shift to fluxes.  
+%  \begin{align}
+%    (f_{T,u},  f_{T, g}, \dots, f_{T, z}) &= h(z, T)
+%  \end{align}
+%  or better yet, a parameterization 
+%  \begin{align}
+%    f(s, z)_{u}, \dots, f(s, z)_{z} &= h(z, s)
+%  \end{align}
+%  where $s$ are like PCA coefficients or other model parameters of the spectra.  
+%  \item Equation 22 gives the form of the prior they use for the probability of galaxy type given magnitude of reference flux
+%  \begin{align}
+%  p(T | m_0) = f_t \exp \left( -k_t(m_0 - 20) \right)
+%  \end{align}
+%  
+%  \item Equation 23 gives the prior probability distribution over red shift given galaxy type and reference flux magnitude 
+%  \begin{align}
+%  p(z | T, m_0)
+%  \end{align}
+% 
+%\end{itemize}
+%}
+
+\frame{\frametitle{Budavari, 2001 (cont'd)}
+
+High level: 
+    \begin{quote}
+    For a given redshift, the photometric observation gives
+constraints on the possible underlying SED, since we expect
+to get back the measured photometric values by redshifting
+the SED and convolving it with the filter response function.
+This constraint obviously depends on the photometric
+system and, also, the redshift of the object as the rest-frame
+spectrum is sampled at different wavelengths.
+    \end{quote}s
+
+\begin{itemize}
+  \item describes an algorithm for reconstruction a quasar spectrum template from photometric observations and spectroscopic redshifts.  It seems sorta like a dynamic K-means/EM algorithm (they add spectral types as needed), and does a decent job reconstructing bumps where the emission lines are.  
+
+\end{itemize}
+}
+\frame{\frametitle{Budavari, 2001 (cont'd)}
+ The algorithm is: start with a collection of initial spectral templates (I believe these are rest frame.)  $\psi_1(\lambda), \dots \psi_K(\lambda)$
+  \begin{enumerate}
+  \item Categorize all photometric observations in the training set into one of these $K$ categories.  Which is the most likely template to describe each observation?
+  \item Repair the estimated SEDs of each object (does this mean just de-redshift them?)
+  \item Replace each reference templates $\psi_k(\lambda)$ with the mean of each of the repaired templates of that class (discovered in step 1).  This is like computing the new mean in k-means.  
+  \item Check to see if you need to add a new template or remove an existing template based on some statistical criterion.  
+  \end{enumerate}
+  
+  My proposed method is basically a fully probabilistic version of this.  
+}
+
+\frame{\frametitle{Budavari, 2001 (cont'd)}
+%A difference to point out - my work proposes to do all of these steps within a rigorous probabilistic framework.  We can even incorporate a nonparametric model to add/remove templates (or bases).  Also, my model is more of a feature learning vs clustering.  I'm not sure what difference this makes. 
+
+Some takeaways from this paper: 
+  \begin{itemize}
+  \item They land on four classes of quasars (Fig 7), each of which has a slightly different distribution of red shift (figure 6)
+  \item Again, this paper doesn't really clarify to me an important aspect - how exactly is the $\chi^2$ objective defined?  How do you go from templates, $T$ to fluxes?  
+  \item How does ``clustering'' compare to a decomposition method like PCA/NMF?  
+  %\item One improvement that I can make would be learning a prior over spectral model weights $w$ (similarly, template indicators $T$), and use this prior to hone in on combinations of $w$ that are likely, while leaving the correlation between $w$ and $z$ alone a priori.  
+%  Similarly, incorporating prior information about magnitudes might disambiguate really low red shifts with higher red shifts.  
+  \end{itemize}
+}
+
+
+\frame{\frametitle{Brescia (2013) - Empirical Method}
+\begin{itemize}
+\item  use a multi-layer perceptron (four layers) regression setting on a combination of SDSS (from the DR7QSO dataset, I believe), UKIDSS, and WISE photometric datasets, comparing photo-z performance on the following intersections:   
+  \begin{enumerate}
+  \item SDSS: 1.1 $\times$ 105;
+  \item SDSS $\cap$ GALEX: 4.5 $\times$ 104;
+  \item SDSS $\cap$ UKIDSS: 3.1 $\times$ 104;
+  \item SDSS $\cap$ GALEX $\cap$ UKIDSS: 1.5 $\times$ 104;
+  \item SDSS $\cap$ GALEX $\cap$ UKIDSS $cap$ WISE: 1.4 $\times$ 104.
+  \end{enumerate}
+The largest dataset combined 43 features (mostly band fluxes and magnitudes).  
+The authors mostly discuss the multi-layer model and their training technique, which is L-BFGS and various rounds of cross validation.   The authors note their model's inability to generalize to regions of the space for which they don't have data (particularly large magnitudes or out of range $z$ values). 
+\end{itemize}
+
+}
+\frame{\frametitle{Brescia (2013) - Empirical Method (cont'd)}
+The authors outline a bunch of statistics to compare between methods, including the bias, sample stdev, median of absolute value of two quantities
+  \begin{itemize}
+  \item $\Delta z = (z_{spec} - z_{phot})$ (residuals) 
+  \item $\Delta z_{norm} = (z_{spec} - z_{phot}) / (1 + z_{spec})$ (normalized residuals)
+  \end{itemize}
+And a bunch of percentages of outliers and such based on those statistics.  One is ``catastrophic outliers'', defined as individual samples where $|z_{norm}| > 2 \sigma(z_{norm})|$ - outside of two sample standard deviations.  
+}
+
+
+
+%\item \cite{kind2014somz} perform photo-z on a galaxy sample in a somewhat similar two step process to this work 
+%\begin{itemize}
+%\item use a self-organizing map as an unsupervised preprocessing step to put data on a low (2) dimensional manifold, typically from galaxy meta information like fluxes and profile information.  In a sense, galaxies are clustered into little grid cells on this low-dimensional manifold, which are continuous.  
+%\item Spectroscopic $z$ measurements are then somehow assigned to each grid cell for use in the prediction task.  Prediction seems to be take galaxy features, map it to the cell, and use some sort of average or statistic of that cell's photo-z measurement.  This seems like a $k-nn$ kinda thing?  I'm not sure.  
+%\end{itemize}
+%Though similar in spirit, the self-organizing map doesn't elicit much of a generative or physical interpretation, and really serves as more of a manifold learning.  I would not expect generalization outside of the range of $z$ values and flux magnitudes to predict accurately with this method.  
+%
+%\item \cite{budavari2009unified} 
+%\item Bayesian photo-z
+%\item Integrated spectral energy for galaxies paper
+%\item \url{http://arxiv.org/pdf/1105.3975v2.pdf}
+%
+%\item \cite{berk2001composite} Describes a composite spectra for quasars using 2200 sample spectra form the SDSS sample in 2001.  This paper goes into details about the characteristic emission lines and how they combined (de-redshifted, re-binned, took the median, etc), and what it says about the physical makeup of the object. Major quote
+%  \begin{quote}
+%  The steps required to generate a composite quasar spectrum involve selecting the input spectra, determining accurate redshifts, rebinning the spectra to the rest frame, scaling or normalizing the spectra, and stacking the spectra into the final composite. Each of these steps can have many variations, and their effect on the resulting spectrum can be significant
+%  \end{quote}
+%Takeaway: details about the particular meaning behind emission lines or inductive biases about smoothness or good models for quasar spectra can probably be mined from this paper.  
+%
+%
+%\item \cite{walcher2011fitting} provides an extensive review of spectral energy density (SED) models for stars and galaxies, and various models and methods that can be used for measuring specific properties.  They describe various types of eigendecomposition of galaxy spectra (SVD, trimmed SVD, robust SVD), and various other models of spectra.  They also go into detail about the emission/absorption lines.  
+%
+%One example they go into detail is photometric red shifts.  
+%
+%\begin{quote}
+%Traditionally, photometric redshift estimation is broadly split into two areas: empirical methods and the template- fitting approach. Empirical methods use a subsample of the photometric survey with spectroscopically-measured red- shifts as a ‘training set’ for the redshift estimators. This sub- sample describes the redshift distribution in magnitude and colour space empirically and is used then to calibrate this relation. Template methods use libraries of either observed spectra of galaxies exterior to the survey or model SEDs (as described in Sect. 2). As these are full spectra, the templates can be shifted to any redshift and then convolved with the transmission curves of the filters used in the photometric survey to create the template set for the redshift estimators.
+%\end{quote}
+%
+%\item \cite{ball2008robust} Is cited in the review \cite{walcher2011fitting} as a quasar photo-z method using artifical neural networks.  
+%
+%\item \cite{myers2009incorporating}
+%
+%\item \cite{ball2008galaxy}
+%
+
+
+
+
+\end{document}
+
