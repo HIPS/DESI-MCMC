@@ -27,20 +27,22 @@ def find_closest(wavelength):
     return model_spec[(np.abs(lam - wavelength)).argmin()]
 
 
-def project_to_bands(spectra, wavelengths): 
-    fluxes = np.zeros(5)
-    for i, band in enumerate(['u','g','r','i','z']):
-        # interpolate sensitivity curve onto wavelengths
-        sensitivity = np.interp(wavelengths, planck.wavelength_lookup[band]*(10**10), 
-                                             planck.sensitivity_lookup[band])
-        norm        = sum(sensitivity)
+#def project_to_bands(spectra, wavelengths): 
+#    fluxes = np.zeros(5)
+#    for i, band in enumerate(['u','g','r','i','z']):
+#        # interpolate sensitivity curve onto wavelengths
+#        sensitivity = np.interp(wavelengths, planck.wavelength_lookup[band]*(10**10), 
+#                                             planck.sensitivity_lookup[band])
+#        norm        = sum(sensitivity)
+#
+#        # conversion
+#        flambda2fnu  = wavelengths**2 / 2.99792e18
+#        fthru        = np.sum(sensitivity * spectra * flambda2fnu) / norm #np.multiply(model_matched, flambda2fnu)) / norm 
+#        mags         = -2.5 * np.log10(fthru) - (48.6 - 2.5*17)
+#        fluxes[i]    = np.power(10., (mags - 22.5)/-2.5)
+#    return fluxes
 
-        # conversion
-        flambda2fnu  = wavelengths**2 / 2.99792e18
-        fthru        = np.sum(sensitivity * spectra * flambda2fnu) / norm #np.multiply(model_matched, flambda2fnu)) / norm 
-        mags         = -2.5 * np.log10(fthru) - (48.6 - 2.5*17)
-        fluxes[i]    = np.power(10., (mags - 22.5)/-2.5)
-    return fluxes
+from redshift_utils import project_to_bands
 
 print spectro_syn_flux
 print project_to_bands(model_spec, lam)
