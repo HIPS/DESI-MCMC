@@ -1,0 +1,204 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%% ICML 2015 EXAMPLE LATEX SUBMISSION FILE %%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Use the following line _only_ if you're still using LaTeX 2.09.
+%\documentstyle[icml2015,epsf,natbib]{article}
+% If you rely on Latex2e packages, like most moden people use this:
+\documentclass{article}
+
+% use Times
+\usepackage{times}
+% For figures
+\usepackage{graphicx} % more modern
+%\usepackage{epsfig} % less modern
+\usepackage{subfigure} 
+\usepackage{amsmath,amsfonts,amssymb,bbm}
+
+% For citations
+\usepackage{natbib}
+
+% For algorithms
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% As of 2011, we use the hyperref package to produce hyperlinks in the
+% resulting PDF.  If this breaks your system, please commend out the
+% following usepackage line and replace \usepackage{icml2015} with
+% \usepackage[nohyperref]{icml2015} above.
+\usepackage{hyperref}
+
+% Packages hyperref and algorithmic misbehave sometimes.  We can fix
+% this with the following command.
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+\DeclareMathOperator{\Tr}{Tr}
+\newcommand{\R}{\mathbbm{R}}
+\newcommand{\mba}{\mathbf{a}}
+\newcommand{\mbb}{\mathbf{b}}
+\newcommand{\mbx}{\mathbf{x}}
+\newcommand{\mbxt}{\tilde{\mathbf{x}}}
+\newcommand{\Sigmat}{\tilde{\Sigma}}
+\newcommand{\mbz}{\mathbf{z}}
+\newcommand{\mbw}{\mathbf{w}}
+\newcommand{\mcN}{\mathcal{N}}
+\newcommand{\mcP}{\mathcal{P}}
+\newcommand{\eps}{\epsilon}
+\newcommand{\trans}{\intercal}
+\newcommand{\Ut}{\tilde{U}}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\newcommand{\angstrom}{\textup{\AA}}
+\newcommand{\red}[1]{\textcolor{red}{#1}}
+
+
+% Employ the following version of the ``usepackage'' statement for
+% submitting the draft version of the paper for review.  This will set
+% the note in the first column to ``Under review.  Do not distribute.''
+\usepackage{icml2015} 
+
+% Employ this version of the ``usepackage'' statement after the paper has
+% been accepted, when creating the final version.  This will set the
+% note in the first column to ``Proceedings of the...''
+%\usepackage[accepted]{icml2015}
+
+
+% The \icmltitle you define below is probably too long as a header.
+% Therefore, a short form for the running title is supplied here:
+\icmltitlerunning{Model of Quasar Spectroscopy}
+
+\begin{document} 
+
+\twocolumn[
+\icmltitle{A Stochastic Process Model of Quasar Spectroscopy} %# \\
+%Inference of Red Shift from Quasar Photometry }
+
+% It is OKAY to include author information, even for blind
+% submissions: the style file will automatically remove it for you
+% unless you've provided the [accepted] option to the icml2015
+% package.
+\icmlauthor{Andrew Miller}{acm@seas.harvard.edu}
+\icmladdress{Harvard University,
+            33 Oxford St, Cambridge, MA USA}
+%\icmlauthor{Your CoAuthor's Name}{email@coauthordomain.edu}
+%\icmladdress{Their Fantastic Institute,
+%            27182 Exp St., Toronto, ON M6H 2T1 CANADA}
+
+% You may provide any keywords that you 
+% find helpful for describing your paper; these are used to populate 
+% the "keywords" metadata in the PDF but will not be shown in the document
+\icmlkeywords{boring formatting information, machine learning, ICML}
+
+\vskip 0.3in
+]
+
+\begin{abstract} 
+We present a method to measure the red-shift of quasars from photometric observations.  Our method treats the unknown spectrum of a quasar as a latent stochastic process and uses statistical inference to infer the unknown structure.  Our model leverages a small number of existing examples of full quasar spectra with known red-shift to build a structured stochastic process prior distribution over unknown spectra.  We then use Bayesian inference to infer red-shift from a typical 5-band photometric sample of astronomical imagery, the so called ``photo-z'' problem. 
+\end{abstract} 
+
+\section{Introduction}
+
+Enormous amounts of astronomical data are collected to \red{cite sloan digital sky survey, other astronomical surveys}.  Among this collection are measurements of spectral energy distribution (SED) of a light source (e.g.~a star, galaxy, quasar).  
+The spectrum of an object carries information about properties of the particular object, including effective temperature, type, red-shift, and chemical makeup.  
+
+However, measurements of astronomical spectra are produced by instruments at widely varying resolutions.  
+Spectroscopic measurements can resolve noisy measurements of the spectral energy distribution (SED) of an object (e.g.~a star, galaxy, or quasar) in finer detail than broadband photometric measurements.  For example, the Baryonic Oscillation Spectroscopic Survey \cite{dawson2013baryon} samples measurements at over four thousand wavelengths between 3,500 and 10,500 $\angstrom$.  In contrast, the photometry from the Sloan Digital Sky Survey (SDSS) \red{cite sloan}, gathers broadband photometric measurements in the u,g,r,i, and z bands.  These measurements are the weighted average response over a large swath of the spectrum \red{refer to plot}. 
+
+Photometric measurements, however, are available for a larger number of sources, including objects that are fainter and possibly at extremely high red-shift (farther away).  This work focuses on extracting information from observations of light sources by jointly modeling spectroscopic and photometric data.  In particular, we we focus on measuring the red-shift of quasars for which we only have photometric observations.  Quasars, or quasi-stellar radio sources, are extremely distant and energetic sources of electromagnetic radiation that can exhibit high red-shift \red{cite something here}.  Identifying and measuring the red-shift of a quasars from photometric data is a necessary task due to the widespread availability of large photometric surveys.  Photometric estimates of red-shift have the potential to guide the study of certain quasars with higher resolution instruments.  Furthermore, accurate models can aid identification and classification of faintly observed quasars in such a large photometric survey.  Study of distant quasars allow astronomers to observe the universe as it was many billions of years ago \red{need lots of references..}
+
+In this paper, we describe a probabilistic model that jointly describes both high resolution spectroscopic data and low resolution photometric observations of quasars in terms of their latent spectral energy distribution, luminosity, and red-shift.  We model a quasar's spectral energy as a hidden variable, and describe a fully Bayesian inference procedure to compute the marginal probability distribution of a quasar's red-shift given observed photometric fluxes and their uncertainties. 
+
+\section{Background}
+The spectral energy distribution of an object describes the distribution of energy it radiates as a function of wavelength.  
+For example, most stars are well modeled as a blackbody, so their spectral radiance is well modeled by Planck's law, which describes a parametric form for the spectral energy distribution.  Resolvable stars, however, tend to be close enough that they are never observed at a measurable redshift. 
+Quasars, on the other hand, have a complicated spectral energy distribution characterized by some salient features (\red{mention Ly-$\alpha$ and Lyman forest?}).  
+Furthermore, quasars can be much more luminous and at a much higher red-shift.  
+The red-shift effectively stretches an object's rest frame spectral energy distribution, skewing its mass toward higher wavelengths.  
+Denoting the rest-frame SED of a quasar $n$ as a function, $f_n^{(rest)} : \mathcal{W} \rightarrow \R_+$, the affect of red-shift on our observations is summarized by the relationship 
+\begin{align}
+  f_n^{(obs)}(\lambda) &\propto f_n^{(rest)}(\lambda \cdot (1 + z_n)) \, .
+\end{align}
+An example of an observed quasar spectrum and it's de-redshifted rest frame spectrum can be found in \red{figure with an example}
+
+
+\subsection{Related work}
+The problem of estimating the red-shift of a source (galaxy or quasar) is known as ``photo-$z$''.  There have been many statistical and machine learning methods developed to tackle this problem. These roughly break down into template-based and regression-based methods \cite{walcher2011fitting}.  Regression-based (or empirical) methods for photo-$z$ fit a functional relationship between a set of photometric features and red-shift value.  
+
+Probabilistic models for inferring red-shift from photometry has also had some success.  \cite{benitez2000bayesian} presents a thorough summary of Bayesian methods for photometric red-shift estimation from spectral templates.  
+
+\cite{budavari2001photometric} and \cite{richards2001photometric} go into specific detail for SED model based photometric redshifts for quasars.  They compare a bunch of methods. Particularly, they describe an algorithm for reconstruction a quasar spectrum template from photometric observations and spectroscopic redshifts.  It seems sorta like a dynamic K-means/EM algorithm (they add spectral types as needed), and does a decent job reconstructing bumps where the emission lines are.  
+
+\red{Others to mention: }
+\begin{itemize}
+\item \cite{bovy2012photometric} - extreme deconvolution method
+
+\item \cite{suzuki2006quasar} (QUASAR SPECTRUM CLASSIFICATION WITH PRINCIPAL COMPONENT ANALYSIS (PCA): EMISSION LINES IN THE Ly$\alpha$ FOREST)
+
+\item \cite{brescia2013photometric} use a multi-layer perceptron (four layers) regression setting on a combination of SDSS (from the DR7QSO dataset, I believe), UKIDSS, and WISE photometric datasets, comparing photo-z performance on the following intersections:   
+ 
+\item \cite{budavari2009unified} (Unified photo-z paper)
+\end{itemize}
+
+
+\section{Model}
+This section describes the probabilistic model for spectroscopic and photometric observations.  
+
+\subsection{Stochastic Process Model of Spectra}
+The SED of a quasar is a nonnegative valued function of wavelength.  We model it in rest-frame as a linear combination of a set of basis functions.  We place a log-Gaussian process prior on each of these basis functions.  The generative process for quasar spectra is 
+
+\begin{align}
+  \beta_k(\cdot) &\sim \mathcal{GP}(0, K_\theta) \\
+  B_k(\cdot) &= \frac{\exp(\beta_k(\cdot))}{\int_\mathcal{W} \exp(\beta_k)}   \\
+  \mathbf{w} &\sim p(\mathbf{w}) \, , \text{ s.t. } \sum_{w_k} = 1  \\
+  f^{(rest)}_n &= \sum_{k} w_k B_k &&\text{ (SED) }\\
+  \tilde f^{(rest)}_n &= \ell_n \sum_{k} w_k B_k
+\end{align}
+
+\red{Warp input for varying lengthscale}.  
+
+
+We view the spectrum of a quasar as a (scaled) probability distribution itself, and thus model it as a random measure.  Specifically, we specify a model for the \emph{rest frame} spectrum of a quasar, and explain observations by warping the input measurements by the appropriate red-shift values. 
+
+As the spectrum of a source characterizes much of the information of interest, we take special care creating a structured prior over $f_n(\cdot)$ using available observations of rich spectra. Furthermore, due to the fact that the red-shift value effectively scales the input of this function, we cannot rely on a fixed grid of $\lambda_1, \dots, \lambda_P$ values, but must define a stochastic process to coherently define a probabilistic model.  The rest of this section outlines a model for these spectra and subsequent photometric observations.  
+
+
+\section{Experiments}
+
+
+\section{Discussion}
+
+
+
+% Acknowledgements should only appear in the accepted version. 
+%\section*{Acknowledgments} 
+ 
+%\textbf{Do not} include acknowledgements in the initial version of
+%the paper submitted for blind review.
+
+%If a paper is accepted, the final camera-ready version can (and
+%probably should) include acknowledgements. In this case, please
+%place such acknowledgements in an unnumbered section at the
+%end of the paper. Typically, this will include thanks to reviewers
+%who gave useful comments, to colleagues who contributed to the ideas, 
+%and to funding agencies and corporate sponsors that provided financial 
+%support.  
+
+
+% In the unusual situation where you want a paper to appear in the
+% references without citing it in the main text, use \nocite
+%\nocite{langley00}
+
+\bibliography{../refs}
+\bibliographystyle{icml2015}
+
+\end{document} 
+
+
+% This document was modified from the file originally made available by
+% Pat Langley and Andrea Danyluk for ICML-2K. This version was
+% created by Lise Getoor and Tobias Scheffer, it was slightly modified  
+% from the 2010 version by Thorsten Joachims & Johannes Fuernkranz, 
+% slightly modified from the 2009 version by Kiri Wagstaff and 
+% Sam Roweis's 2008 version, which is slightly modified from 
+% Prasad Tadepalli's 2007 version which is a lightly 
+% changed version of the previous year's version by Andrew Moore, 
+% which was in turn edited from those of Kristian Kersting and 
+% Codrina Lauth. Alex Smola contributed to the algorithmic style files.  
