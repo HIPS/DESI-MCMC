@@ -182,28 +182,20 @@ def load_specs_from_disk(spec_files):
 
     return spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, spec_ids, bad_ids
 
+def project_to_bands(spectra, wavelengths): 
+    fluxes = np.zeros(5)
+    for i, band in enumerate(['u','g','r','i','z']):
+        # interpolate sensitivity curve onto wavelengths
+        sensitivity = np.interp(wavelengths, planck.wavelength_lookup[band]*(10**10), 
+                                             planck.sensitivity_lookup[band])
+        norm        = sum(sensitivity)
 
-def project_to_bands(spectra, wavelengths):
-    # linearly interpolate filters to be sampled the same as the spectra
-    bands = ['u', 'g', 'r', 'i', 'z']
-    filters = {}
-    for b in bands: 
-        filter_interp = np.interp(wavelengths,
-                                  planck.wavelength_lookup[b] * 1e10,
-                                  planck.sensitivity_lookup[b],
-                                  left = 0, right = 0)
-        # multiply each filter by the photon-energy relationship and 10^20 for erg conversion
-        filter_interp *= 1e-25 * wavelengths / (planck.h * planck.c)
-        filters[b] = filter_interp
-
-    # numerically integrate filter*observed spectra to get band brightness 
-    bright_mat = np.zeros((spectra.shape[0], len(bands)))
-    for n in range(spectra.shape[0]):
-        for i, b in enumerate(bands):
-            bright_mat[n, i] = integrate.simps(spectra[n,:]*filters[b],
-                                               wavelengths)
-    return bright_mat
-
+        # conversion
+        flambda2fnu  = wavelengths**2 / 2.99792e18
+        fthru        = np.sum(sensitivity * spectra * flambda2fnu) / norm #np.multiply(model_matched, flambda2fnu)) / norm 
+        mags         = -2.5 * np.log10(fthru) - (48.6 - 2.5*17)
+        fluxes[i]    = np.power(10., (mags - 22.5)/-2.5)
+    return fluxes
 
 def fit_weights_given_basis(B, lam0, X, inv_var, z_n, lam_obs, return_loss=False, sgd_iter=100):
     """ Weighted optimization routine to fit the values of \log w given 
