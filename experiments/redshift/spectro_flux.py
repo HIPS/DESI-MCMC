@@ -25,7 +25,7 @@ planck.wavelength_lookup
 def find_closest(wavelength):
     return model_spec[(np.abs(lam - wavelength)).argmin()]
 
-fluxes = dict()
+fluxes = []
 
 for band in ['u','g','r','i','z']:
     wavelengths = planck.wavelength_lookup[band] * (10**10)
@@ -35,9 +35,11 @@ for band in ['u','g','r','i','z']:
     flambda2fnu = wavelengths**2 / 2.99792e18
     model_matched = np.array(map(find_closest, wavelengths))
     fthru = np.dot(sensitivity, np.multiply(model_matched, flambda2fnu)) / norm 
-    fluxes[band] = -2.5 * np.log10(fthru) - (48.6 - 2.5*17)
+    mags = -2.5 * np.log10(fthru) - (48.6 - 2.5*17)
+    fluxes.append(np.power(10., (mags - 22.5)/-2.5))
 
 print fluxes
+print spectro_syn_flux
 
 # (other broadband flux fields (UGRIZ fluxes)
 spectroflux = spec_data[2]['SPECTROFLUX'].read()
