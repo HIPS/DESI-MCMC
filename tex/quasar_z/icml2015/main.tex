@@ -134,20 +134,31 @@ Observed quasar spectra and their ``de-red-shifted'' rest frame spectra are depi
 \end{figure*} 
 
 \subsection{Related work}
-The problem of estimating the red-shift of a source (galaxy or quasar) is known as ``photo-$z$''.  There have been many statistical and machine learning methods developed to tackle this problem. These roughly break down into template-based and regression-based methods \cite{walcher2011fitting}.  Regression-based (or empirical) methods for photo-$z$ fit a functional relationship between a set of photometric features and red-shift value.  
+The problem of estimating the red-shift of a source (galaxy or quasar) is known as photometric redshift estimation, or
+``photo-$z$''.  There have been many statistical and machine learning methods developed to tackle this problem. These roughly break down into template-based and regression-based methods. Template-based methods use prior knowledge from spectral energy distributions
+and match these with actual astronomical objects, while regression-based methods use fitting methods, such as neural networks and
+simple regression, on the physical properties to predict red shift. \cite{walcher2011fitting}.  Regression-based (or empirical) methods for photo-$z$ fit a functional relationship between a set of photometric features and red-shift value.  
 
-Probabilistic models for inferring red-shift from photometry has also had some success.  \cite{benitez2000bayesian} presents a thorough summary of Bayesian methods for photometric red-shift estimation from spectral templates.  
+Probabilistic models for inferring red-shift from photometry have also had some success.  \cite{benitez2000bayesian} presents a thorough summary of Bayesian methods for photometric red-shift estimation from spectral templates.  
 
 \cite{budavari2001photometric} and \cite{richards2001photometric} go into specific detail for SED model based photometric redshifts for quasars.  They compare a bunch of methods. Particularly, they describe an algorithm for reconstruction a quasar spectrum template from photometric observations and spectroscopic redshifts.  It seems sorta like a dynamic K-means/EM algorithm (they add spectral types as needed), and does a decent job reconstructing bumps where the emission lines are.  
 
-\cite{brescia2013photometric} use a multi-layer perceptron with a combination of SDSS, UKIDSS, and WISE photometric fluxes datasets, to compute a regression function for red-shift.  
+\cite{brescia2013photometric} use a multi-layer perceptron with a combination of SDSS, UKIDSS, and WISE photometric fluxes datasets, to compute a regression function for red-shift. Though predictions are accurate, we do not have an idea of the distribution over redshifts, i.e., uncertainty in our predictions.
 
-Other models blur the line between regression-based and generative models.  \cite{bovy2012photometric} develops a method termed $XDQSOz$ to use a large 
+Other models blur the line between regression-based and generative models.  \cite{bovy2012photometric} develops a method termed $XDQSOz$ to use a large dataset of astronomical objects to simultaneously infer redshift and classify quasars. They do this by inferring a joint distribution over object type, fluxes, and redshift. In particular, they factor this joint distribution
+into one part that describes the distribution over star brightness, which involves binning based on a single-channel flux, and
+one part that describes the distribution of relative fluxes (as compared to this channel) and the redshift. The latter distribution
+is represented by a mixture of up to 60 Gaussians. However, we see that, due to the
+binning, this approach is not fully probabilistic or Bayesian.
 
-\cite{budavari2009unified} unifies approaches into a single probabilistic framework, distinguishing methods based on the assumptions they impose on probability distributions over photometric fluxes.  
+
+\cite{budavari2009unified} unifies template-based and regression-based
+approaches into a single probabilistic framework, distinguishing methods based on the assumptions they impose on probability distributions over photometric fluxes. Instead of treating the spectral distribution and physical properties as disparate, the authors represent physical properties as a random variable whose conditional distributions over observations such as spectra can be computed.
 
 \red{Others to mention: }
-\cite{suzuki2006quasar} (QUASAR SPECTRUM CLASSIFICATION WITH PRINCIPAL COMPONENT ANALYSIS (PCA): EMISSION LINES IN THE Ly$\alpha$ FOREST). 
+\cite{suzuki2006quasar} does unsupervised learning on the UV spectra of quasars using principal components analysis (PCA). Through this analysis, the authors found that 96\% of the total variance was accounted for by the first 3 spectral components. As a result, they created a classification scheme based on the first two component's coefficients that separates quasars into five different classes. This classification scheme allows researchers to understand quasars better from a qualitative perspective.
+
+\red{This doesn't seem that relevant. What do you think, Andy?}
 
 
 %----------------------------------------------------------------------------------
@@ -261,10 +272,18 @@ To generate samples from the posterior distribution $p(B | \mathbf{X})$, we use 
 \subsection{Sampling $\mathbf{w}_n, m_n$, and $z_n$}
 Conditioned on a basis $B_k, k=1,\dots, K$, we can draw posterior samples of $\mathbf{w}_n$ and $z_n$ independently for each $n$
 \begin{align}
-  p(\mathbf{w}_n, m_n, z_n | ) &\propto p 
+  &p(\mathbf{w}_n, m_n, z_n | B, \mathbf{y}_n) \\
+  &\propto p(\mathbf{y}_n | \mathbf{w}_n, m_n, z_n, B) p(\mathbf{w}_n, m_n, z_n) \\
+  &= p(\mathbf{y}_n | \mathbf{w}_n, m_n, z_n, B) p(\mathbf{w}_n) p(m_n, z_n)
 \end{align}
 
-...
+We assume that $\mathbf{w}_n$ is independent of $m_n, z_n$. Indeed, our prior for $\mathbf{w}_n$ will 
+introduce $\gamma_n \sim \mathcal{N}(0, \mathbb{I})$ and then a softmax function:
+\begin{equation*}
+w_{ni} = \frac{\exp(\gamma_{ni})}{\sum_i {\exp(\gamma_{ni})}},
+\end{equation*}
+
+which enforces non negativity and the fact that $\sum \mathbf{w}_n = 1$.
  
 
 
