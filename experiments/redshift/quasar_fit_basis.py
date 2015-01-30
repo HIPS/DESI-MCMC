@@ -16,12 +16,32 @@ import matplotlib.pyplot as plt
 from funkyyak import grad, numpy_wrapper as np
 npr.seed(42)
 from scipy.optimize import minimize
-from scipy.ndimage import gaussian_filter1d
 from redshift_utils import load_data_clean_split, project_to_bands, sinc_interp, \
                            check_grad, fit_weights_given_basis, \
-                           evaluate_random_direction, ParamParser
+                           evaluate_random_direction, ParamParser, \
+                           resample_rest_frame
 from slicesample import slicesample
 import GPy
+import os
+import cPickle as pickle
+
+def save_basis_fit(th, lam0, lam0_delta, parser):
+    """ save basis fit info """
+    # grab B value for shape info
+    B = parser.get(th, 'betas')
+    with open('cache/basis_fit_K-%d_V-%d.pkl'%B.shape, 'wb') as handle:
+        pickle.dump(th, handle)
+        pickle.dump(lam0, handle)
+        pickle.dump(lam0_delta, handle)
+        pickle.dump(parser, handle)
+
+def load_basis_fit(fname):
+    with open(fname, 'rb') as handle:
+        th         = pickle.load(handle)
+        lam0       = pickle.load(handle)
+        lam0_delta = pickle.load(handle)
+        parser     = pickle.load(handle)
+    return th, lam0, lam0_delta, parser
 
 def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, Kinv_beta, sig2_omega, sig2_mu):
     parser = ParamParser()
@@ -153,15 +173,13 @@ def train_model(th, loss_fun, loss_grad, prior_loss, prior_grad,
                    jac = lambda(th): loss_grad(th) + prior_grad(th),
                    x0  = th, 
                    method = 'L-BFGS-B',
-                   options = {'gtol':1e-6, 'disp':True, 'maxiter':cvx_iter})
+                   options = {'gtol':1e-6, 'ftol':1e-6, 'disp':True, 'maxiter':cvx_iter})
     th = res.x
 
     # go from whitened space to GP space
     betas = parser.get(th, 'betas')
     parser.set(th, 'betas', np.dot(K_chol, betas.T).T)
     return th
-
-
 
 if __name__=="__main__":
 
@@ -184,35 +202,13 @@ if __name__=="__main__":
     eigQSO     = eigQSOfits[0].read()[:, ::lam_subsample]
     K          = eigQSO.shape[0]
 
-    ## resample to lam0 => rest frame basis 
-    print "resampling de-redshifted data"
-    wave_mat = np.zeros(qtrain['spectra'].shape)
-    for i in range(qtrain['spectra'].shape[0]):
-        wave_mat[i, :] = lam_obs / (1 + qtrain['Z'][i])
-    spectra_resampled = np.zeros((qtrain['spectra'].shape[0], len(lam0)))
-    spectra_ivar_resampled = np.zeros((qtrain['spectra'].shape[0], len(lam0)))
-    #for i in range(qtrain['spectra'].shape[0]):
-    #    if i%20==0: print "%d of %d"%(i, qtrain['spectra'].shape[0])
-    #    spectra_resampled[i, :] = sinc_interp(lam0,
-    #                                          wave_mat[i, :],
-    #                                          qtrain['spectra'][i, :],
-    #                                          left = np.nan, right = np.nan)
-    #    spectra_ivar_resampled[i, :] = sinc_interp(lam0,
-    #                                               wave_mat[i, :],
-    #                                               qtrain['spectra_ivar'][i, :],
-    #                                               left = np.nan, right = np.nan)
-    for i in range(qtrain['spectra'].shape[0]):
-        spectra_resampled[i, :] = np.interp(x     = lam0,
-                                            xp    = wave_mat[i, :],
-                                            fp    = qtrain['spectra'][i, :],
-                                            left  = np.nan,
-                                            right = np.nan)
-        spectra_ivar_resampled[i, :] = np.interp(x     = lam0,
-                                                 xp    = wave_mat[i, :],
-                                                 fp    = qtrain['spectra_ivar'][i, :],
-                                                 left  = np.nan,
-                                                 right = np.nan)
-
+    # resample spectra and spectra inverse variance onto common rest frame
+    spectra_resampled, spectra_ivar_resampled, lam_mat = \
+        resample_rest_frame(qtrain['spectra'], 
+                            qtrain['spectra_ivar'],
+                            qtrain['Z'], 
+                            lam_obs, 
+                            lam0)
 
     ## construct smooth + spiky prior over betas
     beta_kern = GPy.kern.Matern52(input_dim=1, variance=1., lengthscale=40)
@@ -235,26 +231,15 @@ if __name__=="__main__":
                        sig2_mu    = 10.)
 
     ## initialize basis and weights
-    th = np.zeros(parser.N)
-    parser.set(th, 'betas', .01 * K_chol.dot(np.random.randn(len(lam0), K)).T)
-    parser.set(th, 'omegas', .01 * npr.randn(N, K))
-    parser.set(th, 'mus', .01 * npr.randn(N))
- 
-    ## or load from file load and interpolate existing basis
-    #def load_initial_values(lam0, num_quasars=N):
-    #    th_init  = np.load("cache/basis_th_K-4_V-1364.npy")
-    #    lam_init = np.load("cache/lam0_V-1364.npy")
-    #    omegas   = th_init[:, 0:num_quasars].T
-    #    betas    = th_init[:, num_quasars:]
-    #    betas_resamp = np.zeros((betas.shape[0], len(lam0)))
-    #    for k in range(B.shape[0]):
-    #        betas_resamp[k, :] = np.interp(x = lam0, 
-    #                                       xp = lam_init, 
-    #                                       fp = betas[k, :], 
-    #                                       left = 0., right = 0.)
-    #    return np.column_stack((omegas.T, betas_resamp))
-    #th = load_initial_values(lam0)
-    #print loss_fun(th)
+    basis_cache = 'cache/basis_fit_K-4_V-1364.pkl'
+    USE_CACHE = True
+    if os.path.exists(basis_cache) and USE_CACHE:
+        th, lam0, lam0_delta, parser = load_basis_fit(basis_cache)
+    else:
+        th = np.zeros(parser.N)
+        parser.set(th, 'betas', .01 * K_chol.dot(np.random.randn(len(lam0), K)).T)
+        parser.set(th, 'omegas', .01 * npr.randn(N, K))
+        parser.set(th, 'mus', .01 * npr.randn(N))
 
     ## sanity check gradient
     check_grad(fun = lambda th: loss_fun(th) + prior_loss(th), # X, Lam), 
@@ -280,8 +265,7 @@ if __name__=="__main__":
     Xtilde = np.dot(W*M, B)
 
     # cache result
-    np.savez("cache/basis_fit_K-%d_V-%d.npz"%B.shape, 
-             th=th, lam0=lam0, lam0_delta=lam0_delta)
+    save_basis_fit(th, lam0, lam0_delta, parser)
 
     ## sanity check out of sample fits
     if False:
@@ -320,6 +304,24 @@ if __name__=="__main__":
         plt.show()
         test_idxs = [0, 10, 95, 139]
         plot_fits(qtest, test_idxs, refit_w = True)
+
+
+
+## or load from file load and interpolate existing basis
+#def load_initial_values(lam0, num_quasars=N):
+#    th_init  = np.load("cache/basis_th_K-4_V-1364.npy")
+#    lam_init = np.load("cache/lam0_V-1364.npy")
+#    omegas   = th_init[:, 0:num_quasars].T
+#    betas    = th_init[:, num_quasars:]
+#    betas_resamp = np.zeros((betas.shape[0], len(lam0)))
+#    for k in range(B.shape[0]):
+#        betas_resamp[k, :] = np.interp(x = lam0, 
+#                                       xp = lam_init, 
+#                                       fp = betas[k, :], 
+#                                       left = 0., right = 0.)
+#    return np.column_stack((omegas.T, betas_resamp))
+#th = load_initial_values(lam0)
+#print loss_fun(th)
 
 
 ## DEAD CODE

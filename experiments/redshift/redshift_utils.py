@@ -41,6 +41,33 @@ def spline_interp(new_samples, samples, fvals):
     ynew = interpolate.splev(new_samples, tck, der=0)
     return ynew
 
+def resample_rest_frame(spectra, spectra_ivar, zs, lam_obs, lam0):
+    """ Resamples spectra with known red-shifts into rest frame 
+        at samples given by lam0.
+    """
+    if lam_obs.ndim == 1:
+        lam_obs = np.tile(lam_obs, (spectra.shape[0], 1))
+    lam_mat                = np.zeros(spectra.shape)
+    spectra_resampled      = np.zeros((spectra.shape[0], len(lam0)))
+    spectra_ivar_resampled = np.zeros((spectra.shape[0], len(lam0)))
+    for i in range(spectra.shape[0]):
+        lam_mat[i, :] = lam_obs[i,:] / (1 + zs[i])
+        spectra_resampled[i, :] = np.interp(x     = lam0,
+                                            xp    = lam_mat[i, :],
+                                            fp    = spectra[i, :],
+                                            left  = np.nan,
+                                            right = np.nan)
+        # resample variances linearly, not inverse variances
+        spec_var = 1. / spectra_ivar[i,:]
+        spectra_ivar_resampled[i, :] = 1. / np.interp(x     = lam0,
+                                                      xp    = lam_mat[i, :],
+                                                      fp    = spec_var,
+                                                      left  = np.nan,
+                                                      right = np.nan)
+    return spectra_resampled, spectra_ivar_resampled, lam_mat
+
+
+
 def load_data_clean_split(spec_fits_file = '../../andrew-qso.fits', Ntrain=500):
 
     # load and split
