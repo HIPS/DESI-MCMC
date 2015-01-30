@@ -2,9 +2,13 @@ import fitsio
 import numpy as np
 import numpy.random as npr
 from scipy.optimize import minimize
+from hmc import hmc
 import sys, os
 from redshift_utils import project_to_bands
 from quasar_fit_basis import load_basis_fit
+import scipy.stats
+import matplotlib.pyplot as plt
+import copy
 
 ### helper functions
 def softmax(x):
@@ -16,15 +20,23 @@ def prior_w(w):
         return -np.inf
     return 0
 
-def prior_z(z): 
-    if np.any(z <= 0): 
-        return -np.inf
-    return 0
+def prior_gamma(gamma): 
+    length = len(gamma)
+    prob = scipy.stats.multivariate_normal.pdf(gamma,
+                                               np.zeros(length),
+                                               np.eye(length));
+    return np.log(prob)
 
+# TODO(awu): Gaussian for now
+MEAN_Z_DIST = 2.5
+STDEV_Z_DIST = 1.0
+def prior_z(z): 
+    return np.log(scipy.stats.norm.pdf((z - MEAN_Z_DIST) / STDEV_Z_DIST))
+
+# TODO(awu): lognormal for now
+STDEV_M_DIST = 20.0
 def prior_m(m):
-    if np.any(m <= 0):
-        return -np.inf
-    return 0
+    return np.log(scipy.stats.norm.pdf(np.log(m) / STDEV_M_DIST))
 
 ### Likelihood of 5-band SDSS flux given weights, 
 def pixel_likelihood(z, w, m, fluxes, fluxes_ivar, lam0, B):
@@ -37,43 +49,45 @@ def pixel_likelihood(z, w, m, fluxes, fluxes_ivar, lam0, B):
     """
     # at rest frame for lam0
     lam_obs = lam0 * (1. + z)
-    spec    = w.dot(B)
-    mu      = project_to_bands(spec, lam_obs)
-    ll      = -.5 * mu * np.sum(x * np.log(mu) - mu)
+    spec    = np.dot(w, B)
+    mu      = project_to_bands(spec, lam_obs) * m
+    ll      = -0.5 * np.sum(np.multiply(fluxes_ivar, (fluxes - mu)**2))
     return ll
 
 ### Let gamma be a vector whose softmax gives weights that sum to 1
 def grad_pixel_likelihood(z, gamma, m, fluxes, fluxes_ivar, lam0, B,
                           delta_z, delta_gamma, delta_m):
-
     lls = []
     w = softmax(gamma)
+    print "z:", z
+    print "m:", m
+    print "w:", w
 
     # take gradient with respect to z
-    z_lower -= delta_z
-    z_upper += delta_z
+    z_lower = z - delta_z
+    z_upper = z + delta_z
     l_lower = pixel_likelihood(z_lower, w, m, fluxes, fluxes_ivar, lam0, B)
-    p_lower = l_lower * prior_z(z_lower) * prior_w(w) * prior_m(m)
+    p_lower = l_lower * prior_z(z_lower) * prior_gamma(gamma) * prior_m(m)
 
     l_upper = pixel_likelihood(z_upper, w, m, fluxes, fluxes_ivar, lam0, B)
-    p_upper = l_upper * prior_z(z_upper) * prior_w(w) * prior_m(m)
+    p_upper = l_upper * prior_z(z_upper) * prior_gamma(gamma) * prior_m(m)
 
     grad_z = (p_upper - p_lower) / (2 * delta_z)
     lls.append(grad_z)
 
     # take gradient with respect to gamma
     for i in range(len(gamma)):
-        gamma_lower = deepcopy(gamma)
-        gamma_upper = deepcopy(gamma)
+        gamma_lower = copy.deepcopy(gamma)
+        gamma_upper = copy.deepcopy(gamma)
         gamma_lower[i] -= delta_gamma
         gamma_upper[i] += delta_gamma
         w_lower = softmax(gamma_lower)
         w_upper = softmax(gamma_upper)
         l_lower = pixel_likelihood(z, w_lower, m, fluxes, fluxes_ivar, lam0, B)
-        p_lower = l_lower * prior_z(z) * prior_w(w_lower) * prior_m(m)
+        p_lower = l_lower * prior_z(z) * prior_gamma(gamma_lower) * prior_m(m)
 
         l_upper = pixel_likelihood(z, w_upper, m, fluxes, fluxes_ivar, lam0, B)
-        p_upper = l_upper * prior_z(z) * prior_w(w_upper) * prior_m(m)
+        p_upper = l_upper * prior_z(z) * prior_gamma(gamma_upper) * prior_m(m)
 
         grad_gamma = (p_upper - p_lower) / (2 * delta_gamma)
         lls.append(grad_gamma)
@@ -82,10 +96,10 @@ def grad_pixel_likelihood(z, gamma, m, fluxes, fluxes_ivar, lam0, B,
     m_lower = m - delta_m
     m_upper = m + delta_m
     l_lower = pixel_likelihood(z, w, m_lower, fluxes, fluxes_ivar, lam0, B)
-    p_lower = l_lower * prior_z(z) * prior_w(w) * prior_m(m_lower)
+    p_lower = l_lower * prior_z(z) * prior_gamma(gamma) * prior_m(m_lower)
 
     l_upper = pixel_likelihood(z, w, m_upper, fluxes, fluxes_ivar, lam0, B)
-    p_upper = l_upper * prior_z(z) * prior_w(w_lower) * prior_m(m_upper)
+    p_upper = l_upper * prior_z(z) * prior_gamma(gamma) * prior_m(m_upper)
 
     grad_m = (p_upper - p_lower) / (2 * delta_m)
     lls.append(grad_m)
@@ -110,7 +124,7 @@ B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
 M = np.exp(mus)
 
 # load in some quasar fluxes
-qso_df        = fitsio.FITS('../../data/DR10QSO/DR10Q_v2.fits')
+qso_df        = fitsio.FITS('cache/DR10Q_v2.fits')
 psf_flux      = qso_df[1]['PSFFLUX'].read()
 psf_flux_ivar = qso_df[1]['IVAR_PSFFLUX'].read()
 z             = qso_df[1]['Z_VI'].read()
@@ -123,32 +137,64 @@ y_flux_ivar = psf_flux_ivar[n]
 print "Choosing n = %d, (z = %2.2f)"%(n, z[n])
 
 # functions to pass into HMC
-SIZE_BASIS = 4
 def probability(q):
-    m = q[0]
-    w = q[1:SIZE_BASIS]
-    r = q[SIZE_BASIS + 1]
+    z = q[0]
+    w = q[1:(B.shape[0] + 1)]
+    m = q[B.shape[0] + 1]
     return pixel_likelihood(z, w, m, y_flux, y_flux_ivar, lam0, B)
 
-def grad_probability(q):
-    m = q[0]
-    w = q[1:SIZE_BASIS]
-    r = q[SIZE_BASIS + 1]
-    return grad_pixel_likelihood(z, w, m, y_flux, y_flux_ivar, lam0, B):
+# TODO(awu): set appropriately
+INIT_REDSHIFT = 4.0
+INIT_MAG = 10000.
+STEP_SIZE = 0.1
+STEPS_PER_SAMPLE = 10
 
-if __name__=="__main__":
+DELTA_Z = 0.01
+DELTA_W = 0.01
+DELTA_M = 1
+
+def grad_probability(q):
+    z = q[0]
+    w = q[1:(B.shape[0] + 1)]
+    m = q[B.shape[0] + 1]
+    return grad_pixel_likelihood(z, w, m, y_flux, y_flux_ivar, lam0, B,
+                                 DELTA_Z, DELTA_W, DELTA_M)
+
+if __name__ == "__main__":
     # Draw posterior samples p(w, z, m | B, y_flux, y_flux_ivar)
-    Nsamps = 1000
+    Nsamps = 2 
     w_samps = np.zeros((Nsamps, B.shape[0]))  # N samples of a K dimensional vector
     z_samps = np.zeros(Nsamps)                # N samples of a scalar
     m_samps = np.zeros(Nsamps)                # N samples of the magnitude
+    likelihood_samps = np.zeros(Nsamps)
 
-    # TODO: change samples 
-    samps = np.zeros(Nsamps, B.shape[0] + 2)
-    for s in np.arange(1, Nsamps)
-        smpls[s] = hmc(probablility,
+    samps = np.zeros((Nsamps, B.shape[0] + 2))
+    samps[0,:] = np.ones(B.shape[0] + 2)
+    samps[0, 0] = INIT_REDSHIFT
+    samps[0, B.shape[0] + 1] = INIT_MAG
+    for s in np.arange(1, Nsamps):
+        print "Iteration", s
+        samps[s] = hmc(probability,
                        grad_probability,
-                       0.1, 10,
-                       np.atleast_1d(smpls[s-1]),
+                       STEP_SIZE, STEPS_PER_SAMPLE,
+                       samps[s-1,:],
                        negative_log_prob=True)
+        likelihood_samps[s] = probability(samps[s])
+        samps[s,1:(B.shape[0] + 1)] = softmax(samps[s,1:(B.shape[0] + 1)])
+
+    z_samps = samps[:,0]
+    w_samps = samps[:,1:(B.shape[0] + 1)]
+    m_samps = samps[:,B.shape[0] + 1]
+
+    # plot z
+    plt.figure(1)
+    plt.plot(range(0, len(z_samps)), z_samps, 'bo')
+
+    # plot m
+    plt.figure(2)
+    plt.plot(range(0, len(m_samps)), m_samps, 'bo')
+
+    # plot likelihoods
+    plt.figure(3)
+    plt.plot(range(0, len(Nsamps)), likelihoods, 'bo')
 
