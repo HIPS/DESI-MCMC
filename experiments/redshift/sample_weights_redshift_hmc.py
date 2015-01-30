@@ -60,9 +60,6 @@ def grad_probability_params(z, gamma, m, fluxes, fluxes_ivar, lam0, B,
                             delta_z, delta_gamma, delta_m):
     lls = []
     w = softmax(gamma)
-    print "z:", z
-    print "m:", m
-    print "w:", w
 
     # take gradient with respect to z
     z_lower = z - delta_z
@@ -104,7 +101,6 @@ def grad_probability_params(z, gamma, m, fluxes, fluxes_ivar, lam0, B,
 
     grad_m = (p_upper - p_lower) / (2 * delta_m)
     lls.append(grad_m)
-    print lls 
 
     return np.array(lls)
 
@@ -182,6 +178,9 @@ if __name__ == "__main__":
                        samps[s-1,:],
                        negative_log_prob=True)
         likelihood_samps[s] = probability(samps[s])
+        print "z:", samps[s, 0]
+        print "w:", softmax(samps[s, 1:(B.shape[0] + 1)])
+        print "m:", samps[s, B.shape[0] + 1]
 
     z_samps = samps[:,0]
     w_samps = samps[:,1:(B.shape[0] + 1)]
