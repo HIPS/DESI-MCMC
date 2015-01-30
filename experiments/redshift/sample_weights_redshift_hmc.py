@@ -39,7 +39,7 @@ def prior_m(m):
     return np.log(scipy.stats.norm.pdf(np.log(m) / STDEV_M_DIST))
 
 ### Likelihood of 5-band SDSS flux given weights, 
-def pixel_likelihood(z, w, m, fluxes, fluxes_ivar, lam0, B):
+def pixel_likelihood(z, gamma, m, fluxes, fluxes_ivar, lam0, B):
     """ compute the likelihood of 5 bands given
         z    : (scalar) red-shift of observed source
         w    : (vector) K positive weights for positive rest-frame basis
@@ -49,14 +49,15 @@ def pixel_likelihood(z, w, m, fluxes, fluxes_ivar, lam0, B):
     """
     # at rest frame for lam0
     lam_obs = lam0 * (1. + z)
+    w = softmax(gamma)
     spec    = np.dot(w, B)
     mu      = project_to_bands(spec, lam_obs) * m
     ll      = -0.5 * np.sum(np.multiply(fluxes_ivar, (fluxes - mu)**2))
-    return ll
+    return ll * prior_z(z) * prior_gamma(gamma) * prior_m(m)
 
 ### Let gamma be a vector whose softmax gives weights that sum to 1
-def grad_pixel_likelihood(z, gamma, m, fluxes, fluxes_ivar, lam0, B,
-                          delta_z, delta_gamma, delta_m):
+def grad_probability_params(z, gamma, m, fluxes, fluxes_ivar, lam0, B,
+                            delta_z, delta_gamma, delta_m):
     lls = []
     w = softmax(gamma)
     print "z:", z
@@ -103,6 +104,7 @@ def grad_pixel_likelihood(z, gamma, m, fluxes, fluxes_ivar, lam0, B,
 
     grad_m = (p_upper - p_lower) / (2 * delta_m)
     lls.append(grad_m)
+    print lls 
 
     return np.array(lls)
 
@@ -139,14 +141,14 @@ print "Choosing n = %d, (z = %2.2f)"%(n, z[n])
 # functions to pass into HMC
 def probability(q):
     z = q[0]
-    w = q[1:(B.shape[0] + 1)]
+    gamma = q[1:(B.shape[0] + 1)]
     m = q[B.shape[0] + 1]
-    return pixel_likelihood(z, w, m, y_flux, y_flux_ivar, lam0, B)
+    return pixel_likelihood(z, gamma, m, y_flux, y_flux_ivar, lam0, B)
 
 # TODO(awu): set appropriately
 INIT_REDSHIFT = 4.0
 INIT_MAG = 10000.
-STEP_SIZE = 0.1
+STEP_SIZE = 0.00001
 STEPS_PER_SAMPLE = 10
 
 DELTA_Z = 0.01
@@ -155,14 +157,14 @@ DELTA_M = 1
 
 def grad_probability(q):
     z = q[0]
-    w = q[1:(B.shape[0] + 1)]
+    gamma = q[1:(B.shape[0] + 1)]
     m = q[B.shape[0] + 1]
-    return grad_pixel_likelihood(z, w, m, y_flux, y_flux_ivar, lam0, B,
-                                 DELTA_Z, DELTA_W, DELTA_M)
+    return grad_probability_params(z, gamma, m, y_flux, y_flux_ivar, lam0, B,
+                                   DELTA_Z, DELTA_W, DELTA_M)
 
 if __name__ == "__main__":
     # Draw posterior samples p(w, z, m | B, y_flux, y_flux_ivar)
-    Nsamps = 2 
+    Nsamps = 10
     w_samps = np.zeros((Nsamps, B.shape[0]))  # N samples of a K dimensional vector
     z_samps = np.zeros(Nsamps)                # N samples of a scalar
     m_samps = np.zeros(Nsamps)                # N samples of the magnitude
@@ -180,7 +182,6 @@ if __name__ == "__main__":
                        samps[s-1,:],
                        negative_log_prob=True)
         likelihood_samps[s] = probability(samps[s])
-        samps[s,1:(B.shape[0] + 1)] = softmax(samps[s,1:(B.shape[0] + 1)])
 
     z_samps = samps[:,0]
     w_samps = samps[:,1:(B.shape[0] + 1)]
@@ -189,12 +190,15 @@ if __name__ == "__main__":
     # plot z
     plt.figure(1)
     plt.plot(range(0, len(z_samps)), z_samps, 'bo')
+    plt.savefig('z.png')
 
     # plot m
     plt.figure(2)
     plt.plot(range(0, len(m_samps)), m_samps, 'bo')
+    plt.savefig('m.png')
 
     # plot likelihoods
     plt.figure(3)
-    plt.plot(range(0, len(Nsamps)), likelihoods, 'bo')
+    plt.plot(range(0, len(likelihood_samps)), likelihood_samps, 'bo')
+    plt.savefig('ll.png')
 
