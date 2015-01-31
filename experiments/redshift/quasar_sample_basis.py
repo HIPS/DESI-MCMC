@@ -21,9 +21,6 @@ import GPy
 import os, sys
 import cPickle as pickle
 from hmc import hmc
-#import seaborn as sns
-#sns.set_style("white")
-#current_palette = sns.color_palette()
 
 def save_basis_samples(th_samps, ll_samps, lam0, lam0_delta, parser, chain_idx):
     """ save basis fit info """
@@ -68,7 +65,11 @@ if __name__=="__main__":
     length_scale = float(sys.argv[3]) if len(sys.argv) > 3 else 40.
     init_iter    = int(sys.argv[4]) if len(sys.argv) > 4 else 100
     K            = 4
-    print "==== SAMPLING CHAIN ID = %d "%chain_idx
+    print "==== SAMPLING CHAIN ID = %d ============== "%chain_idx
+    print "    Nsamps          = %d "%Nsamps
+    print "    length_scale    = %2.2f"%length_scale
+    print "    num init_iters  = %d   "%init_iter
+    print "    K               = %d   "%K
 
     ##################################################################
     ## load a handful of quasar spectra and resample
@@ -80,7 +81,7 @@ if __name__=="__main__":
 
     ## resample to lam0 => rest frame basis 
     lam0, lam0_delta = get_lam0(lam_subsample=10)
-    print "resampling de-redshifted data"
+    print "    resampling de-redshifted data"
     spectra_resampled, spectra_ivar_resampled, lam_mat = \
         resample_rest_frame(qtrain['spectra'], 
                             qtrain['spectra_ivar'],
@@ -97,7 +98,7 @@ if __name__=="__main__":
     ## Set prior variables (K_chol, sig2_omega, sig2_mu) 
     ###########################################################################
     sig2_omega = 1.
-    sig2_mu    = 100.
+    sig2_mu    = 500.
     beta_kern = GPy.kern.Matern52(input_dim=1, variance=1., lengthscale=length_scale)
     K_beta    = beta_kern.K(lam0.reshape((-1, 1)))
     K_chol    = np.linalg.cholesky(K_beta)
@@ -110,12 +111,12 @@ if __name__=="__main__":
         make_functions(X, Lam, lam0, lam0_delta, K, 
                        Kinv_beta  = K_inv,
                        K_chol     = K_chol,
-                       sig2_omega = 1.,
-                       sig2_mu    = 500.)
+                       sig2_omega = sig2_omega,
+                       sig2_mu    = sig2_mu)
     # sample from prior
-    npr.seed(chain_idx)    # different initialization
+    npr.seed(chain_idx + 42)   # different initialization
     th = np.zeros(parser.N)
-    parser.set(th, 'betas', .01 * np.random.randn(K, len(lam0)))
+    parser.set(th, 'betas', .001 * np.random.randn(K, len(lam0)))
     parser.set(th, 'omegas', .01 * npr.randn(N, K))
     parser.set(th, 'mus', .01 * npr.randn(N))
 
@@ -127,14 +128,20 @@ if __name__=="__main__":
     ###########################################################################
     ## optimize for about 350 iterations to get to some meaty part of the dist
     ###########################################################################
-    print "Switching to CVX Optimization Method"
-    res = minimize(fun = lambda(th): loss_fun(th) + prior_loss(th),
-                   jac = lambda(th): loss_grad(th) + prior_grad(th),
-                   x0  = th, 
-                   method = 'L-BFGS-B',
-                   options = {'gtol':1e-6, 'ftol':1e-6, 
-                              'disp':True, 'maxiter':init_iter})
-    th = res.x
+    cache_fname = 'cache/basis_samples_K-4_V-1364_chain_%d.npy'%chain_idx
+    if True and os.path.exists(cache_fname):
+        print "    initializing first sample from CACHE (pre-optimized)"
+        th_samples, _, _, _, _, _ = \
+            load_basis_samples(cache_fname)
+        th = th_samples[0, :]
+    else:
+        res = minimize(fun = lambda(th): loss_fun(th) + prior_loss(th),
+                       jac = lambda(th): loss_grad(th) + prior_grad(th),
+                       x0  = th, 
+                       method = 'L-BFGS-B',
+                       options = {'gtol':1e-8, 'ftol':1e-8, 
+                                  'disp':True, 'maxiter':init_iter})
+        th = res.x
 
     ##########################################################################
     # Sample Nsamps, adapt step size
@@ -161,9 +168,10 @@ if __name__=="__main__":
                  n_steps = 20,
                  q_curr  = th,
                  negative_log_prob = False, 
-                 adaptive_step_sz = True, 
-                 avg_accept_rate = avg_accept_rate, 
-                 tgt_accept_rate = .8)
+                 adaptive_step_sz  = True, 
+                 min_step_sz       = 0.00005,
+                 avg_accept_rate   = avg_accept_rate, 
+                 tgt_accept_rate   = .55)
 
         ## store sample
         th_ll = -loss_fun(th) - prior_loss(th)

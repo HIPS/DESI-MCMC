@@ -17,7 +17,7 @@ def hmc(U,
         tgt_accept_rate=0.9,
         avg_accept_time_const=0.95,
         avg_accept_rate=0.9,
-        min_step_sz=0.001,
+        min_step_sz=0.00005,
         max_step_sz=1.0,
         negative_log_prob=True):
     """
