@@ -68,7 +68,6 @@ if __name__=="__main__":
     length_scale = float(sys.argv[3]) if len(sys.argv) > 3 else 40.
     init_iter    = int(sys.argv[4]) if len(sys.argv) > 4 else 100
     K            = 4
-    npr.seed(chain_idx)  ## different random seed
     print "==== SAMPLING CHAIN ID = %d "%chain_idx
 
     ##################################################################
@@ -114,6 +113,7 @@ if __name__=="__main__":
                        sig2_omega = 1.,
                        sig2_mu    = 500.)
     # sample from prior
+    npr.seed(chain_idx)    # different initialization
     th = np.zeros(parser.N)
     parser.set(th, 'betas', .01 * np.random.randn(K, len(lam0)))
     parser.set(th, 'omegas', .01 * npr.randn(N, K))
@@ -184,62 +184,4 @@ if __name__=="__main__":
 
     # write them out
     save_basis_samples(th_samps, ll_samps, lam0, lam0_delta, parser, chain_idx)
-
-    ##################################################################
-    # inspect posterior summary of betas
-    ##################################################################
-    if False: 
-        # Unpack Samples
-        B_samps = np.zeros((Nsamps, K, V))
-        W_samps = np.zeros((Nsamps, Ntrain, K))
-        M_samps = np.zeros((Nsamps, Ntrain))
-        for n in range(Nsamps):
-            betas = K_chol.dot(parser.get(th_samps[n, :], 'betas').T).T
-            mus   = parser.get(th_samps[n, :], 'mus')
-            omegas = parser.get(th_samps[n, :], 'omegas')
-            W = np.exp(omegas)
-            W /= np.sum(W, axis=1, keepdims=True)
-            B = np.exp(betas)
-            B /= np.sum(B * lam0_delta, axis=1, keepdims=True)
-            M = np.exp(mus)
-            B_samps[n, :] = B
-            M_samps[n, :] = M.squeeze()
-            W_samps[n, :] = W
-
-        plt.plot(lam0, B_samps.mean(axis=0).T)
-        plt.show()
-
-        qidx = 30
-        n, bins, patches = plt.hist(M_samps[:, qidx], 25, normed=True)
-        plt.vlines(M_mle[qidx], ymin=0, ymax=n.max())
-        plt.show()
-
-        n, bins, patches = plt.hist(W_samps[:, qidx, 1], 30, normed=True)
-        plt.vlines(W_mle[qidx, 1], ymin=0, ymax=n.max(), linewidth=3 )
-
-
-        def plot_recon(spec_recon, z, spec, spec_ivar):
-            fig = plt.figure(figsize=(18,6))
-            plt.plot(lam_obs / (1 + z), spec, linewidth=2,
-                     color=current_palette[0], label="measured")
-            plt.plot(lam_obs / (1 + z), spec_ivar, 
-                     linewidth=1, color='grey', alpha=.5, label="inverse variance")
-            plt.plot(lam0, spec_recon, linewidth=2, color=current_palette[2], label="rank %d reconstruction"%B.shape[0])
-            plt.xlim(lam_obs.min()/(1 + z), lam_obs.max()/(1+z))
-            plt.ylim(0, spec.max())
-            plt.xlabel("wavelength")
-            plt.ylabel("spectrum")
-            plt.legend(fontsize='xx-large')
-
-        qidx = 20
-        samp_idx = 1409
-        spec_recon = M_samps[samp_idx][qidx] * \
-                     W_samps[samp_idx, qidx, :].dot(B_samps[samp_idx,:,:])
-        #spec_recon = np.dot(M_mle[qidx] * W_mle[qidx, :], B_mle)
-        plot_recon(spec_recon, qtrain['Z'][qidx], 
-                               qtrain['spectra'][qidx,:],
-                               qtrain['spectra_ivar'][qidx,:])
-
-        plt.show()
-
 
