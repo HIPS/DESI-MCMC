@@ -66,7 +66,16 @@ def resample_rest_frame(spectra, spectra_ivar, zs, lam_obs, lam0):
                                                       right = np.nan)
     return spectra_resampled, spectra_ivar_resampled, lam_mat
 
-
+def get_lam0(lam_subsample=10):
+    """ Gets the lambda values from the spEigenQSO file, uses as fixed basis inputs """
+    header     = fitsio.read_header('../../data/eigen_specs/spEigenQSO-55732.fits')
+    eigQSOfits = fitsio.FITS('../../data/eigen_specs/spEigenQSO-55732.fits')
+    lam0       = 10.**(header['COEFF0'] + np.arange(header['NAXIS1']) * header['COEFF1'])
+    lam0       = lam0[::lam_subsample]
+    lam0_delta = np.concatenate((lam0[1:] - lam0[:-1], [lam0[-1] - lam0[-2]]))
+    eigQSO     = eigQSOfits[0].read()[:, ::lam_subsample]
+    K          = eigQSO.shape[0]
+    return lam0, lam0_delta
 
 def load_data_clean_split(spec_fits_file = '../../andrew-qso.fits', Ntrain=500):
 
