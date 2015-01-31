@@ -129,7 +129,7 @@ if __name__=="__main__":
             img.nelec = np.random.poisson(mimg)
 
     #cache initial likelihood, initial temp
-    ll0 = celeste_likelihood_multi_image(srcs, imgs)
+    %lprun -m celeste  ll0 = celeste_likelihood_multi_image(srcs, imgs)
     print "Data generating log like: ", ll0
 
     # re-initialize source values randomly
@@ -159,9 +159,9 @@ if __name__=="__main__":
     #############################################################
     fname='star_samples_rand.bin'
 
-    #%lprun -m util.slicesample \
+    %lprun -m util.slicesample -m celeste_em \
     t_samps, b_samps, u_samps, e_samps, ll_samps = \
-        sample_source_params(srcs, imgs, Niter=500, fname=fname)
+        sample_source_params(srcs, imgs, Niter=2, fname=fname)
 
     if False:
         t_samps, b_samps, u_samps, e_samps, ll_samps = load_samples(fname)

@@ -53,12 +53,12 @@
 % Employ the following version of the ``usepackage'' statement for
 % submitting the draft version of the paper for review.  This will set
 % the note in the first column to ``Under review.  Do not distribute.''
-\usepackage{icml2015} 
+%\usepackage{icml2015} 
 
 % Employ this version of the ``usepackage'' statement after the paper has
 % been accepted, when creating the final version.  This will set the
 % note in the first column to ``Proceedings of the...''
-%\usepackage[accepted]{icml2015}
+\usepackage[accepted]{icml2015}
 
 
 % The \icmltitle you define below is probably too long as a header.
@@ -76,12 +76,16 @@
 % unless you've provided the [accepted] option to the icml2015
 % package.
 \icmlauthor{Andrew Miller}{acm@seas.harvard.edu}
+%\icmladdress{Harvard University,
+%             33 Oxford St, Cambridge, MA USA}
+\icmlauthor{Albert Wu}{awu@college.harvard.edu}
+\icmlauthor{Ryan Adams}{rpa@seas.harvard.edu}
 \icmladdress{Harvard University,
-            33 Oxford St, Cambridge, MA USA}
-%\icmlauthor{Your CoAuthor's Name}{email@coauthordomain.edu}
-%\icmladdress{Their Fantastic Institute,
-%            27182 Exp St., Toronto, ON M6H 2T1 CANADA}
-
+             33 Oxford St, Cambridge, MA, 02138 USA}
+\icmlauthor{David Schlegel}{djschlegel@lbl.gov}
+\icmladdress{Lawrence Berkeley National Laboratory, 
+             1 Cyclotron Road, Berkeley, CA, 94720 USA}
+             
 % You may provide any keywords that you 
 % find helpful for describing your paper; these are used to populate 
 % the "keywords" metadata in the PDF but will not be shown in the document
@@ -91,15 +95,18 @@
 ]
 
 \begin{abstract} 
-We describe a joint model of two different sources of astronomical data, spectroscopy and photometry, which carry information about a source of light at extremely different resolutions. 
+We describe a joint model of two disparate sources of astronomical data, spectroscopy and photometry, which carry information about a source of light at extremely different resolutions. 
+Our model treats the energy distribution of the radiation of a source as a latent variable, which hierarchically generates both photometric and spectroscopic observations.  
 %We describe a fully generative model that combines information from a large dataset of high resolution spectroscopic measurements with a small number of broadband photometric observations, and we use it to measure the red-shift of quasars from photometry, the ``photo-z'' problem.  
-Our method treats the unknown spectral energy distribution of an object (e.g.~star, galaxy, or quasar) as a latent stochastic process and uses statistical inference to infer the unknown structure. 
-We use our model to infer the red-shift of quasars from five-band (low resolution) photometric data, the so called ``photo-z'' problem. 
+We place a structured stochastic process prior over the spectral energy distribution of a light source (e.g.~star, galaxy, or quasar) that admits a physically interpretable decomposition and allows us to tractably perform fully Bayesian inference using MCMC.  
+We use our model to compute the distribution of red-shift of quasars from five-band (low resolution) photometric data, the so called ``photo-z'' problem. 
+Our method shows that tools from machine learning and Bayesian statistics can aid in the joint modeling of 
+
 Our method leverages a small number of existing examples of high resolution quasar spectra with known red-shift to build a structured prior distribution over unknown spectra.  
 \end{abstract} 
 
 \section{Introduction}
-Enormous amounts of astronomical data are collected \red{cite sloan digital sky survey, other astronomical surveys}.  Among this collection are measurements of spectral energy distribution (WED) of a light source (e.g.~a star, galaxy, quasar).  
+Enormous amounts of diverse astronomical data are \red{cite sloan digital sky survey, other astronomical surveys}.  Among this collection are measurements of spectral energy distribution (WED) of a light source (e.g.~a star, galaxy, quasar).  
 The spectrum of a source carries information about properties of the particular object, including effective temperature, type, red-shift, and chemical makeup.  
 
 However, measurements of astronomical spectra are produced by instruments at widely varying resolutions.  

@@ -181,7 +181,7 @@ if __name__=="__main__":
                 " %d "%Naccept)
         if n % 200 == 0: 
             save_basis_samples(th_samps, ll_samps, lam0, lam0_delta, parser, chain_idx)
- 
+
     # write them out
     save_basis_samples(th_samps, ll_samps, lam0, lam0_delta, parser, chain_idx)
 
@@ -209,8 +209,8 @@ if __name__=="__main__":
         plt.plot(lam0, B_samps.mean(axis=0).T)
         plt.show()
 
-        qidx = 20
-        n, bins, patches = plt.hist(M_samps[:, qidx], normed=True)
+        qidx = 30
+        n, bins, patches = plt.hist(M_samps[:, qidx], 25, normed=True)
         plt.vlines(M_mle[qidx], ymin=0, ymax=n.max())
         plt.show()
 
@@ -231,8 +231,8 @@ if __name__=="__main__":
             plt.ylabel("spectrum")
             plt.legend(fontsize='xx-large')
 
-        qidx = 310
-        samp_idx = 199
+        qidx = 20
+        samp_idx = 1409
         spec_recon = M_samps[samp_idx][qidx] * \
                      W_samps[samp_idx, qidx, :].dot(B_samps[samp_idx,:,:])
         #spec_recon = np.dot(M_mle[qidx] * W_mle[qidx, :], B_mle)

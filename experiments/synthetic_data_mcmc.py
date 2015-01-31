@@ -10,38 +10,38 @@ from util.init_utils import load_imgs_and_catalog
 import numpy as np
 import matplotlib.pyplot as plt
 
-def sample_source_params(srcs, imgs, Niter = 10):
-    e_samps = np.zeros((Niter, len(imgs)))    # sky term
-    t_samps = np.zeros((Niter, len(srcs)))    # source temp
-    b_samps = np.zeros((Niter, len(srcs)))    # source brightness
-    u_samps = np.zeros((Niter, len(srcs), 2)) # source location 
-    ll_samps = np.zeros(Niter)
-    prev_ll = celeste_likelihood_multi_image(srcs, imgs)
-    print prev_ll
-    for n in range(Niter):
-        if n%1==0:
-            print "===== iter %d of %d (curr_ll = %2.2f)==="%(n, Niter, prev_ll)
-
-        if n%100==0:
-            save_samples(e_samps, t_samps, b_samps, u_samps, ll_samps, fname='star_samples_teff_seed.bin')
-
-        # run a gibbs step
-        if n > 0:
-            celeste_gibbs_sample(srcs, imgs, subiter=1, verbose=False, debug=False)
-
-        # save current likelihood and samples
-        ll_samps[n] = celeste_likelihood_multi_image(srcs, imgs)
-        prev_ll = ll_samps[n]
-        for n_img in range(len(imgs)):
-            e_samps[n, n_img] = imgs[n_img].epsilon
-        for s in range(len(srcs)):
-            t_samps[n, s] = srcs[s].t
-            b_samps[n, s] = srcs[s].b
-            u_samps[n, s, :] = srcs[s].u
-
-    # save and return
-    save_samples(e_samps, t_samps, b_samps, u_samps, ll_samps, fname='star_samples_teff_seed.bin')
-    return t_samps, b_samps, u_samps, e_samps, ll_samps
+#def sample_source_params(srcs, imgs, Niter = 10):
+#    e_samps = np.zeros((Niter, len(imgs)))    # sky term
+#    t_samps = np.zeros((Niter, len(srcs)))    # source temp
+#    b_samps = np.zeros((Niter, len(srcs)))    # source brightness
+#    u_samps = np.zeros((Niter, len(srcs), 2)) # source location 
+#    ll_samps = np.zeros(Niter)
+#    prev_ll = celeste_likelihood_multi_image(srcs, imgs)
+#    print prev_ll
+#    for n in range(Niter):
+#        if n%1==0:
+#            print "===== iter %d of %d (curr_ll = %2.2f)==="%(n, Niter, prev_ll)
+#
+#        if n%100==0:
+#            save_samples(e_samps, t_samps, b_samps, u_samps, ll_samps, fname='star_samples_teff_seed.bin')
+#
+#        # run a gibbs step
+#        if n > 0:
+#            celeste_gibbs_sample(srcs, imgs, subiter=1, verbose=False, debug=False)
+#
+#        # save current likelihood and samples
+#        ll_samps[n] = celeste_likelihood_multi_image(srcs, imgs)
+#        prev_ll = ll_samps[n]
+#        for n_img in range(len(imgs)):
+#            e_samps[n, n_img] = imgs[n_img].epsilon
+#        for s in range(len(srcs)):
+#            t_samps[n, s] = srcs[s].t
+#            b_samps[n, s] = srcs[s].b
+#            u_samps[n, s, :] = srcs[s].u
+#
+#    # save and return
+#    save_samples(e_samps, t_samps, b_samps, u_samps, ll_samps, fname='star_samples_teff_seed.bin')
+#    return t_samps, b_samps, u_samps, e_samps, ll_samps
 
 def geweke_source_params(srcs, imgs, Niter = 10):
     e_samps = np.zeros((Niter, len(imgs)))    # sky term
@@ -98,7 +98,7 @@ if __name__=="__main__":
     ##
     ## Generate some fake sources using real image data (PSF and stuff)
     ##
-    cat_glob = glob('data/stamp_catalog/cat*.fits')[1]
+    cat_glob = glob('data/stamp_catalog/cat*.fits')[1:2]
     srcs, imgs, teff_catalog, us = load_imgs_and_catalog(cat_glob)
     print "initialized with %d sources and %d images"%(len(srcs), len(imgs))
 
@@ -136,6 +136,8 @@ if __name__=="__main__":
     for img in imgs:
         img.epsilon = np.random.rand()*1e3
 
+    print "random initial ll = %2.2f"%celeste_likelihood_multi_image(srcs, imgs)
+
     print "========= EM for %d sources, %d images ================"%(len(srcs), len(imgs))
     #%prun -s tottime ll_trace, conv = celeste_em(srcs, imgs, 2, debug=False, verbose=1)
     ll_trace, conv = celeste_em(srcs, imgs, maxiter=40, debug=False, verbose=1)
@@ -151,7 +153,7 @@ if __name__=="__main__":
     #    sample_source_params(srcs, imgs, Niter=5)
     #%lprun -m celeste_em \
     t_samps, b_samps, u_samps, e_samps, ll_samps = \
-        sample_source_params(srcs, imgs, Niter=1000)
+        sample_source_params(srcs, imgs, Niter=200)
 
     im = imgs[0]
     Niters = 5
