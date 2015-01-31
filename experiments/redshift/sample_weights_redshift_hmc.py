@@ -158,6 +158,68 @@ def grad_probability(q):
     return grad_probability_params(z, gamma, m, y_flux, y_flux_ivar, lam0, B,
                                    DELTA_Z, DELTA_W, DELTA_M)
 
+# Metropolis-Hastings
+def create_transition():
+    mean = np.zeros(B.shape[0] + 2)
+    var = np.zeros(B.shape[0] + 2)
+    var[0] = 0.5
+    var[1:(B.shape[0] + 1)] = 0.1
+    var[B.shape[0] + 1] = 1000
+    return np.random.multivariate_normal(mean, np.diag(var))
+
+if __name__ == "__main__":
+    # Draw posterior samples p(w, z, m | B, y_flux, y_flux_ivar)
+    Nsamps = 10000
+    w_samps = np.zeros((Nsamps, B.shape[0]))  # N samples of a K dimensional vector
+    z_samps = np.zeros(Nsamps)                # N samples of a scalar
+    m_samps = np.zeros(Nsamps)                # N samples of the magnitude
+    likelihood_samps = np.zeros(Nsamps)
+
+    samps = np.zeros((Nsamps, B.shape[0] + 2))
+    samps[0,:] = np.ones(B.shape[0] + 2)
+    samps[0, 0] = INIT_REDSHIFT
+    samps[0, B.shape[0] + 1] = INIT_MAG
+    for s in np.arange(1, Nsamps):
+        print "Iteration", s
+        
+        probability_pre = probability(samps[s-1,:])
+        change = create_transition()
+        new_samp = samps[s-1,:] + change
+        probability_post = probability(new_samp)
+
+        alpha = probability_post / probability_pre
+        if npr.random() < alpha:
+            samps[s,:] = new_samp
+        else:
+            samps[s,:] = samps[s-1,:]
+
+        likelihood_samps[s] = probability(samps[s, :])
+        print "z:", samps[s, 0]
+        print "w:", softmax(samps[s, 1:(B.shape[0] + 1)])
+        print "m:", samps[s, B.shape[0] + 1]
+        print "prob:", likelihood_samps[s]
+
+    z_samps = samps[:,0]
+    w_samps = samps[:,1:(B.shape[0] + 1)]
+    m_samps = samps[:,B.shape[0] + 1]
+
+    # plot z
+    plt.figure(1)
+    plt.plot(range(0, len(z_samps)), z_samps, 'bo')
+    plt.savefig('z.png')
+
+    # plot m
+    plt.figure(2)
+    plt.plot(range(0, len(m_samps)), m_samps, 'bo')
+    plt.savefig('m.png')
+
+    # plot likelihoods
+    plt.figure(3)
+    plt.plot(range(0, len(likelihood_samps)), likelihood_samps, 'bo')
+    plt.savefig('ll.png')
+
+
+"""
 if __name__ == "__main__":
     # Draw posterior samples p(w, z, m | B, y_flux, y_flux_ivar)
     Nsamps = 10
@@ -200,4 +262,4 @@ if __name__ == "__main__":
     plt.figure(3)
     plt.plot(range(0, len(likelihood_samps)), likelihood_samps, 'bo')
     plt.savefig('ll.png')
-
+"""
