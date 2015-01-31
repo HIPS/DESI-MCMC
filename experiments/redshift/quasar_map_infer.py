@@ -24,11 +24,14 @@ if __name__=="__main__":
                               Ntrain         = 400)
 
     ## load in basis
-    basis_string = "13637"                # size of the basis
-    th   = np.load("cache/basis_th_K-4_V-%s.npy"%basis_string)
-    lls  = np.load("cache/lls_K-4_V-%s.npy"%basis_string)
-    lam0 = np.load("cache/lam0_V-%s.npy"%basis_string)
-    N    = th.shape[1] - lam0.shape[0]
+    basis_string = "1364" # size of lam0
+    file_contents = np.load('cache/basis_fit_K-4_V-%s.npz'%basis_string)
+    lam0       = file_contents['lam0']
+    lam0_delta = file_contents['lam0_delta'] 
+    th         = file_contents['th']
+
+    parser = ParamParser()
+
     omegas = th[:,:N]
     betas  = th[:, N:]
     W = np.exp(omegas)

@@ -4,7 +4,6 @@ import numpy.random as npr
 from scipy.optimize import minimize
 from scipy import interpolate
 from funkyyak import grad, numpy_wrapper as np
-from scipy.optimize import minimize
 from redshift_utils import load_data_clean_split, project_to_bands
 from slicesample import slicesample
 import matplotlib.pyplot as plt
@@ -15,7 +14,53 @@ sns.set_style("white")
 current_palette = sns.color_palette()
 npr.seed(42)
 
+### Likelihood of 5-band SDSS flux given weights, 
+def pixel_likelihood(z, w, x, lam0, B):
+    """ compute the likelihood of 5 bands given
+        z    : (scalar) red-shift of observed source
+        w    : (vector) K positive weights for positive rest-frame basis
+        x    : (vector) 5 pixel values corresponding to UGRIZ
+        lam0 : basis wavelength values
+        B    : (matrix) K x P basis 
+    """
+    # at rest frame for lam0
+    lam_obs = lam0 * (1. + z)
+    spec    = w.dot(B)
+    mu      = project_to_bands(np.atleast_2d(spec), lam_obs)
+    ll      = np.sum(x * np.log(mu) - mu)
+    return ll
+
+def weights_to_bands(z, w, x, lam0, B):
+    lam_obs = lam0 * (1. + z)
+    spec    = w.dot(B)
+    mu      = project_to_bands(np.atleast_2d(spec), lam_obs)
+    return mu
+
+def prior_w(w): 
+    if np.any(w <= 0): 
+        return -np.inf
+    return 0
+
+def prior_z(z): 
+    if np.any(z <= 0): 
+        return -np.inf
+    return 0
+
 if __name__=="__main__":
+
+    ## define test example 
+    if len(sys.argv) > 1:
+        n = int(sys.argv[1])                 # index
+    else:
+        n = 95
+    if len(sys.argv) > 2:
+        Nsamps = int(sys.argv[2])            # num samples to draw
+    else:
+        Nsamps = 5000
+    if len(sys.argv) > 3:
+        basis_string = sys.argv[3]           # which basis to use
+    else:
+        basis_string = "1364"                # size of the basis
 
     ## load a handful of quasar spectra
     lam_obs, qtrain, qtest = \
@@ -23,35 +68,15 @@ if __name__=="__main__":
                               Ntrain         = 400)
 
     ## load in basis
-    th   = np.load("cache/basis_th_K-4_V-2728.npy")
-    lls  = np.load("cache/lls_K-4_V-2728.npy")
-    lam0 = np.load("cache/lam0_V-2728.npy")
+    th   = np.load("cache/basis_th_K-4_V-%s.npy"%basis_string)
+    lls  = np.load("cache/lls_K-4_V-%s.npy"%basis_string)
+    lam0 = np.load("cache/lam0_V-%s.npy"%basis_string)
     N    = th.shape[1] - lam0.shape[0]
     omegas = th[:,:N]
     betas  = th[:, N:]
     W = np.exp(omegas)
     B = np.exp(betas)
     B = B / B.sum(axis=1, keepdims=True)
-
-    ############### pixel experiment #######################################
-    def pixel_likelihood(z, w, x, lam0):
-        """ compute the likelihood of 5 bands given
-            z    : (scalar) red-shift of observed source
-            w    : (vector) K positive weights for positive rest-frame basis
-            x    : (vector) 5 pixel values corresponding to UGRIZ
-            lam0 : basis wavelength values
-        """
-        # at rest frame for lam0
-        lam_obs = lam0 * (1. + z)
-        spec    = w.dot(B)
-        mu      = project_to_bands(np.atleast_2d(spec), lam_obs)
-        ll      = np.sum(x * np.log(mu) - mu)
-        return ll
-
-    def prior_w(w): 
-        if np.any(w <= 0): 
-            return -np.inf
-        return 0
 
     ### DEBUG PLOTS ###################
     if False:
@@ -61,18 +86,7 @@ if __name__=="__main__":
             axarr[k].hist(W[k,:], 40, normed=True)
         plt.show()
 
-        ## plot all pairwise distribuitons
-
-    ## load test example 
-    if len(sys.argv) > 1:
-        n = int(sys.argv[1])
-    else:
-        n = 95
-    if len(sys.argv) > 2:
-        Nsamps = int(sys.argv[2])
-    else:
-        Nsamps = 5000
-
+    ## fit w's and red-shift w/ MCMC
     print "Fitting SDSS pixel projection to test idx %d of %d (%d mcmc samps)"%(n, qtest['Z'].shape[0], Nsamps)
     spec_n             = qtest['spectra'][n, :]
     spec_n[spec_n < 0] = 0
@@ -81,7 +95,18 @@ if __name__=="__main__":
     mu_n               = project_to_bands(np.atleast_2d(spec_n), lam_obs)
     x_n                = npr.poisson(mu_n).ravel()
     w_n                = .05*W.mean(axis=1)
-    #w_n                = fit_weights_given_basis(B, lam0, spec_n, spec_ivar_n, z_n, lam_obs)
+    w_n                = fit_weights_given_basis(B, lam0, spec_n, spec_ivar_n, z_n, lam_obs)
+    w_n = np.random.rand(len(w_n))
+
+    ## do maximum likelihood using numerical differences
+    lnfun = lambda th: -pixel_likelihood(th[-1], th[:-1], x_n, lam0, B)
+    def lnjac(th): 
+        dth = np.zeros(len(th))
+        for i in range(len(th)):
+            de = np.zeros(len(th))
+            de[i] = 1e-4
+            dth[i] = (lnfun(th + de) - lnfun(th - de)) / (2*de)
+        return dth
 
     #### DEBUG ##### 
     # SANITY CHECK:  fit pixel likelihood fixed on w_n (taking the full spectrum - THIS IS CHEATING)
@@ -90,7 +115,7 @@ if __name__=="__main__":
         bottom_right_misses = [ 13, 120,  94,  93,  19,  11,  89,  99, 151,  26, 166, 100,  81 ]
         top_left_misses = [15, 83, 14, 122, 156]
         n = 89
-        z_profile = lambda z: pixel_likelihood(z, w_n, x_n, lam0)
+        z_profile = lambda z: pixel_likelihood(z, w_n, x_n, lam0, B)
         w_grid = np.linspace(0, 10, 100)
         z_grid = np.array([z_profile(z) for z in w_grid])
         z_grid = z_grid #- z_grid.max()
@@ -105,8 +130,9 @@ if __name__=="__main__":
     ## sample W's and Z's for this test example
     ll_samps = np.zeros(Nsamps)
     th_samps = np.zeros((Nsamps, len(w_n) + 1))
-    th_curr  = np.concatenate((w_n, [8]))
-    lnpdf    = lambda th: pixel_likelihood(th[-1], th[:-1], x_n, lam0) + prior_w(th[:-1])
+    th_curr  = np.concatenate((w_n, [z_n]))
+    lnpdf    = lambda th: pixel_likelihood(th[-1], th[:-1], x_n, lam0, B) + \
+                          prior_w(th[:-1])
     ll_curr  = lnpdf(th_curr)
     print "{0:15} | {1:15} | {2:15} | {3:15} ".format("iter", "log like", "z value (true z)", "weight0")
     for samp_i in range(Nsamps):
@@ -118,7 +144,7 @@ if __name__=="__main__":
                                        lb = -np.Inf, ub = np.Inf)
         th_samps[samp_i,:] = th_curr
         ll_samps[samp_i] = ll_curr
-        if samp_i % 100 == 0:
+        if samp_i % 2 == 0:
             print "{0:15} | {1:15} | {2:15} | {3:15} ".format(
                 samp_i, ll_curr, "%2.2f (%2.2f)"%(th_curr[-1], z_n), th_curr[0])
         if samp_i % 1000 == 0:
@@ -194,7 +220,7 @@ if __name__=="__main__":
         ## inspect w samples
         fig, axarr = plt.subplots(1, 4)
         for i, ax in enumerate(axarr.flatten()):
-            cnts, bins, patches = ax.hist(th_samps[(Nsamps/2):, i]; 20, alpha=.5, normed=True)
+            cnts, bins, patches = ax.hist(th_samps[(Nsamps/2):, i], 20, alpha=.5, normed=True)
             ax.vlines(w[i], cnts.max())
 
 

@@ -59,6 +59,16 @@ notebooks/.texpadtmp/
 notebooks/.ipynb_checkpoints/
 notebooks/*.tex
 notebooks/*_files/
+notebooks/*
+*.c
+*.so
+.texpadtmp
+*.bin
+*.npy
+.DS_Store
+
+#tex imgs
+tex/imgs/*
 
 data/*.gz
 data/*.bz2

@@ -97,15 +97,17 @@ plt.savefig(out_dir + "quasar_redshift_obs_frame.pdf", bbox_inches = 'tight')
 full_out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/quasar_specs/" 
 full_idx = np.arange(0, qtrain['spectra'].shape[0], 5)
 for idx in full_idx: 
-    fig = plt.figure(figsize=(24,8))
-    plt.plot(lam_obs, qtrain['spectra'][idx, :].T, label="z = %2.2f"%qtrain['Z'][idx], linewidth=1)
-    plt.plot(lam_obs, qtrain['spectra_ivar'][idx, :].T, label="inv var", color='grey', alpha=.5, linewidth=.3)
+    fig = plt.figure(figsize=(20,6))
+    lam_rest = lam_obs / (1 + qtrain['Z'][idx])
+    plt.plot(lam_rest, qtrain['spectra'][idx, :].T, label="z = %2.2f"%qtrain['Z'][idx], linewidth=1)
+    plt.plot(lam_rest, qtrain['spectra_ivar'][idx, :].T, label="inv var", color='grey', alpha=.5, linewidth=.3)
     plt.title("Quasar (training # %d)"%idx)
     plt.xlabel("wavelength")
-    plt.ylabel("$f(\lambda)$")
+    plt.ylabel("$f(\lambda)$", fontsize=18)
+    plt.xlim(500, 4500)
     plt.legend()
     plt.savefig(full_out_dir + "quasar_spectra_%d.png"%idx, bbox_inches = 'tight')
-    plt.close('all')
+    #plt.close('all')
  
 ## re-sample into rest frame
 #header      = fitsio.read_header('../../data/eigen_specs/spEigenQSO-55732.fits')
