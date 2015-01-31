@@ -14,32 +14,22 @@ import copy
 def softmax(x):
     return np.exp(x) / sum(np.exp(x))
 
-# TODO: use real priors
-def prior_w(w): 
-    if np.any(w <= 0): 
-        return -np.inf
-    return 0
-
-def prior_gamma(gamma): 
-    length = len(gamma)
-    prob = scipy.stats.multivariate_normal.pdf(gamma,
-                                               np.zeros(length),
-                                               np.eye(length));
-    return np.log(prob)
+def prior_omega(omega):
+    return -.5 * omega.dot(omega)
 
 # TODO(awu): Gaussian for now
 MEAN_Z_DIST = 2.5
 STDEV_Z_DIST = 1.0
 def prior_z(z): 
-    return np.log(scipy.stats.norm.pdf((z - MEAN_Z_DIST) / STDEV_Z_DIST))
+    return -(z - MEAN_Z_DIST)*(z- MEAN_Z_DIST) / (2. * STDEV_Z_DIST * STDEV_Z_DIST)
 
 # TODO(awu): lognormal for now
 STDEV_M_DIST = 20.0
-def prior_m(m):
-    return np.log(scipy.stats.norm.pdf(np.log(m) / STDEV_M_DIST))
+def prior_mu(mu):
+    return - mu * mu / (2. * STDEV_M_DIST*STDEV_M_DIST)
 
 ### Likelihood of 5-band SDSS flux given weights, 
-def pixel_likelihood(z, gamma, m, fluxes, fluxes_ivar, lam0, B):
+def pixel_likelihood(z, w, m, fluxes, fluxes_ivar, lam0, B):
     """ compute the likelihood of 5 bands given
         z    : (scalar) red-shift of observed source
         w    : (vector) K positive weights for positive rest-frame basis
@@ -49,11 +39,10 @@ def pixel_likelihood(z, gamma, m, fluxes, fluxes_ivar, lam0, B):
     """
     # at rest frame for lam0
     lam_obs = lam0 * (1. + z)
-    w = softmax(gamma)
     spec    = np.dot(w, B)
-    mu      = project_to_bands(spec, lam_obs) * m
+    mu      = project_to_bands(spec, lam_obs) * m / (1. + z)
     ll      = -0.5 * np.sum(np.multiply(fluxes_ivar, (fluxes - mu)**2))
-    return ll * prior_z(z) * prior_gamma(gamma) * prior_m(m)
+    return ll
 
 ### Let gamma be a vector whose softmax gives weights that sum to 1
 def grad_probability_params(z, gamma, m, fluxes, fluxes_ivar, lam0, B,
@@ -122,7 +111,7 @@ B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
 M = np.exp(mus)
 
 # load in some quasar fluxes
-qso_df        = fitsio.FITS('cache/DR10Q_v2.fits')
+qso_df        = fitsio.FITS('../../data/DR10QSO/DR10Q_v2.fits')
 psf_flux      = qso_df[1]['PSFFLUX'].read()
 psf_flux_ivar = qso_df[1]['IVAR_PSFFLUX'].read()
 z             = qso_df[1]['Z_VI'].read()
@@ -130,16 +119,18 @@ print "Loaded %d spectroscopically measured quasars and their redshifts"%len(psf
 
 # choose one to work on
 n = 23
+z_n = z[n]
 y_flux      = psf_flux[n]
 y_flux_ivar = psf_flux_ivar[n]
 print "Choosing n = %d, (z = %2.2f)"%(n, z[n])
 
 # functions to pass into HMC
-def probability(q):
-    z = q[0]
-    gamma = q[1:(B.shape[0] + 1)]
-    m = q[B.shape[0] + 1]
-    return pixel_likelihood(z, gamma, m, y_flux, y_flux_ivar, lam0, B)
+def lnpdf(q):
+    z     = q[0]
+    omega = q[1:(B.shape[0] + 1)]
+    mu    = q[B.shape[0] + 1]
+    ll    =  pixel_likelihood(z, softmax(omega), np.exp(mu), y_flux, y_flux_ivar, lam0, B)
+    return ll + prior_omega(omega) + prior_mu(mu) + prior_z(z)
 
 # TODO(awu): set appropriately
 INIT_REDSHIFT = 4.0
@@ -151,7 +142,7 @@ DELTA_Z = 0.01
 DELTA_W = 0.01
 DELTA_M = 1
 
-def grad_probability(q):
+def grad_lnpdf(q):
     z = q[0]
     gamma = q[1:(B.shape[0] + 1)]
     m = q[B.shape[0] + 1]
@@ -169,35 +160,48 @@ def create_transition():
 
 if __name__ == "__main__":
     # Draw posterior samples p(w, z, m | B, y_flux, y_flux_ivar)
-    Nsamps = 10000
+    Nsamps = 5000
     w_samps = np.zeros((Nsamps, B.shape[0]))  # N samples of a K dimensional vector
     z_samps = np.zeros(Nsamps)                # N samples of a scalar
     m_samps = np.zeros(Nsamps)                # N samples of the magnitude
     likelihood_samps = np.zeros(Nsamps)
 
     samps = np.zeros((Nsamps, B.shape[0] + 2))
-    samps[0,:] = np.ones(B.shape[0] + 2)
+    samps[0,:] = np.zeros(B.shape[0] + 2)
     samps[0, 0] = INIT_REDSHIFT
-    samps[0, B.shape[0] + 1] = INIT_MAG
+    samps[0, B.shape[0] + 1] = np.log(INIT_MAG)
+    Naccept = 0
+    prop_scale = .05 * np.ones(samps.shape[1])
+    prop_scale[-1] = .2
     for s in np.arange(1, Nsamps):
-        print "Iteration", s
-        
-        probability_pre = probability(samps[s-1,:])
-        change = create_transition()
-        new_samp = samps[s-1,:] + change
-        probability_post = probability(new_samp)
 
-        alpha = probability_post / probability_pre
-        if npr.random() < alpha:
-            samps[s,:] = new_samp
+        if s > 2000: 
+            prop_scale = .01 * np.ones(samps.shape[1])
+            prop_scale[-1] = .1
+
+        probability_pre  = lnpdf(samps[s-1,:])
+        change           = create_transition()
+        change           = prop_scale * np.random.randn(samps.shape[1])
+        new_samp         = samps[s-1,:] + change
+        probability_post = lnpdf(new_samp)
+
+        # accept/reject
+        if np.log(npr.rand()) < probability_post - probability_pre:
+            samps[s,:]          = new_samp
+            likelihood_samps[s] = probability_post
+            Naccept += 1
         else:
-            samps[s,:] = samps[s-1,:]
+            samps[s,:]          = samps[s-1,:]
+            likelihood_samps[s] = probability_pre
 
-        likelihood_samps[s] = probability(samps[s, :])
-        print "z:", samps[s, 0]
-        print "w:", softmax(samps[s, 1:(B.shape[0] + 1)])
-        print "m:", samps[s, B.shape[0] + 1]
-        print "prob:", likelihood_samps[s]
+        if s % 100==0:
+            print "Iteration", s
+            print "num accept (frac): %d (%2.2f)"%(Naccept, Naccept / float(s))
+            print "z:", samps[s, 0]
+            print "change: ", change
+            print "w:", softmax(samps[s, 1:(B.shape[0] + 1)])
+            print "m:", samps[s, B.shape[0] + 1]
+            print "prob:", likelihood_samps[s]
 
     z_samps = samps[:,0]
     w_samps = samps[:,1:(B.shape[0] + 1)]
@@ -218,6 +222,10 @@ if __name__ == "__main__":
     plt.plot(range(0, len(likelihood_samps)), likelihood_samps, 'bo')
     plt.savefig('ll.png')
 
+
+    n, bins, patches = plt.hist(z_samps[2500:], 40, normed=True)
+    plt.vlines(z_n, 0, n.max())
+    plt.show()
 
 """
 if __name__ == "__main__":
