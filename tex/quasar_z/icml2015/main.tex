@@ -95,11 +95,11 @@
 ]
 
 \begin{abstract} 
-We describe a joint model of two disparate sources of astronomical data, spectroscopy and photometry, which carry information about a source of light at extremely different resolutions. 
-Our model treats the energy distribution of the radiation of a source as a latent variable, which hierarchically generates both photometric and spectroscopic observations.  
+We describe a joint model of two disparate sources of astronomical data, spectroscopy and photometry, which carry information about sources light at extremely different resolutions. 
+Our model treats the energy distribution of a source's radiation as a latent variable, which hierarchically generates both photometric and spectroscopic observations.  
 %We describe a fully generative model that combines information from a large dataset of high resolution spectroscopic measurements with a small number of broadband photometric observations, and we use it to measure the red-shift of quasars from photometry, the ``photo-z'' problem.  
-We place a structured stochastic process prior over the spectral energy distribution of a light source (e.g.~star, galaxy, or quasar) that admits a physically interpretable decomposition and allows us to tractably perform fully Bayesian inference using MCMC.  
-We use our model to compute the distribution of red-shift of quasars from five-band (low resolution) photometric data, the so called ``photo-z'' problem. 
+We place a structured stochastic process prior over the spectral energy distribution of a light source (e.g.~star, galaxy, or quasar) that admits a physically interpretable decomposition and allows us to tractably perform fully Bayesian inference using Markov Chain Monte Carlo (MCMC).  
+We use our model to compute the distribution of red-shift of quasars from five-band (low-resolution) photometric data, the so called photometric red-shift estimation (``photo-z'') problem. 
 Our method shows that tools from machine learning and Bayesian statistics can aid in the joint modeling of 
 
 Our method leverages a small number of existing examples of high resolution quasar spectra with known red-shift to build a structured prior distribution over unknown spectra.  
@@ -110,23 +110,23 @@ Enormous amounts of diverse astronomical data are \red{cite sloan digital sky su
 The spectrum of a source carries information about properties of the particular object, including effective temperature, type, red-shift, and chemical makeup.  
 
 However, measurements of astronomical spectra are produced by instruments at widely varying resolutions.  
-Spectroscopic measurements can resolve noisy measurements of the spectral energy distribution (SED) of an object (e.g.~a star, galaxy, or quasar) in finer detail than broadband photometric measurements.  For example, the Baryonic Oscillation Spectroscopic Survey \cite{dawson2013baryon} samples measurements at over four thousand wavelengths between 3,500 and 10,500 $\angstrom$.  In contrast, the photometry from the Sloan Digital Sky Survey (SDSS) \red{cite sloan}, gathers broadband photometric measurements in the u,g,r,i, and z bands.  These measurements are the weighted average response over a large swath of the spectrum.  The two methods of spectral information collection are compared in Figure~\ref{fig:filters}. 
+Spectroscopic measurements can resolve noisy measurements of the spectral energy distribution (SED) of an object (e.g.~a star, galaxy, or quasar) in finer detail than broadband photometric measurements.  For example, the Baryonic Oscillation Spectroscopic Survey (BOSS) \cite{dawson2013baryon} samples measurements at over four thousand wavelengths between 3,500 and 10,500 $\angstrom$.  In contrast, the photometry from the Sloan Digital Sky Survey (SDSS) \cite{kent1994sdss}, gathers broadband photometric measurements in the u, g, r, i, and z bands.  These measurements are the weighted average response over a large swath of the spectrum.  The two methods of spectral information collection are compared in Figure~\ref{fig:filters}. 
 
-Photometric measurements, however, are much more widely available and exist for a larger number of sources, including objects that are fainter and possibly at extremely high red-shift (farther away).  This work focuses on extracting information from observations of light sources by jointly modeling spectroscopic and photometric data.  In particular, we we focus on measuring the red-shift of quasars for which we only have photometric observations.  Quasars, or quasi-stellar radio sources, are extremely distant and energetic sources of electromagnetic radiation that can exhibit high red-shift \red{cite something here}.  Identifying and measuring the red-shift of a quasars from photometric data is a necessary task due to the widespread availability of large photometric surveys.  Photometric estimates of red-shift have the potential to guide the study of certain quasars with higher resolution instruments.  Furthermore, accurate models can aid identification and classification of faintly observed quasars in such a large photometric survey.  Study of distant quasars allow astronomers to observe the universe as it was many billions of years ago \red{need lots of references..}. 
+Photometric measurements, however, are much more widely available and exist for a larger number of sources, including objects that are fainter and possibly at extremely high redshift (farther away).  This work focuses on extracting information from observations of light sources by jointly modeling spectroscopic and photometric data.  In particular, we we focus on measuring the red-shift of quasars for which we only have photometric observations.  Quasars, or quasi-stellar radio sources, are extremely distant and energetic sources of electromagnetic radiation that can exhibit high red-shift \red{cite something here}.  Identifying and measuring the red-shift of a quasars from photometric data is a necessary task due to the widespread availability of large photometric surveys.  Photometric estimates of red-shift have the potential to guide the study of certain quasars with higher resolution instruments.  Furthermore, accurate models can aid identification and classification of faintly observed quasars in such a large photometric survey.  Study of distant quasars allow astronomers to observe the universe as it was many billions of years ago \red{need lots of references..}. 
 
 In this paper, we describe a probabilistic model that jointly describes both high resolution spectroscopic data and low resolution photometric observations of quasars in terms of their latent spectral energy distribution, luminosity, and red-shift.  We model a quasar's spectral energy as a latent variable, and describe a fully Bayesian inference procedure to compute the marginal probability distribution of a quasar's red-shift given observed photometric fluxes and their uncertainties. 
 
 \section{Background}
 The SED of an object describes the distribution of energy it radiates as a function of wavelength.  
-For example, most stars are well modeled as a blackbody, so their spectral radiance closely follows Planck's law, which describes a parametric form for the spectral energy distribution.  Resolvable stars, however, tend to be close enough that they are never observed at a non-zero redshift. 
+For example, most stars are well-modeled as blackbodies, so their spectral radiance closely follows Planck's law, which describes a parametric form for the spectral energy distribution.  Resolvable stars, however, tend to be close enough that they are never observed at a non-zero red-shift. 
 Quasars, on the other hand, have a complicated spectral energy distribution characterized by some salient features (\red{mention Ly-$\alpha$ and Lyman forest?}).  
-Furthermore, quasars can be much more luminous and at a much higher red-shift.  
+Furthermore, quasars can be much more luminous and at a much higher red-shift than stars and galaxies.  
 The effect of red-shift is the stretching of the input space of wavelengths, $\lambda\in \Lambda$, of an object's \emph{rest-frame} SED toward higher values, skewing its mass toward higher (redder) wavelengths. 
-Denoting the rest-frame SED of a quasar $n$ as a function, $f_n^{(rest)} : \Lambda \rightarrow \R_+$, the affect of red-shift on our observations is summarized by the relationship 
+Denoting the rest-frame SED of a quasar $n$ as a function, $f_n^{(\text{rest})} : \Lambda \rightarrow \R_+$, the effect of red-shift on our observations is summarized by the relationship 
 \begin{align}
-  f_n^{(obs)}(\lambda) &\propto f_n^{(rest)}(\lambda \cdot (1 + z_n)) \, .
+  f_n^{(\text{obs})}(\lambda) &\propto f_n^{(\text{rest})}(\lambda \cdot (1 + z_n)) \, .
 \end{align}
-Observed quasar spectra and their ``de-red-shifted'' rest frame spectra are depicted in Figure~\ref{fig:frames}
+Observed quasar spectra and their ``de-red-shifted'' rest frame spectra are depicted in Figure~\ref{fig:frames}.
 
 %% example of obs vs rest frame data
 \begin{figure*}[ht]
@@ -141,14 +141,16 @@ Observed quasar spectra and their ``de-red-shifted'' rest frame spectra are depi
 \end{figure*} 
 
 \subsection{Related work}
-The problem of estimating the red-shift of a source (galaxy or quasar) is known as photometric redshift estimation, or
-``photo-$z$''.  There have been many statistical and machine learning methods developed to tackle this problem. These roughly break down into template-based and regression-based methods. Template-based methods use prior knowledge from spectral energy distributions
-and match these with actual astronomical objects, while regression-based methods use fitting methods, such as neural networks and
-simple regression, on the physical properties to predict red shift. \cite{walcher2011fitting}.  Regression-based (or empirical) methods for photo-$z$ fit a functional relationship between a set of photometric features and red-shift value.  
+The problem of estimating the red-shift of a source (galaxy or quasar) is known as photometric red-shift estimation, or
+``photo-$z$''.  There have been many statistical and machine learning methods developed to tackle this problem. These roughly break down into template-based and regression-based methods. Template-based methods use prior knowledge about spectral energy distributions
+and match these with observed quasar spectra \cite{walcher2011fitting}.  Regression-based (or empirical) methods for photo-$z$ fit a functional relationship between a set of photometric features and red-shift value.  
 
 Probabilistic models for inferring red-shift from photometry have also had some success.  \cite{benitez2000bayesian} presents a thorough summary of Bayesian methods for photometric red-shift estimation from spectral templates.  
 
-\cite{budavari2001photometric} and \cite{richards2001photometric} go into specific detail for SED model based photometric redshifts for quasars.  They compare a bunch of methods. Particularly, they describe an algorithm for reconstruction a quasar spectrum template from photometric observations and spectroscopic redshifts.  It seems sorta like a dynamic K-means/EM algorithm (they add spectral types as needed), and does a decent job reconstructing bumps where the emission lines are.  
+\cite{budavari2001photometric} and \cite{richards2001photometric} go into specific detail on SED
+model-based photometric redshift estimation for quasars.  They compare many methods. Particularly, they describe an algorithm for reconstruction a quasar spectrum template from photometric observations and spectroscopic redshifts.  The method is very similar to a dynamic K-means or expectation-maximization
+algorithm, which spectral types added as needed, and does a decent job reconstructing the locations
+of emissions lines in the spectrum.
 
 \cite{brescia2013photometric} use a multi-layer perceptron with a combination of SDSS, UKIDSS, and WISE photometric fluxes datasets, to compute a regression function for red-shift. Though predictions are accurate, we do not have an idea of the distribution over redshifts, i.e., uncertainty in our predictions.
 
@@ -187,22 +189,24 @@ and for each quasar, $n$
 \begin{align}
   \mathbf{w}_n &\sim p(\mathbf{w}) \, , \text{ s.t. } \sum_{w_k} = 1  \\
   m_n  &\sim p(m) \, \text{ s.t. } m_n > 0 \\
-  f^{(rest)}_n(\cdot) &= \sum_{k} w_k B_k(\cdot) &&\text{ (SED) }\\
-  \tilde f^{(rest)}_n(\cdot) &= m_n \sum_{k} w_k B_k(\cdot) \\
+  f^{(\text{rest})}_n(\cdot) &= \sum_{k} w_k B_k(\cdot) &&\text{ (SED) }\\
+  \tilde f^{(\text{rest})}_n(\cdot) &= m_n \sum_{k} w_k B_k(\cdot) \\
   z_n &\sim p(z) &&\text{(red-shift)}
 \end{align}
 where $p(\mathbf{w})$ is a prior over weights that sum to one, and $p(z)$ is a prior over red-shifts. 
 
-Each positive basis function, $B_k$ is normalized to integrate to one, and each quasar's weight vector $\mathbf{w}_n$ also sums to one.  This allows us to interpret the $f^{(rest)}_n(\cdot)$ function as a density, scaled by $m_n$. 
+Each positive basis function, $B_k$ is normalized to integrate to one, and each quasar's weight vector $\mathbf{w}_n$ also sums to one.  This allows us to interpret the $f^{(\text{rest})}_n(\cdot)$ function as a density, scaled by $m_n$. 
 \red{Todo: Warp input for varying lengthscale}.  
 
 For each quasar $n$, we observe noisy samples of the red-shifted and scaled spectral energy distribution at a grid of wavelengths $\lambda \in \{\lambda_1, \dots, \lambda_P \}$.  Our \emph{observation frame} samples are modeled
 \begin{align}
   x_{n, \lambda} 
-    &\sim \mathcal{N}\left( \frac{1}{(1 + z_n)} \tilde f_n^{(rest)}( \lambda \cdot (1 + z_n) ), \sigma_{n,\lambda}^2 \right)
+    &\sim \mathcal{N}\left( \frac{1}{(1 + z_n)} \tilde f_n^{(\text{rest})}( \lambda \cdot (1 + z_n) ), \sigma_{n,\lambda}^2 \right)
     \label{eq:spec} 
 \end{align}
-where $\sigma_{n, \lambda}^2$ is known instrument variance. The BOSS spectra (and our rest-frame bassi) are stored in units ergs/cm$^2$/s/$\angstrom$. 
+where $\sigma_{n, \lambda}^2$ is known measurement variance from the instruments
+used to make the observations.
+The BOSS spectra (and our rest-frame basis) are stored in units ergs/cm$^2$/s/$\angstrom$. 
 
 \subsection{Photometric Observations}
 Photometric observations summarize the number of photon observations over a large swatch of the wavelength spectrum.  Roughly, a photometric flux measures the number of photons hitting the instrument's lens, filtered by a band-specific sensitivity curve, over the duration of an exposure. 
@@ -211,18 +215,18 @@ The photometric data are measured in the SDSS $ugriz$ bands, giving us a vector,
 Each band measures photon observations at each wavelength in proportion to a known filter sensitivity, $S_{band}(\lambda)$. 
 The filter sensitivities for the SDSS $ugriz$ bands are depicted in Figure~\ref{fig:filters}, with an example (observation frame) quasar spectrum overlaid.   The actual measured fluxes can be computed by integrating the full object's spectrum, $m_n \cdot f_n(\lambda)$ against the filters.  For a band $b \in \{u, g, r, i, z \}$
 \begin{align}
-  \mu_b &= \int f^{(obs)}_n(\lambda) S_b(\lambda) C(\lambda) d \lambda  \\
-        &\equiv I_b(f_n^{(rest)}, z_n)
+  \mu_b &= \int f^{(\text{obs})}_n(\lambda) S_b(\lambda) C(\lambda) d \lambda  \\
+        &\equiv I_b(f_n^{(\text{rest})}, z_n)
 \end{align}
 where $C(\lambda)$ is a conversion factor to go from the units of $f_n(\lambda)$ to nanomaggies.  This projection onto SDSS bands results in five fluxes, which are modeled as independent Gaussian random variables with known variance (derived from a pixel to flux inference procedure)
 \begin{align}
-  y_{n,b} &\sim \mathcal{N}( I_b(f_n^{(rest)}, z_n), \tau_{n,b} )
+  y_{n,b} &\sim \mathcal{N}( I_b(f_n^{(\text{rest})}, z_n), \tau_{n,b} )
   \label{eq:phot}
 \end{align}
-Given a low dimensional summary of $f_n^{(rest)}$, we can rewrite $I$ as a function of those parameters. 
+Given a low dimensional summary of $f_n^{(\text{rest})}$, we can rewrite $I$ as a function of those parameters. 
 
 \subsection{Joint model}
-Given a sample of $M$ noisy full spectra and their sample locations, $\{\mathbf{x}_m, \lambda^{(obs)}_m \}_{m=1}^M$, and a set of $N$ photometric fluxes, $\{\mathbf{y}_n\}_{n=1}^N$, our full likelihood in terms of $\{ \mathbf{w}_m \}_{m=1}^M, B_1, \dots, B_K, \{ w_n \}_{n=1}^N$, and $\{z_m\}, \{z_n\}$ is 
+Given a sample of $M$ noisy full spectra and their sample locations, $\{\mathbf{x}_m, \lambda^{(\text{obs})}_m \}_{m=1}^M$, and a set of $N$ photometric fluxes, $\{\mathbf{y}_n\}_{n=1}^N$, our full likelihood in terms of $\{ \mathbf{w}_m \}_{m=1}^M, B_1, \dots, B_K, \{ w_n \}_{n=1}^N$, and $\{z_m\}, \{z_n\}$ is 
 \begin{align*}
   L( \{ \mathbf{w}_m, z_m \}, &\{ B_k \}, \{ \mathbf{w}_n, z_n \} )  \\
     = & \prod_{m=1}^M p( \mathbf{x}_m | \mathbf{w}_m, z_m, \{ B_k \})  \\
