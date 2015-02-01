@@ -4,29 +4,40 @@ import numpy.random as npr
 from scipy.optimize import minimize
 from hmc import hmc
 import sys, os
-from redshift_utils import project_to_bands
+from redshift_utils import project_to_bands, check_grad
 from quasar_fit_basis import load_basis_fit
 import scipy.stats
 import matplotlib.pyplot as plt
 import copy
+import seaborn as sns
+sns.set_style("white")
+current_palette = sns.color_palette()
+
 
 ### helper functions
 def softmax(x):
-    return np.exp(x) / sum(np.exp(x))
+    return np.exp(x) / np.sum(np.exp(x))
 
 def prior_omega(omega):
     return -.5 * omega.dot(omega)
+
+def dprior_omega(omega):
+    return -omega
 
 # TODO(awu): Gaussian for now
 MEAN_Z_DIST = 2.5
 STDEV_Z_DIST = 1.0
 def prior_z(z): 
     return -(z - MEAN_Z_DIST)*(z- MEAN_Z_DIST) / (2. * STDEV_Z_DIST * STDEV_Z_DIST)
+def dprior_z(z):
+    return -(z - MEAN_Z_DIST) / (STDEV_Z_DIST * STDEV_Z_DIST)
 
 # TODO(awu): lognormal for now
 STDEV_M_DIST = 20.0
 def prior_mu(mu):
     return - mu * mu / (2. * STDEV_M_DIST*STDEV_M_DIST)
+def dprior_mu(mu):
+    return - mu / (STDEV_M_DIST*STDEV_M_DIST)
 
 ### Likelihood of 5-band SDSS flux given weights, 
 def pixel_likelihood(z, w, m, fluxes, fluxes_ivar, lam0, B):
@@ -118,7 +129,7 @@ z             = qso_df[1]['Z_VI'].read()
 print "Loaded %d spectroscopically measured quasars and their redshifts"%len(psf_flux)
 
 # choose one to work on
-n = 23
+n = 123
 z_n = z[n]
 y_flux      = psf_flux[n]
 y_flux_ivar = psf_flux_ivar[n]
@@ -131,6 +142,16 @@ def lnpdf(q):
     mu    = q[B.shape[0] + 1]
     ll    =  pixel_likelihood(z, softmax(omega), np.exp(mu), y_flux, y_flux_ivar, lam0, B)
     return ll + prior_omega(omega) + prior_mu(mu) + prior_z(z)
+
+def dlnpdf(q):
+    de = np.zeros(q.shape)
+    grad_vec = np.zeros(q.shape)
+    for i in range(len(q)):
+        de[i] = 1e-6
+        grad_vec[i] = (lnpdf(q + de) - lnpdf(q - de)) / 2e-6
+        de[i] = 0.0
+    return grad_vec
+
 
 # TODO(awu): set appropriately
 INIT_REDSHIFT = 4.0
@@ -160,7 +181,7 @@ def create_transition():
 
 if __name__ == "__main__":
     # Draw posterior samples p(w, z, m | B, y_flux, y_flux_ivar)
-    Nsamps = 5000
+    Nsamps = 1000
     w_samps = np.zeros((Nsamps, B.shape[0]))  # N samples of a K dimensional vector
     z_samps = np.zeros(Nsamps)                # N samples of a scalar
     m_samps = np.zeros(Nsamps)                # N samples of the magnitude
@@ -170,38 +191,81 @@ if __name__ == "__main__":
     samps[0,:] = np.zeros(B.shape[0] + 2)
     samps[0, 0] = INIT_REDSHIFT
     samps[0, B.shape[0] + 1] = np.log(INIT_MAG)
+    likelihood_samps[0] = lnpdf(samps[0,:])
+
+    ## sanity check gradient
+    check_grad(fun = lnpdf, jac = dlnpdf, th = samps[0,:])
+
+    ## sample
     Naccept = 0
     prop_scale = .05 * np.ones(samps.shape[1])
     prop_scale[-1] = .2
+    step_sz = .015
+    avg_accept_rate = .9
+    print "{0:15}|{1:15}|{2:15}|{3:15}|{4:15}".format(
+        " iter ",
+        " ll ",
+        " step_sz ",
+        " Naccept(rate)",
+        " z ")
     for s in np.arange(1, Nsamps):
 
-        if s > 2000: 
-            prop_scale = .01 * np.ones(samps.shape[1])
-            prop_scale[-1] = .1
+        #if s > 2000: 
+        #    prop_scale = .01 * np.ones(samps.shape[1])
+        #    prop_scale[-1] = .1
+        if s > Nsamps/2:
+            adaptive_step_sz = False
 
-        probability_pre  = lnpdf(samps[s-1,:])
-        change           = create_transition()
-        change           = prop_scale * np.random.randn(samps.shape[1])
-        new_samp         = samps[s-1,:] + change
-        probability_post = lnpdf(new_samp)
 
-        # accept/reject
-        if np.log(npr.rand()) < probability_post - probability_pre:
-            samps[s,:]          = new_samp
-            likelihood_samps[s] = probability_post
-            Naccept += 1
-        else:
-            samps[s,:]          = samps[s-1,:]
-            likelihood_samps[s] = probability_pre
+        samps[s,:], step_sz, avg_accept_rate = hmc(
+                 U       = lnpdf,
+                 grad_U  = dlnpdf,
+                 step_sz = step_sz,
+                 n_steps = 20,
+                 q_curr  = samps[s-1,:],
+                 negative_log_prob = False, 
+                 adaptive_step_sz  = True, 
+                 min_step_sz       = 0.00005,
+                 avg_accept_rate   = avg_accept_rate, 
+                 tgt_accept_rate   = .55)
 
-        if s % 100==0:
-            print "Iteration", s
-            print "num accept (frac): %d (%2.2f)"%(Naccept, Naccept / float(s))
-            print "z:", samps[s, 0]
-            print "change: ", change
-            print "w:", softmax(samps[s, 1:(B.shape[0] + 1)])
-            print "m:", samps[s, B.shape[0] + 1]
-            print "prob:", likelihood_samps[s]
+        ## store sample
+        likelihood_samps[s] = lnpdf(samps[s, :])
+        if likelihood_samps[s] == likelihood_samps[s-1]: 
+            Naccept += 1 
+        if s % 2 == 0:
+            print "{0:15}|{1:15}|{2:15}|{3:15}|{4:15}".format(
+                " %d / %d "%(s, Nsamps),
+                " %2.4f"%likelihood_samps[s],
+                " %2.5f"%step_sz,
+                " %d (%2.2f)"%(Naccept, avg_accept_rate), 
+                " %2.2f (%2.2f)"%(samps[s,0], z_n))
+        #if n % 200 == 0: 
+        #    save_basis_samples(th_samps, ll_samps, lam0, lam0_delta, parser, chain_idx)
+
+        #probability_pre  = lnpdf(samps[s-1,:])
+        #change           = create_transition()
+        #change           = prop_scale * np.random.randn(samps.shape[1])
+        #new_samp         = samps[s-1,:] + change
+        #probability_post = lnpdf(new_samp)
+
+        ## accept/reject
+        #if np.log(npr.rand()) < probability_post - probability_pre:
+        #    samps[s,:]          = new_samp
+        #    likelihood_samps[s] = probability_post
+        #    Naccept += 1
+        #else:
+        #    samps[s,:]          = samps[s-1,:]
+        #    likelihood_samps[s] = probability_pre
+
+        #if s % 100==0:
+        #    print "Iteration", s
+        #    print "num accept (frac): %d (%2.2f)"%(Naccept, Naccept / float(s))
+        #    print "z:", samps[s, 0]
+        #    print "change: ", change
+        #    print "w:", softmax(samps[s, 1:(B.shape[0] + 1)])
+        #    print "m:", samps[s, B.shape[0] + 1]
+        #    print "prob:", likelihood_samps[s]
 
     z_samps = samps[:,0]
     w_samps = samps[:,1:(B.shape[0] + 1)]
@@ -222,10 +286,14 @@ if __name__ == "__main__":
     plt.plot(range(0, len(likelihood_samps)), likelihood_samps, 'bo')
     plt.savefig('ll.png')
 
-
-    n, bins, patches = plt.hist(z_samps[2500:], 40, normed=True)
-    plt.vlines(z_n, 0, n.max())
+    cnts, bins, patches = plt.hist(z_samps[Nsamps/2:], 15, normed=True, alpha=.35)
+    plt.vlines(z_samps[Nsamps/2:].mean(), 0, cnts.max(), linewidth=4, 
+               color=sns.color_palette()[1], label='$E[z_{photo}]$')
+    plt.vlines(z_n, 0, cnts.max(), linewidth=4, color="black", label='$z_{spec}$')
+    plt.legend(fontsize=15)
+    plt.savefig("z_compare_idx_%d.pdf"%n, bbox_inches='tight')
     plt.show()
+
 
 """
 if __name__ == "__main__":
