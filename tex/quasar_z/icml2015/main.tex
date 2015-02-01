@@ -47,7 +47,7 @@
 \newcommand{\Ut}{\tilde{U}}
 \DeclareMathOperator*{\argmax}{arg\,max}
 \newcommand{\angstrom}{\textup{\AA}}
-\newcommand{\red}[1]{\textcolor{red}{#1}}
+\newcommand{\red}[1]{\textcolor{red}{[TODO: #1]}}
 
 
 % Employ the following version of the ``usepackage'' statement for
@@ -76,15 +76,16 @@
 % unless you've provided the [accepted] option to the icml2015
 % package.
 \icmlauthor{Andrew Miller}{acm@seas.harvard.edu}
-%\icmladdress{Harvard University,
-%             33 Oxford St, Cambridge, MA USA}
 \icmlauthor{Albert Wu}{awu@college.harvard.edu}
-\icmlauthor{Ryan Adams}{rpa@seas.harvard.edu}
 \icmladdress{Harvard University,
-             33 Oxford St, Cambridge, MA, 02138 USA}
+             33 Oxford St, Cambridge, MA USA}
 \icmlauthor{David Schlegel}{djschlegel@lbl.gov}
 \icmladdress{Lawrence Berkeley National Laboratory, 
              1 Cyclotron Road, Berkeley, CA, 94720 USA}
+\icmlauthor{Ryan Adams}{rpa@seas.harvard.edu}
+\icmladdress{Harvard University,
+             33 Oxford St, Cambridge, MA, 02138 USA}
+
              
 % You may provide any keywords that you 
 % find helpful for describing your paper; these are used to populate 
@@ -95,33 +96,46 @@
 ]
 
 \begin{abstract} 
-We describe a joint model of two disparate sources of astronomical data, spectroscopy and photometry, which carry information about a source of light at extremely different resolutions. 
-Our model treats the energy distribution of the radiation of a source as a latent variable, which hierarchically generates both photometric and spectroscopic observations.  
+We describe a method for combining information from two disparate sources of astronomical data, spectroscopy and photometry, which carry information about sources of light (e.g.~stars, galaxies, quasars) at extremely different resolutions. 
+Our model treats the spectral energy distribution (SED) of the radiation of a source as a latent variable, hierarchically generating both photometric and spectroscopic observations.  
+Furthermore, we view the problem of SED inference as a density estimation problem, placing a flexible nonparametric prior over the SED of a light source that admits a physically interpretable decomposition and allows us to tractably perform fully Bayesian inference using MCMC.  
+We exhibit the utility of our model by using it to predict the distribution of the red-shift of quasars from five-band (low resolution) photometric data, the so called ``photo-z'' problem. 
+Our method shows that tools from machine learning and Bayesian statistics can allow us to jointly model multiple resolutions of information to make accurate predictions with well-characterized uncertainties.  
+%Our method leverages a small number of existing examples of high resolution quasar spectra with known red-shift to build a structured prior distribution over unknown spectra.  
 %We describe a fully generative model that combines information from a large dataset of high resolution spectroscopic measurements with a small number of broadband photometric observations, and we use it to measure the red-shift of quasars from photometry, the ``photo-z'' problem.  
-We place a structured stochastic process prior over the spectral energy distribution of a light source (e.g.~star, galaxy, or quasar) that admits a physically interpretable decomposition and allows us to tractably perform fully Bayesian inference using MCMC.  
-We use our model to compute the distribution of red-shift of quasars from five-band (low resolution) photometric data, the so called ``photo-z'' problem. 
-Our method shows that tools from machine learning and Bayesian statistics can aid in the joint modeling of 
-
-Our method leverages a small number of existing examples of high resolution quasar spectra with known red-shift to build a structured prior distribution over unknown spectra.  
 \end{abstract} 
 
 \section{Introduction}
-Enormous amounts of diverse astronomical data are \red{cite sloan digital sky survey, other astronomical surveys}.  Among this collection are measurements of spectral energy distribution (WED) of a light source (e.g.~a star, galaxy, quasar).  
-The spectrum of a source carries information about properties of the particular object, including effective temperature, type, red-shift, and chemical makeup.  
+Enormous amounts of astronomical data are collected by a range of instruments at multiple resolutions, providing information about billions of sources of light in the observable universe. \red{cite sloan digital sky survey, other astronomical surveys}.  
+Among this collection of data are measurements of the spectral energy distribution (SED) of a source.  
+The SED describes the distribution of energy radiated by a source over the spectrum of wavelengths or energy levels.  
+For intuition, the SED of a star at around $5,800\, K$ (like our sun) radiates most of it's energy in the $4,000 \angstrom$ to $7,000\angstrom$ range, which corresponds roughly to the range of visible light.  
+However, stars tend to have simple distributions (well-modeled by Planck's law), whereas other objects, such as galaxies and quasars, can have much more complicated SEDs.  
+The SED of a source is an object of interest because it carries information about the physical properties of the particular object, which can include type of source, effective temperature, distance to earth, and red-shift. 
 
-However, measurements of astronomical spectra are produced by instruments at widely varying resolutions.  
-Spectroscopic measurements can resolve noisy measurements of the spectral energy distribution (SED) of an object (e.g.~a star, galaxy, or quasar) in finer detail than broadband photometric measurements.  For example, the Baryonic Oscillation Spectroscopic Survey \cite{dawson2013baryon} samples measurements at over four thousand wavelengths between 3,500 and 10,500 $\angstrom$.  In contrast, the photometry from the Sloan Digital Sky Survey (SDSS) \red{cite sloan}, gathers broadband photometric measurements in the u,g,r,i, and z bands.  These measurements are the weighted average response over a large swath of the spectrum.  The two methods of spectral information collection are compared in Figure~\ref{fig:filters}. 
+Measurements of SEDs, however, are produced by instruments at widely varying resolutions.  
+Spectroscopic measurements can can resolve noisy measurements of a source's SED in finer detail than broadband photometric measurements.  For example, the Baryonic Oscillation Spectroscopic Survey \cite{dawson2013baryon} measures SED samples at over four thousand wavelengths between 3,500 and 10,500 $\angstrom$.  
+In contrast, the photometry from the Sloan Digital Sky Survey (SDSS) \red{cite sloan}, gathers broadband photometric measurements in the $u,g,r,i,$ and $z$ bands.  These measurements are the weighted average response over a large swath of the wavelength spectrum, often expressed as a vector of band-specific fluxes, roughly corresponding to the number of photons measured over the area and duration of an exposure.  
+The two methods of spectral information collection are compared in Figure~\ref{fig:filters}. 
 
-Photometric measurements, however, are much more widely available and exist for a larger number of sources, including objects that are fainter and possibly at extremely high red-shift (farther away).  This work focuses on extracting information from observations of light sources by jointly modeling spectroscopic and photometric data.  In particular, we we focus on measuring the red-shift of quasars for which we only have photometric observations.  Quasars, or quasi-stellar radio sources, are extremely distant and energetic sources of electromagnetic radiation that can exhibit high red-shift \red{cite something here}.  Identifying and measuring the red-shift of a quasars from photometric data is a necessary task due to the widespread availability of large photometric surveys.  Photometric estimates of red-shift have the potential to guide the study of certain quasars with higher resolution instruments.  Furthermore, accurate models can aid identification and classification of faintly observed quasars in such a large photometric survey.  Study of distant quasars allow astronomers to observe the universe as it was many billions of years ago \red{need lots of references..}. 
+Despite carrying less information, broadband photometric measurements are more widely available and exist for a larger number of sources than spectroscopic measurements. 
+This work develops a method for extracting information from observations of light sources by \emph{jointly} modeling spectroscopic and photometric data.  
+In particular, we we focus on measuring the red-shift of quasars for which we only have photometric observations.  
+Quasars, or quasi-stellar radio sources, are extremely distant and energetic sources of electromagnetic radiation that can exhibit high red-shift \red{cite something here}.  
+Estimates and accurate characterization of uncertainty of red-shift measurements from photometry have the potential to guide the study of certain quasars with higher resolution instruments.  
+Furthermore, accurate models can aid the automation of identifying and classifying faintly observed quasars in large photometric surveys.  
+%Identifying and measuring the red-shift of a quasars from photometric data is a necessary task due to the widespread availability of large photometric surveys.  
 
-In this paper, we describe a probabilistic model that jointly describes both high resolution spectroscopic data and low resolution photometric observations of quasars in terms of their latent spectral energy distribution, luminosity, and red-shift.  We model a quasar's spectral energy as a latent variable, and describe a fully Bayesian inference procedure to compute the marginal probability distribution of a quasar's red-shift given observed photometric fluxes and their uncertainties. 
+%Study of distant quasars allow astronomers to observe the universe as it was many billions of years ago \red{need lots of references.}. 
+In this paper, we describe a probabilistic model that jointly describes both high resolution spectroscopic data and low resolution photometric observations of quasars in terms of their latent SEDs, luminosity, and red-shift.  We model a quasar's spectral energy as a latent variable, and describe a fully Bayesian inference procedure to compute the marginal probability distribution of a quasar's red-shift given observed photometric fluxes and their uncertainties.  The following section provides relevant application and statistical background, as well as related work on the ``photo-z'' problem.  Section~\ref{sec:model} describes our probabilistic model of SEDs and broadband photometric measurements.  Section~\ref{sec:inference} outlines our MCMC-based inference method for efficiently computing statistics of the posterior distribution. Section~\ref{sec:experiments} presents red-shift and SED predictions from photometric measurements, among other model summaries.    
 
 \section{Background}
+\label{sec:background}
 The SED of an object describes the distribution of energy it radiates as a function of wavelength.  
 For example, most stars are well modeled as a blackbody, so their spectral radiance closely follows Planck's law, which describes a parametric form for the spectral energy distribution.  Resolvable stars, however, tend to be close enough that they are never observed at a non-zero redshift. 
 Quasars, on the other hand, have a complicated spectral energy distribution characterized by some salient features (\red{mention Ly-$\alpha$ and Lyman forest?}).  
 Furthermore, quasars can be much more luminous and at a much higher red-shift.  
-The effect of red-shift is the stretching of the input space of wavelengths, $\lambda\in \Lambda$, of an object's \emph{rest-frame} SED toward higher values, skewing its mass toward higher (redder) wavelengths. 
+The effect of red-shift is the stretching of the input space of wavelengths, $\lambda\in \Lambda$, of an object's \emph{rest-frame} SED toward longer wavelength values, skewing its mass toward longer (redder) wavelengths. 
 Denoting the rest-frame SED of a quasar $n$ as a function, $f_n^{(rest)} : \Lambda \rightarrow \R_+$, the affect of red-shift on our observations is summarized by the relationship 
 \begin{align}
   f_n^{(obs)}(\lambda) &\propto f_n^{(rest)}(\lambda \cdot (1 + z_n)) \, .
@@ -172,6 +186,7 @@ approaches into a single probabilistic framework, distinguishing methods based o
 %----------------------------------------------------------------------------------
 %----------------------------------------------------------------------------------
 \section{Model}
+\label{sec:model}
 This section describes the details of our probabilistic model for spectroscopic and photometric observations.  
 
 \subsection{Stochastic Process Model of Spectra}
@@ -252,6 +267,7 @@ where we condition the photometric weights on the spectroscopically fit weights.
 %----------------------------------------------------------------------------------
 %----------------------------------------------------------------------------------
 \section{Inference}
+\label{sec:inference}
 The ``photo-z'' tasks requires that we compute posterior marginal distributions of $z$, $\mathbf{w}$ and $m$.  To simplify notation, let $\mathbf{X} = \{\mathbf{x}_m, \lambda^{(obs)}_m \}_{m=1}^M$ and $\mathbf{Y} = ( \mathbf{y}_1, \dots, \mathbf{y}_N )^\trans$.   
 For example, we wish to compute the posterior marginal distribution for
 \begin{align}

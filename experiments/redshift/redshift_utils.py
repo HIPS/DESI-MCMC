@@ -230,7 +230,7 @@ def project_to_bands(spectra, wavelengths):
         norm        = sum(sensitivity)
         # conversion
         flambda2fnu  = wavelengths**2 / 2.99792e18
-        fthru        = np.sum(sensitivity * spectra * flambda2fnu) / norm #np.multiply(model_matched, flambda2fnu)) / norm 
+        fthru        = np.sum(sensitivity * spectra * flambda2fnu) / norm 
         #mags         = -2.5 * np.log10(fthru) - (48.6 - 2.5*17)
         #fluxes[i]    = np.power(10., (mags - 22.5)/-2.5)
         # We don't have to log and exponentiate 
@@ -305,6 +305,10 @@ def check_grad(fun, jac, th):
     nd          = (test_fun(1e-4) - test_fun(-1e-4)) / 2e-4
     ad          = np.dot(jac(th).ravel(), rand_dir)
     print "Checking grads. Relative diff is: {0}".format((nd - ad)/np.abs(nd))
+
+def softmax(x):
+    x_tilde = np.exp(x)
+    return x_tilde / x_tilde.sum()
 
 class ParamParser(object):
     """ Helper class to handle different slicing for different parameters

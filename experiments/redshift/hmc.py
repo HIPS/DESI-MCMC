@@ -88,7 +88,7 @@ def hmc(U,
 
         return (q_next, new_step_sz, new_accept_rate)
     else:
-        return q_next
+        return q_next, step_sz, 0.0
 
 def test_hmc():
     """
