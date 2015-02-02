@@ -470,10 +470,30 @@ MAPE &  0.397 & 0.113 & 0.090 & 0.063 & 0.022 \\
 %----------------------------------------------------------------------------------
 %----------------------------------------------------------------------------------
 \section{Discussion}
+
+Therefore, we have showed that we can use a generative model involving a basis
+of SEDs, mixture weights for the basis, and red-shift
+that jointly generates both photometric and spectral observations. Furthermore, we are able
+to successfully and accurately perform inference on these latent variables through sampling methods
+such as Hamiltonian Monte Carlo.
+ 
+There is still more work to do. We want to incorporate
+more factors into our model in order to create a more realistic
+generative model and thus more accurate inference. This involves
+including physical characteristics such as the distance of stars and dust in either the atmosphere
+or the universe.
+
+More generally, we want to create a model that can infer redshift from pixels without
+involving fluxes. We can still use our approach of jointly
+modeling redshift and pixel data, since pixel appearance models for 
+quasars are relatively well-known. Furthermore, by extending our
+pixel appearance models to galaxies and stars, we can create
+a model for automatic classification of galaxies,
+stars, and quasars.
+
 \red{Disucssion and future work.  Future work includes 
 \begin{itemize}
   \item Direct inference from pixels to red-shift (no flux step)
-  \item incorporation of new physical characteristics (distance, dust, etc)
   \item incorporation of more broadband photometry
   \item models for automatic classification of galaxies, stars, quasars
 \end{itemize}
