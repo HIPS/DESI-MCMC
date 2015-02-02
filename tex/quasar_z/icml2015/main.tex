@@ -233,11 +233,12 @@ approaches into a single probabilistic framework, distinguishing methods based o
 \begin{figure}
 \input{graph_model}
 \caption{Graphical model representation of the joint photometry and spectroscopy model.  The left shaded variables represent spectroscopically measured samples and their variances.  The right shaded variables represent photometrically measured fluxes and their variances. }
+\label{fig:graphical}
 \end{figure}
 
 
 \label{sec:model}
-This section describes the details of our probabilistic model for spectroscopic and photometric observations.  
+This section describes the details of our joint probabilistic model of spectroscopic and photometric observations.  
 
 \subsection{Stochastic Process Model of Spectra}
 The SED of a quasar is a nonnegative valued function $f : \Lambda \rightarrow \R^+$, where $\Lambda$ denotes the range of wavelengths and $\R^+$ are nonnegative real-valued numbers.  However, quasar SEDs are highly structured, and we model this structure by imposing the assumption that each SED is a convex mixture of a small number, $K$, of latent, positive basis functions (or templates).  
@@ -284,13 +285,12 @@ SDSS photometric data are measured in $ugriz$ bands, giving us a vector, $\mathb
 Each band measures photon observations at each wavelength in proportion to a known filter sensitivity, $S_{\text{band}}(\lambda)$. 
 The filter sensitivities for the SDSS $ugriz$ bands are depicted in Figure~\ref{fig:filters}, with an example observation frame quasar SED overlaid.  The actual measured fluxes can be computed by integrating the full object's spectrum, $m_n \cdot f_n(\lambda)$ against the filters.  For a band $b \in \{u, g, r, i, z \}$
 \begin{align}
-  \mu_b &= \int f^{(\text{obs})}_n(\lambda) S_b(\lambda) C(\lambda) d \lambda  \\
-        &\equiv I_b(f_n^{(\text{rest})}, z_n)
+  \mu_b(f_n^{(\text{rest})}, z_n) &= \int f^{(\text{obs})}_n(\lambda) S_b(\lambda) C(\lambda) d \lambda 
 \end{align}
 where $C(\lambda)$ is a conversion factor to go from the units of $f_n(\lambda)$ to nanomaggies \red{ write out the conversion }. We use $I_b$ to represent the full function from 
 a rest spectrum and red shift to a band-specific flux. This projection onto SDSS bands results in five fluxes, which are modeled as independent Gaussian random variables with known variance
 \begin{align}
-  y_{n,b} | \mathbf{w}_n, z_n, m_n, B &\sim \mathcal{N}( I_b(f_n^{(\text{obs})}, z_n), \tau_{n,b} ) \, .
+  y_{n,b} | \mathbf{w}_n, z_n, m_n, B &\sim \mathcal{N}( \mu_b(f_n^{(\text{obs})}, z_n), \tau_{n,b} ) \, .
 \end{align}
 
 Conditioned on the basis, $\{B_k\}$, we can represent $f_n^{(\text{rest})}$ with a low-dimensional vector.  We overload notation, and re-write the conditional likelihood of photometric observations as
@@ -307,7 +307,7 @@ Given a sample of $M$ noisy full spectra and their sample locations, $\{\mathbf{
     = & \prod_{m=1}^M p( \mathbf{x}_m | \mathbf{w}_m, z_m, \{ B_k \})  \\
       & \times \prod_{n=1}^N p( \mathbf{y}_n | \mathbf{w}_m, z_m, \{ B_k \})
 \end{align*}
-where the probability distribution of the first term in the product is given by \ref{eq:spec}, and the distribution for the second term in the product is given by \ref{eq:phot}.  
+where the probability distribution of the first term in the product is given by \ref{eq:spec}, and the distribution for the second term in the product is given by \ref{eq:phot}.  The joint distribution is depicted as a graphical model in Figure~\ref{fig:graphical}.
 
 We express the joint prior distribution over weights $\mathbf{w}_n$, $\mathbf{w}_m$, and basis $\{B_k\}$
 \begin{align}
@@ -317,22 +317,20 @@ We express the joint prior distribution over weights $\mathbf{w}_n$, $\mathbf{w}
 \end{align}
 where we condition the photometric weights on the spectroscopically fit weights.  
 
-
 %----------------------------------------------------------------------------------
 %----------------------------------------------------------------------------------
 %----------------------------------------------------------------------------------
 \section{Inference}
 \label{sec:inference}
-The ``photo-z'' tasks requires that we compute posterior marginal distributions of $z$, $\mathbf{w}$ and $m$.  To simplify notation, let $\mathbf{X} = \{\mathbf{x}_m, \lambda^{(obs)}_m \}_{m=1}^M$ and $\mathbf{Y} = ( \mathbf{y}_1, \dots, \mathbf{y}_N )^\trans$.   
-For example, we wish to compute the posterior marginal distribution for
+The ``photo-z'' tasks requires that we compute posterior marginal distributions of $z$, $\mathbf{w}$, and $m$.  To simplify notation, let $\mathbf{X} = \{\mathbf{x}_m, \lambda^{(obs)}_m \}_{m=1}^M$ and $\mathbf{Y} = ( \mathbf{y}_1, \dots, \mathbf{y}_N )^\trans$.   
+For example, to compute expectations with respect to the marginal posterior distribution over quasar red-shift, we will want to produce posterior samples of $B$ and $\mathbf{w}_n$
 \begin{align}
-  p(z_n | \mathbf{y}_n, \mathbf{X}) 
-    &= \int p(z_n, \mathbf{w}_n, B | \mathbf{y}_n, \mathbf{X}) d\mathbf{w}_n dB \\
-    &= \int p(z_n, \mathbf{w}_n | \mathbf{y}_n, B) p(B | \mathbf{X}) d\mathbf{w}_n dB
+  E[ g(z_n) | mathbf{y}_n, \mathbf{X} ]
+    &\approx \sum_{i} f(z_n^{(i)})
+    &= \int z_n p(z_n, \mathbf{w}_n, B | \mathbf{y}_n, \mathbf{X}) d\mathbf{w}_n dB \\
+    &\approx \sum_{i} z_n p(z_n, \mathbf{w}_n | \mathbf{y}_n B) \, B
 \end{align}
-This section outlines our MCMC procedure to compute posterior samples of $\mathbf{w}_n, z_n, m_n$ and $B$ given the sample of spectra, $\mathbf{X}$, and photometric fluxes $\mathbf{y}_{ugriz}$.  
-
-Due to analytic intractability, we numerically integrate expressions $\int_\Lambda f_n^{(obs)}(\lambda) d\lambda$. 
+This section outlines our MCMC procedure to compute posterior samples of $\mathbf{w}_n, z_n, m_n$ and $B$ given the sample of spectra, $\mathbf{X}$, and photometric fluxes $\mathbf{y}_{ugriz}$.  Due to analytic intractability, we numerically integrate expressions $\int_\Lambda f_n^{(obs)}(\lambda) d\lambda$. 
 
 \subsection{Sampling $B$}
 To accelerate computation, we use only information present in $\mathbf{X}$ to draw samples of $B_1, \dots, B_K$.  That is, we approximate the full conditional distribution 
@@ -340,15 +338,13 @@ To accelerate computation, we use only information present in $\mathbf{X}$ to dr
   p(B_1,\dots, B_k | \mathbf{X}, \mathbf{Y}) 
     &\approx p(B_1, \dots, B_k | \mathbf{X})
 \end{align}
-We expect this to have little effect on the distribution, as the amount of information about $B$ present in $\mathbf{X}$ is expected to dwarf that of $\mathbf{Y}$.  
-
-The posterior distribution from which we sample, $p(B | \mathbf{X})$, can be written 
+We expect this to have little effect on the distribution, as the amount of information about $B$ present in $\mathbf{X}$ is expected to dwarf that of $\mathbf{Y}$.  The posterior distribution from which we sample, $p(B | \mathbf{X})$, can be written 
 \begin{align}
   p(B | \mathbf{X}) 
     &= L(\beta; \mathbf{X}) p(\beta) \\
     &= L(\beta; \mathbf{X}) \prod_{k} \mathbf{N}(\beta_k | 0, K_{\theta_k}) \, .
 \end{align}
-We draw posterior samples using Hamiltonian Monte Carlo \cite{neal2011mcmc}, an auxiliary variable method that uses gradient information to efficiently mix.  Empirically, naive Metropolis-Hastings empirically mixes too slowly for practical purposes. 
+We draw posterior samples using Hamiltonian Monte Carlo \cite{neal2011mcmc}, an auxiliary variable method that uses gradient information to efficiently mix.  Empirically, naive Metropolis-Hastings mixes too slowly for practical purposes. 
 
 \subsection{Sampling $\mathbf{w}_n, m_n$, and $z_n$}
 Conditioned on a basis $B_k, k=1,\dots, K$, we can draw posterior samples of $\mathbf{w}_n$ and $z_n$ independently for each $n$
@@ -357,17 +353,9 @@ Conditioned on a basis $B_k, k=1,\dots, K$, we can draw posterior samples of $\m
   &\propto p(\mathbf{y}_n | \mathbf{w}_n, m_n, z_n, B) p(\mathbf{w}_n, m_n, z_n) \\
   &= p(\mathbf{y}_n | \mathbf{w}_n, m_n, z_n, B) p(\mathbf{w}_n) p(m_n, z_n)
 \end{align}
+where our likelihood term is defined in Equation~\ref{eq:phot}. 
 
-We assume that $\mathbf{w}_n$ is independent of $m_n, z_n$. Indeed, our prior for $\mathbf{w}_n$ will 
-introduce $\gamma_n \sim \mathcal{N}(0, \mathbb{I})$ and then a softmax function:
-\begin{equation*}
-w_{ni} = \frac{\exp(\gamma_{ni})}{\sum_i {\exp(\gamma_{ni})}},
-\end{equation*}
-which enforces non negativity and the fact that $\sum \mathbf{w}_n = 1$.
-
-Again, we appeal to Hamiltonian Monte Carlo with an adaptive step size during burn-in to sample from this conditional \cite{neal2011mcmc}. 
-
-
+We place independent priors over $\mathbf{w}_n$, $m_n$, and $z_n$.  Again, we appeal to Hamiltonian Monte Carlo with an adaptive step size during burn-in to sample from this conditional \cite{neal2011mcmc}. 
 
 %----------------------------------------------------------------------------------
 %----------------------------------------------------------------------------------
@@ -375,60 +363,47 @@ Again, we appeal to Hamiltonian Monte Carlo with an adaptive step size during bu
 \section{Experiments}
 \label{sec:experiments}
 We fit our model on a sample of 400 spectroscopic measurements from the the DR10QSO dataset \red{cite dr10}, which includes spectroscopically confirmed red-shifts from over 150,000 quasar spectra.  
-We denote this set of spectroscopic measurements  as $\mathbf{X}$  
-Due to computation constraints, we limit our predictive experiments to a sample of 1,000 spectroscopically and photometrically measured quasars.  We denote this set of photometric measurements as $\mathbf{Y}$.  
-Conditioning only on the data $\mathbf{X}$ and $\mathbf{Y}$, we compute the posterior distribution by iterating over the conditional distributions described in the previous section.  
+We denote this set of spectroscopic measurements  as $\mathbf{X}$. 
+We test our method by predicting red-shift and SED of sample of 1,000 spectroscopically and photometrically measured quasars.  We denote the broadband photometrically measured fluxes as $\mathbf{Y}$.  
+Conditioning only on the data $\mathbf{X}$ and $\mathbf{Y}$, we compute the posterior distribution by iterating our sampler over the conditional distributions described in the previous section.  
 The following subsections summarize and discuss model predictions and output.  
 
+%------ Reconstructed quasar SEDs -----------------------------------------------
+\begin{figure*}[th]
+\vskip 0.2in
+\begin{center}
+\centerline{\includegraphics[width=2\columnwidth]{../figs/quasar_plots/quasar_56_mcmc_recon.pdf}} 
+\centerline{\includegraphics[width=2\columnwidth]{../figs/quasar_plots/quasar_119_mcmc_recon.pdf}} 
+\vskip -0.2in
+\caption{Inferred SEDs from photometric data.  The red line is a PCA-based model fit to the full spectral data.  The green line is the posterior median of $f^{(obs)}_n(\lambda)$. }
+\label{fig:recon}
+\end{center}
+\end{figure*}
+%-------------------------------------------------------------------------------
 
-\subsection{Spectroscopic vs.~ photometric measurements}
 %----- Red Shift, spec vs photo -------------------------------------------------
-\begin{figure}[ht]
+\begin{figure}[h]
 \vskip 0.2in
 \begin{center}
 \centerline{\includegraphics[width=\columnwidth]{../figs/red-shift-test-predictions}}
 \vskip -0.2in
 \caption{Comparison of spectroscopically ($x$-axis) and photometrically ($y$-axis) measured red-shifts for a held out sample of 1,000 quasars.  Red estimates are the posterior mean $E[z_n | \mathbf{y}_n, \mathbf{X}]$, and grey lines display the the 99\% credible interval consisting of samples within quantiles $(.05, .995)$.  The estimate of each quasar is based on 750 samples from five HMC chains, after discarding 750 ``burn-in'' samples. }
-\label{fig:frames}
+\label{fig:vs}
 \end{center}
 \end{figure}
 %-------------------------------------------------------------------------------
 
-\begin{table}[t]
-\caption{Top: mean absolute and mean absolute percentage error of photometric red-shift predictions with respect to spectroscopic ``ground truth''.  Bottom: number of predicted values covered by Bayesian credible intervals of varying size. }
-\label{sample-table}
-\vskip 0.15in
-\begin{center}
-\begin{small}
-\begin{sc}
-\begin{tabular}{cccccc}
-\hline
-\abovespace\belowspace
-        &  $z_{spec} > 0$ & $z_{spec} > 1$ & $z_{spec} > 2$ & $z_{spec} > 3$ & $z_{spec} > 4$ \\
-\hline
-\abovespace
-MAE  &  0.4278 & 0.2527 & 0.2297 & 0.2127 & 0.0893\\
-MAPE &  0.3966 & 0.1134 & 0.0895 & 0.0634 & 0.0221 \\
-\hline
-\% in $[.05, 99.5]$ &  \\ %0.3543 & 0.1359 & 0.1132 & 0.0781 & 0.0221 \\
-\% in $[2.5, 97.5]$ \\
-\hline
-\end{tabular}
-\end{sc}
-\end{small}
-\end{center}
-\vskip -0.1in
-\end{table}
 
-Using information only from $M = 400$ noisy high resolution SED measurements, our structured prior is able to accurately predict and characterize uncertainty about the red-shift of photometrically measured quasars.  
+\subsection{Spectroscopic vs.~photometric measurements}
 
+Using information only from $M = 400$ noisy high resolution SED measurements, our structured prior is able to accurately predict and characterize uncertainty about the red-shift of photometrically measured quasars.  Furthermore, because we are directly modeling the latent SED, our method returns a probabilistic estimate of the latent SED conditioned on only observed photometric fluxes.  
 
+We compare our photometrically measured red-shifts to spectroscopic measurements in Figure~\ref{fig:vs}.  
 
-
-\red{PLOT INDIVIDUAL MARGINALS of $z_n$, $w_n$}
+We also quantify average prediction error and coverage for sets of quasars with increasing red-shift.  We see that our method is quite successful for quasars with redshift higher than 1, measuring within $.25$ of the spectroscopically confirmed red-shift, and an average error of less $11 \%$ or less.  
 
 %----- Red Shift, spec vs photo -------------------------------------------------
-\begin{figure*}[ht]
+\begin{figure*}[t]
 \vskip 0.2in
 \begin{center}
 \centerline{
@@ -437,11 +412,50 @@ Using information only from $M = 400$ noisy high resolution SED measurements, ou
 \includegraphics[width=.66\columnwidth]{../figs/quasar_plots/quasar_22_posterior_z}
 }
 \vskip -0.2in
-\caption{Posterior marginals}
-\label{fig:frames}
+\caption{Posterior predictive distributions, $p(z_n | \mathbf{X}, \mathbf{y}_n)$ for three photometrically measured quasars. The red-line is the spectroscopically confirmed red-shift, and the green line is the posterior mean $E(z_n |\mathbf{X}, \mathbf{y}_n)$ }
+\label{fig:marginals}
 \end{center}
 \end{figure*}
-%---------------s
+%---------------
+
+%----- Red Shift, spec vs photo -------------------------------------------------
+\begin{figure*}[t]
+\vskip 0.2in
+\begin{center}
+\centerline{\includegraphics[width=2\columnwidth]{../figs/basis_samp_K_4}}
+\vskip -0.2in
+\caption{A posterior sample of the basis $\{ B_k \}_{k=1}^K$ for $K=4$.  Note the different ranges of the $x$-axis (wavelength).  Mass is distributed across the spectrum to explain different salient features of quasar spectra in the rest-frame. }
+\label{fig:basis}
+\end{center}
+\end{figure*}
+%---------------
+
+%---- TABLE, coverage --------------------------------------
+\begin{table*}[ht]
+\caption{Top: mean absolute and mean absolute percentage error of photometric red-shift predictions with respect to spectroscopic ``ground truth''.  Bottom: number of predicted values covered by Bayesian credible intervals of varying size. }
+\label{sample-table}
+\vskip 0.15in
+\begin{center}
+\begin{small}
+\begin{sc}
+\begin{tabular*}{0.75\textwidth}{cccccc}
+\hline
+\abovespace\belowspace
+  $\Delta z_{spec}$ &  $ > 0 (501)$ & $ > 1 (418)$ & $ > 2 (370)$ & $ > 3 (65)$ & $ > 4 (3)$ \\
+\hline
+\abovespace
+MAE &  0.428 & 0.253 & 0.230 & 0.213 & 0.089 \\
+MAPE &  0.397 & 0.113 & 0.090 & 0.063 & 0.022 \\
+\hline
+\% in $[.5, 99.5]$ &  66.5 & 77.3 & 78.9 & 81.5 & 66.7 \\
+\hline
+\end{tabular*}
+\end{sc}
+\end{small}
+\end{center}
+\vskip -0.1in
+\end{table*}
+%------------------------------------------------------------------------------
 
 
 \red{PLOT CLUSTERING OF $w_n$ in 2-d}
