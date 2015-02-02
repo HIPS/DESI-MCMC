@@ -69,6 +69,7 @@ notebooks/*
 
 #tex imgs
 tex/imgs/*
+tex/quasar_z/icml2015/main.pdf
 
 data/*.gz
 data/*.bz2

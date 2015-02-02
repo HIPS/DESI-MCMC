@@ -4,24 +4,30 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from redshift_utils import load_data_clean_split, project_to_bands
 from quasar_fit_basis import load_basis_fit
+from quasar_sample_basis import load_basis_samples
 npr.seed(42)
 
 ## grab some plotting defaults
 sns.set_style("white")
 current_palette = sns.color_palette()
 
+
+def make_params(th, parser, lam0_delta):
+    mus    = parser.get(th, 'mus')
+    betas  = parser.get(th, 'betas')
+    omegas = parser.get(th, 'omegas')
+    W = np.exp(omegas)
+    W = W / np.sum(W, axis=1, keepdims=True)
+    B = np.exp(betas)
+    B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
+    M = np.exp(mus)
+    return W, B, M
+
 #######################################################################
 out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/figs/"
 V = "1364"
 th, lam0, lam0_delta, parser = load_basis_fit('cache/basis_fit_K-4_V-1364.pkl')
-mus    = parser.get(th, 'mus')
-betas  = parser.get(th, 'betas')
-omegas = parser.get(th, 'omegas')
-W = np.exp(omegas)
-W = W / np.sum(W, axis=1, keepdims=True)
-B = np.exp(betas)
-B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
-M = np.exp(mus)
+W_mle, B_mle, M_mle = make_params(th, parser, lam0_delta)
 
 fig = plt.figure(figsize=(18,6))
 plt.plot(lam0, B.T, linewidth=2)

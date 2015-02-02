@@ -12,10 +12,11 @@ npr.seed(42)
 sns.set_style("white")
 current_palette = sns.color_palette()
 
-
 if __name__=="__main__":
 
-    sample_files = glob('cache/basis_samples_K-4_V-1364_chain_*.npy')
+
+    ### load MCMC sample files
+    sample_files = glob('cache_remote/basis_samples_K-4_V-1364_chain_*.npy')
     chains = {}
     for sfile in sample_files:
         th_samples, ll_samps, lam0, lam0_delta, parser, chain_idx = \
@@ -23,14 +24,37 @@ if __name__=="__main__":
         chains[chain_idx] = {'th':th_samples, 'lls':ll_samps, 'parser':parser}
 
     # visualize LL trace for each chain
-    for ch in chains.itervalues(): 
-        plt.plot(ch['lls'])
+    for i in range(2): 
+        plt.plot(chains[i]['lls'][-1000:])
     plt.show()
+
+    ### load MLE basis 
+    th, lam0, lam0_delta, parser = load_basis_fit('cache/basis_fit_K-4_V-1364.pkl')
+    mus    = parser.get(th, 'mus')
+    betas  = parser.get(th, 'betas')
+    omegas = parser.get(th, 'omegas')
+    W_mle  = np.exp(omegas)
+    W_mle /= np.sum(W_mle, axis=1, keepdims=True)
+    B_mle  = np.exp(betas)
+    B_mle /= np.sum(B_mle * lam0_delta, axis=1, keepdims=True)
+    M_mle = np.exp(mus)
+
+    ### load training data
+    lam_obs, qtrain, qtest = \
+        load_data_clean_split(spec_fits_file = 'quasar_data.fits',
+                              Ntrain = 400)
+    N = qtrain['spectra'].shape[0]
 
     ##################################################################
     # inspect posterior summary of betas
     ##################################################################
     # Unpack Samples
+    chain_idx = 2
+    th_samps = chains[2]['th'][-3000:, :]
+    Nsamps   = th_samps.shape[0]
+    K, V     = chains[2]['parser'].idxs_and_shapes['betas'][1]
+    Ntrain   = chains[2]['parser'].idxs_and_shapes['mus'][1][0]
+
     B_samps = np.zeros((Nsamps, K, V))
     W_samps = np.zeros((Nsamps, Ntrain, K))
     M_samps = np.zeros((Nsamps, Ntrain))
@@ -72,9 +96,9 @@ if __name__=="__main__":
         plt.ylabel("spectrum")
         plt.legend(fontsize='xx-large')
 
-    qidx = 20
-    samp_idx = 1409
-    spec_recon = M_samps[samp_idx][qidx] * \
+    qidx = 30
+    samp_idx = 2999
+    spec_recon = M_samps[samp_idx, qidx] * \
                  W_samps[samp_idx, qidx, :].dot(B_samps[samp_idx,:,:])
     #spec_recon = np.dot(M_mle[qidx] * W_mle[qidx, :], B_mle)
     plot_recon(spec_recon, qtrain['Z'][qidx], 

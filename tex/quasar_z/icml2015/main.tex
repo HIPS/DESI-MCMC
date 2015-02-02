@@ -201,7 +201,7 @@ This method, while efficient and accurate in mean error, does not characterize t
 
 Template-based approaches use information derived from spectroscopically measured quasars to assist red-shift predictions.  
 \citet{budavari2001photometric} and \citet{richards2001photometric} present a clustering algorithm for reconstructing quasar SEDs from photometric observations and templates derived from noisy spectroscopic measurements.  
-Their method, clusters quasars into individual template categories, and relies on cluster averages of noisy 
+Their method clusters quasars into individual template categories using a $K$-means-like update, relying on weighted template averages of noisy SED measurements.  
 
 Instead of a pure clustering method, we use a non-negative factor analysis-like model to represent the latent structure of quasar SEDs and a continuous and low-dimensional range of quasar types.  
 Furthermore, our method presents a fully probabilistic model of SEDs and a Bayesian inference procedure that integrates out uncertainty over all variables, including  latent templates, individual loadings, and apparent brightness, to measure red-shift.    
@@ -232,7 +232,7 @@ approaches into a single probabilistic framework, distinguishing methods based o
 %--- Graphical Model ------------------------------------------
 \begin{figure}
 \input{graph_model}
-\caption{Graphical model representation of the joint photometry and spectroscopy model.  The left shaded variables represent spectroscopically measured samples and their variances.  The right shaded variables represent photometrically measured fluxes and their variances. \red{Fix Plate Labels} }
+\caption{Graphical model representation of the joint photometry and spectroscopy model.  The left shaded variables represent spectroscopically measured samples and their variances.  The right shaded variables represent photometrically measured fluxes and their variances. }
 \end{figure}
 
 
@@ -249,7 +249,7 @@ The generative procedure for quasar spectra begins with a shared positive basis 
 that map wavelengths to positive numbers:
 \begin{align}
   \beta_k(\cdot) &\sim \mathcal{GP}(0, K_\theta) \, , k=1, \dots, K\\
-  B_k(\cdot) &= \frac{\exp(\beta_k(\cdot))}{\int_\Lambda \exp(\beta_k(d \lambda))}   \,,
+  B_k(\cdot) &= \frac{\exp(\beta_k(\cdot))}{\int_\Lambda \exp(\beta_k(\lambda)) d\lambda}   \, ,
 \end{align}
 where $K_{\theta}$ is the Mat\'{e}rn kernel and $B_k$ is a normalized version of
 the $\beta_k$. These bases are then shared among all quasar SEDs.  For each quasar, $n$, the unobserved SED is distributed
@@ -279,7 +279,7 @@ The BOSS spectra (and our rest-frame basis) are stored in units ergs/cm$^2$/s/$\
 Photometric data summarize the amount of energy observed over a large swath of the wavelength spectrum.  Roughly, a photometric flux measures (proportionally) the number of photons hitting the instrument's lens over the duration of an exposure, filtered by a band-specific sensitivity curve. 
 We will express measurements of flux in nanomaggies \red{reference}, a linear unit of flux, in our method and experiments.  
 
-Photometric fluxes and measurement error derived from broadband imagery have been computed \red{cite PSFFLUX source}. 
+Photometric fluxes and measurement error derived from broadband imagery have been computed directly from pixels and stored \cite{luptonsdss}.  
 SDSS photometric data are measured in $ugriz$ bands, giving us a vector, $\mathbf{y}_n$, of five flux values and their variances, $\tau_{n, b}$ for $b \in ugriz$. 
 Each band measures photon observations at each wavelength in proportion to a known filter sensitivity, $S_{\text{band}}(\lambda)$. 
 The filter sensitivities for the SDSS $ugriz$ bands are depicted in Figure~\ref{fig:filters}, with an example observation frame quasar SED overlaid.  The actual measured fluxes can be computed by integrating the full object's spectrum, $m_n \cdot f_n(\lambda)$ against the filters.  For a band $b \in \{u, g, r, i, z \}$
@@ -290,7 +290,7 @@ The filter sensitivities for the SDSS $ugriz$ bands are depicted in Figure~\ref{
 where $C(\lambda)$ is a conversion factor to go from the units of $f_n(\lambda)$ to nanomaggies \red{ write out the conversion }. We use $I_b$ to represent the full function from 
 a rest spectrum and red shift to a band-specific flux. This projection onto SDSS bands results in five fluxes, which are modeled as independent Gaussian random variables with known variance
 \begin{align}
-  y_{n,b} &\sim \mathcal{N}( I_b(f_n^{(\text{obs})}, z_n), \tau_{n,b} ) \, .
+  y_{n,b} | \mathbf{w}_n, z_n, m_n, B &\sim \mathcal{N}( I_b(f_n^{(\text{obs})}, z_n), \tau_{n,b} ) \, .
 \end{align}
 
 Conditioned on the basis, $\{B_k\}$, we can represent $f_n^{(\text{rest})}$ with a low-dimensional vector.  We overload notation, and re-write the conditional likelihood of photometric observations as
@@ -298,6 +298,7 @@ Conditioned on the basis, $\{B_k\}$, we can represent $f_n^{(\text{rest})}$ with
     y_{n,b} | \mathbf{w}_n, z_n, m_n, B &\sim \mathcal{N}( I_b(\mathbf{w}_n, z_n, m_n, B), \tau_{n,b} ) \, .
    \label{eq:phot}
 \end{align}
+Intuitively, what gives us statistical traction in inferring the posterior distribution over $z_n$ is the structure learned in the latent basis $B$ - the features that correspond to distinguishing bumps and dips in the SED.  
 
 \subsection{Joint model}
 Given a sample of $M$ noisy full spectra and their sample locations, $\{\mathbf{x}_m, \lambda^{(\text{obs})}_m \}_{m=1}^M$, and a set of $N$ photometric fluxes, $\{\mathbf{y}_n\}_{n=1}^N$, our full likelihood in terms of $\{ \mathbf{w}_m \}_{m=1}^M, B_1, \dots, B_K, \{ \mathbf{w}_n \}_{n=1}^N$, and $\{z_m\}, \{z_n\}$ is 
@@ -331,6 +332,8 @@ For example, we wish to compute the posterior marginal distribution for
 \end{align}
 This section outlines our MCMC procedure to compute posterior samples of $\mathbf{w}_n, z_n, m_n$ and $B$ given the sample of spectra, $\mathbf{X}$, and photometric fluxes $\mathbf{y}_{ugriz}$.  
 
+Due to analytic intractability, we numerically integrate expressions $\int_\Lambda f_n^{(obs)}(\lambda) d\lambda$. 
+
 \subsection{Sampling $B$}
 To accelerate computation, we use only information present in $\mathbf{X}$ to draw samples of $B_1, \dots, B_K$.  That is, we approximate the full conditional distribution 
 \begin{align}
@@ -339,13 +342,13 @@ To accelerate computation, we use only information present in $\mathbf{X}$ to dr
 \end{align}
 We expect this to have little effect on the distribution, as the amount of information about $B$ present in $\mathbf{X}$ is expected to dwarf that of $\mathbf{Y}$.  
 
-The posterior distribution $p(B | \mathbf{X})$ we want to sample from is as follows:
+The posterior distribution from which we sample, $p(B | \mathbf{X})$, can be written 
 \begin{align}
   p(B | \mathbf{X}) 
     &= L(\beta; \mathbf{X}) p(\beta) \\
-    &= L(\beta; \mathbf{X}) \prod_{k} \mathbf{N}(\beta_k | 0, K_{\theta_k})
+    &= L(\beta; \mathbf{X}) \prod_{k} \mathbf{N}(\beta_k | 0, K_{\theta_k}) \, .
 \end{align}
-To do so, we use MCMC. In particular, we generate samples from the posterior distribution using Hamiltonian Monte Carlo \ref{neal2011mcmc}, which theoretically mixes faster than basic Metropolis-Hastings.
+We draw posterior samples using Hamiltonian Monte Carlo \cite{neal2011mcmc}, an auxiliary variable method that uses gradient information to efficiently mix.  Empirically, naive Metropolis-Hastings empirically mixes too slowly for practical purposes. 
 
 \subsection{Sampling $\mathbf{w}_n, m_n$, and $z_n$}
 Conditioned on a basis $B_k, k=1,\dots, K$, we can draw posterior samples of $\mathbf{w}_n$ and $z_n$ independently for each $n$
@@ -392,7 +395,7 @@ The following subsections summarize and discuss model predictions and output.
 %-------------------------------------------------------------------------------
 
 \begin{table}[t]
-\caption{Mean absolute and mean absolute percentage error of photometric red-shift predictions with respect to spectroscopic ``ground truth''. }
+\caption{Top: mean absolute and mean absolute percentage error of photometric red-shift predictions with respect to spectroscopic ``ground truth''.  Bottom: number of predicted values covered by Bayesian credible intervals of varying size. }
 \label{sample-table}
 \vskip 0.15in
 \begin{center}
@@ -404,8 +407,11 @@ The following subsections summarize and discuss model predictions and output.
         &  $z_{spec} > 0$ & $z_{spec} > 1$ & $z_{spec} > 2$ & $z_{spec} > 3$ & $z_{spec} > 4$ \\
 \hline
 \abovespace
-MAE  &  0.4351 & 0.3084 & 0.2879 & 0.2586 & 0.0893 \\
-MAPE &  0.3543 & 0.1359 & 0.1132 & 0.0781 & 0.0221 \\
+MAE  &  0.4278 & 0.2527 & 0.2297 & 0.2127 & 0.0893\\
+MAPE &  0.3966 & 0.1134 & 0.0895 & 0.0634 & 0.0221 \\
+\hline
+\% in $[.05, 99.5]$ &  \\ %0.3543 & 0.1359 & 0.1132 & 0.0781 & 0.0221 \\
+\% in $[2.5, 97.5]$ \\
 \hline
 \end{tabular}
 \end{sc}
@@ -414,10 +420,8 @@ MAPE &  0.3543 & 0.1359 & 0.1132 & 0.0781 & 0.0221 \\
 \vskip -0.1in
 \end{table}
 
+Using information only from $M = 400$ noisy high resolution SED measurements, our structured prior is able to accurately predict and characterize uncertainty about the red-shift of photometrically measured quasars.  
 
-
-
-Using information only from $M = 400$ noisy spectra, our structured prior is able to 
 
 
 
@@ -428,9 +432,9 @@ Using information only from $M = 400$ noisy spectra, our structured prior is abl
 \vskip 0.2in
 \begin{center}
 \centerline{
-\includegraphics[width=.66\columnwidth]{../figs/quasar_plots/quasar_147_posterior_z}
-\includegraphics[width=.66\columnwidth]{../figs/quasar_plots/quasar_175_posterior_z}
-\includegraphics[width=.66\columnwidth]{../figs/quasar_plots/quasar_444_posterior_z}
+\includegraphics[width=.66\columnwidth]{../figs/quasar_plots/quasar_94_posterior_z}
+\includegraphics[width=.66\columnwidth]{../figs/quasar_plots/quasar_49_posterior_z}
+\includegraphics[width=.66\columnwidth]{../figs/quasar_plots/quasar_22_posterior_z}
 }
 \vskip -0.2in
 \caption{Posterior marginals}
@@ -452,6 +456,14 @@ Using information only from $M = 400$ noisy spectra, our structured prior is abl
 %----------------------------------------------------------------------------------
 %----------------------------------------------------------------------------------
 \section{Discussion}
+\red{Disucssion and future work.  Future work includes 
+\begin{itemize}
+  \item Direct inference from pixels to red-shift (no flux step)
+  \item incorporation of new physical characteristics (distance, dust, etc)
+  \item incorporation of more broadband photometry
+  \item models for automatic classification of galaxies, stars, quasars
+\end{itemize}
+}
 
 % Acknowledgements should only appear in the accepted version. 
 %\section*{Acknowledgments} 
