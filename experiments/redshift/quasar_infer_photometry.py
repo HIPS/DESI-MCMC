@@ -147,9 +147,9 @@ if __name__=="__main__":
     ## set sampling parameters
     ##########################################################################
     narg    = len(sys.argv)
-    test_n  = sys.argv[1] if narg > 1 else 1
-    Nsamps  = sys.argv[2] if narg > 2 else 500
-    Nchains = sys.argv[3] if narg > 3 else 2
+    test_n  = int(sys.argv[1]) if narg > 1 else 1
+    Nsamps  = int(sys.argv[2]) if narg > 2 else 20
+    Nchains = int(sys.argv[3]) if narg > 3 else 2
 
     # HMC parameters
     INIT_REDSHIFT    = 1.0
