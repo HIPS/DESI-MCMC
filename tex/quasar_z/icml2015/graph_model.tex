@@ -1,0 +1,32 @@
+
+%\begin{figure}
+\centering
+\begin{tikzpicture}
+\tikzstyle{main}=[circle, minimum size = 10mm, thick, draw =black!80, node distance = 12mm]
+\tikzstyle{connect}=[-latex, thick]
+\tikzstyle{box}=[rectangle, draw=black!100,label={[xshift=-14pt,yshift=14pt]south east:#1}]
+  \node[main, fill = gray] (x) {$x_{n,\lambda}$};
+  \node[main, fill=gray] (sigma) [below=of x] { $\sigma^2_{n,\lambda}$};
+  \node[main] (w) [right=of x] {$\vec{w}_n$};
+  \node[main, node distance = 5mm] (m) [below=of w] {$m_n$};
+  \node[main, node distance = 5mm] (z) [below=of m] {$z_n$};
+  \node[main, node distance = 22mm] (B) [above=of w] {$B_k$};
+  \node[main, fill=gray] (y) [right=of w] {$y_{n,\beta}$};
+  \node[main, fill=gray] (tau) [below=of y] {$\tau^2_{n,\beta}$};
+  \path (B) edge [connect] (x)
+           (B) edge [connect] (y)
+           (w) edge [connect] (x)
+           (w) edge [connect] (y)
+           (m) edge [connect] (x)
+           (m) edge [connect] (y)
+           (z) edge [connect] (x)
+           (z) edge [connect] (y)
+           (sigma) edge [connect] (x)
+           (tau) edge [connect] (y);
+  \node[box, inner sep=4.4mm, fit= (x) (sigma)] [label=below:$\lambda \in \Lambda$] {};
+  \node[box, inner sep=4.4mm, draw=black!100, fit= (y) (tau)] [label=below:$\beta \in {u,g,r,i,z}$] {};
+  \node[box, inner sep=10mm, inner ysep=4.4mm, fit =(B)] [label=below right:$k \in \{1\ldots K\}$] {};
+  \node[rectangle, minimum width=80mm, minimum height=60mm, inner sep=4.4mm,draw=black!100, fit= (x) (w) (y) (tau) (sigma) (m) (z)] [label=below:$n \in \{1\ldots N\}$]{};
+\end{tikzpicture}
+
+%\end{figure}
