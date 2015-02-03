@@ -7,8 +7,11 @@ from funkyyak import grad, numpy_wrapper as np
 from redshift_utils import load_data_clean_split, project_to_bands, \
                            check_grad, softmax
 from quasar_fit_basis import load_basis_fit
+from quasar_sample_basis import load_basis_samples
 from hmc import hmc
+from glob import glob
 import cPickle as pickle
+import GPy
 import sys, os
 
 ############################################################################
@@ -55,23 +58,26 @@ def dprior_mu(mu):
 ##############################################################################
 ## Posterior sampler function - factored out for multiple chains
 ##############################################################################
-def gen_redshift_samples(chain_idx, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf):
+def gen_redshift_samples(chain_idx, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf, USE_MLE):
     """ Generate posterior samples of red-shift using HMC """
     ll_samps = np.zeros(Nsamps)
-
+    B        = get_basis_sample(0, USE_MLE)
+    
     ## initialize samples
     samps                    = np.zeros((Nsamps, B.shape[0] + 2))
     samps[0,:]               = .001 * npr.randn(B.shape[0] + 2)
     samps[0, 0]              = INIT_REDSHIFT
     samps[0, B.shape[0] + 1] = np.log(INIT_MAG)
-    ll_samps[0]              = lnpdf(samps[0,:])
+    ll_samps[0]              = lnpdf(samps[0,:], B)
 
     ## sanity check gradient
-    check_grad(fun = lnpdf, jac = dlnpdf, th = samps[0,:])
+    check_grad(fun = lambda(x): lnpdf(x, B),
+               jac = lambda(x): dlnpdf(x, B),
+               th  = samps[0,:])
 
     ## sample
     Naccept         = 0
-    step_sz         = .001
+    step_sz         = .01
     avg_accept_rate = .9
     adapt_step = True
     print "{0:17}|{1:15}|{2:15}|{3:15}|{4:15}".format(
@@ -86,9 +92,10 @@ def gen_redshift_samples(chain_idx, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf):
             adapt_step = False
 
         # hmc draw
+        B = get_basis_sample(s, USE_MLE)
         samps[s,:], step_sz, avg_accept_rate = hmc(
-                 U                 = lnpdf,
-                 grad_U            = dlnpdf,
+                 U                 = lambda(x): lnpdf(x, B),
+                 grad_U            = lambda(x): dlnpdf(x, B),
                  step_sz           = step_sz,
                  n_steps           = STEPS_PER_SAMPLE,
                  q_curr            = samps[s-1,:],
@@ -99,7 +106,7 @@ def gen_redshift_samples(chain_idx, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf):
                  tgt_accept_rate   = .55)
 
         ## store sample
-        ll_samps[s] = lnpdf(samps[s, :])
+        ll_samps[s] = lnpdf(samps[s, :], B)
         if ll_samps[s] != ll_samps[s-1]: 
             Naccept += 1 
         if s % 5 == 0:
@@ -141,15 +148,72 @@ def load_redshift_samples(fname):
         chain_idx = pickle.load(handle)
     return th_samples, ll_samps, q_idx, qso_info, chain_idx
 
+
+############################################################################
+## Basis helper setup and methods
+############################################################################
+
+### load MLE basis 
+th, lam0, lam0_delta, parser = load_basis_fit('cache/basis_fit_K-4_V-1364.pkl')
+mus    = parser.get(th, 'mus')
+betas  = parser.get(th, 'betas')
+omegas = parser.get(th, 'omegas')
+W_mle  = np.exp(omegas)
+W_mle /= np.sum(W_mle, axis=1, keepdims=True)
+B_mle  = np.exp(betas)
+B_mle /= np.sum(B_mle * lam0_delta, axis=1, keepdims=True)
+M_mle = np.exp(mus)
+
+### load and curate basis samples
+np.random.seed(55)
+beta_kern = GPy.kern.Matern52(input_dim=1, variance=1., lengthscale=40.)
+K_beta    = beta_kern.K(lam0.reshape((-1, 1)))
+K_chol    = np.linalg.cholesky(K_beta)
+sample_files = glob('cache_remote/photo_experiment0/basis_samples_K-4_V-1364_chain_*.npy')[1:]
+B_chains = []
+for si, sfile in enumerate(sample_files):
+    print "pre-processing chain %d of %d"%(si, len(sample_files))
+    th_samples, ll_samps, lam0, lam0_delta, parser, chain_idx = \
+        load_basis_samples(sfile)
+    Nsamps = th_samples.shape[0]
+    # discard first half and randomly permute
+    th_samples = th_samples[Nsamps/2:, :]
+    ll_samps   = ll_samps[Nsamps/2:]
+    chain_perm = np.random.permutation(th_samples.shape[0])[0:2500]
+    chain_perm = np.arange(2500)
+    # assemble a few thousand samples
+    B0 = parser.get(th_samples[0], 'betas')
+    B_samps = np.zeros((len(chain_perm), B0.shape[0], B0.shape[1]))
+    for i, idx in enumerate(chain_perm):
+        betas = K_chol.dot(parser.get(th_samples[idx, :], 'betas').T).T
+        B_samp = np.exp(betas)
+        B_samp /= np.sum(B_samp * lam0_delta, axis=1, keepdims=True)
+        B_samps[i, :, :] = B_samp
+    B_chains.append(B_samps)
+B_samps = np.vstack(B_chains)
+B_samps = B_samps[npr.permutation(B_samps.shape[0]), :, :]
+
+def get_basis_sample(idx, mle = False, ): 
+    """ Method to return a basis sample to condition on 
+    (or the MLE if specified) """
+    if mle: 
+        return B_mle
+    else:
+        return B_samps[idx]
+
+##############################################################################
+### Start Script
+##############################################################################
 if __name__=="__main__":
 
     ##########################################################################
     ## set sampling parameters
     ##########################################################################
     narg    = len(sys.argv)
-    test_n  = int(sys.argv[1]) if narg > 1 else 1
-    Nsamps  = int(sys.argv[2]) if narg > 2 else 20
+    test_n  = int(sys.argv[1]) if narg > 1 else 0
+    Nsamps  = int(sys.argv[2]) if narg > 2 else 200
     Nchains = int(sys.argv[3]) if narg > 3 else 2
+    USE_MLE = True if narg > 4 and sys.argv[4] == "USE_MLE" else False
 
     # HMC parameters
     INIT_REDSHIFT    = 1.0
@@ -175,6 +239,10 @@ if __name__=="__main__":
     y_flux        = qso_n_info['PSFFLUX']
     y_flux_ivar   = qso_n_info['IVAR_PSFFLUX']
     print "======== SAMPLING QUASAR %d ==============="%n
+    if USE_MLE:
+        print "    Sampling with cached MLE basis"
+    else:
+        print "    Sampling with basis samples"
     print "    PLATE               = %d"%qso_n_info['PLATE']
     print "    MJD                 = %d"%qso_n_info['MJD']
     print "    FIBERID             = %d"%qso_n_info['FIBERID']
@@ -187,44 +255,44 @@ if __name__=="__main__":
     ## Load in basis fit (or basis samples)
     ##########################################################################
     ### load ML basis from cache (beta and omega values)
-    basis_cache = 'cache/basis_fit_K-4_V-1364.pkl'
-    USE_CACHE = True
-    if os.path.exists(basis_cache) and USE_CACHE:
-        th, lam0, lam0_delta, parser = load_basis_fit(basis_cache)
+    #basis_cache = 'cache/basis_fit_K-4_V-1364.pkl'
+    #USE_CACHE = True
+    #if os.path.exists(basis_cache) and USE_CACHE:
+    #    th, lam0, lam0_delta, parser = load_basis_fit(basis_cache)
 
-    # compute actual weights and basis values (normalized basis + weights)
-    mus    = parser.get(th, 'mus')
-    betas  = parser.get(th, 'betas')
-    omegas = parser.get(th, 'omegas')
-    W = np.exp(omegas)
-    W = W / np.sum(W, axis=1, keepdims=True)
-    B = np.exp(betas)
-    B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
-    M = np.exp(mus)
+    ## compute actual weights and basis values (normalized basis + weights)
+    #mus    = parser.get(th, 'mus')
+    #betas  = parser.get(th, 'betas')
+    #omegas = parser.get(th, 'omegas')
+    #W = np.exp(omegas)
+    #W = W / np.sum(W, axis=1, keepdims=True)
+    #B = np.exp(betas)
+    #B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
+    #M = np.exp(mus)
 
     ##########################################################################
     ## functions to pass into HMC
     ##########################################################################
-    def lnpdf(q):
+    def lnpdf(q, B):
         z     = q[0]
         omega = q[1:(B.shape[0] + 1)]
         mu    = q[B.shape[0] + 1]
         ll    =  pixel_likelihood(z, softmax(omega), np.exp(mu), y_flux, y_flux_ivar, lam0, B)
         return ll + prior_omega(omega) + prior_mu(mu) + prior_z(z)
 
-    def dlnpdf(q):
+    def dlnpdf(q, B):
         de = np.zeros(q.shape)
         grad_vec = np.zeros(q.shape)
         for i in range(len(q)):
             de[i] = 1e-6
-            grad_vec[i] = (lnpdf(q + de) - lnpdf(q - de)) / 2e-6
+            grad_vec[i] = (lnpdf(q + de, B) - lnpdf(q - de, B)) / 2e-6
             de[i] = 0.0
         return grad_vec
 
     ##########################################################################
     ## Draw samples of redshift and weights
     ##########################################################################
-    z_inits = [1.0, 3.0, 5.0]
+    z_inits = [.5, 1.0, 3.0, 5.0]
     chain_samps = []
     chain_lls   = []
     for chain_idx, z_init in enumerate(z_inits):
@@ -233,7 +301,8 @@ if __name__=="__main__":
             Nsamps        = Nsamps,
             INIT_REDSHIFT = z_init,
             lnpdf         = lnpdf,
-            dlnpdf        = dlnpdf)
+            dlnpdf        = dlnpdf,
+            USE_MLE       = USE_MLE)
         chain_samps.append(samps)
         chain_lls.append(ll_samps)
 
