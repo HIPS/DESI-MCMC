@@ -150,11 +150,11 @@ The two methods of spectral information collection are graphically compared in F
 Despite carrying less information, broadband photometric measurements are more widely available and exist for a larger number of sources than spectroscopic measurements. 
 This work develops a method for extracting information from observations of light sources by \emph{jointly} modeling spectroscopic and photometric data.  
 In particular, we use our model to measure the redshift of quasars for which we only have photometric observations.  
-Redshift is a phenomenon in which the SED of a source of light is stretched toward longer (redder) wavelengths.  This effect can be caused by the source rapidly moving away from the observer (analogous to the Doppler effect) or due to the expansion of the universe \red{cite something here}.  
-Quasars, or quasi-stellar radio sources, are extremely distant and energetic sources of electromagnetic radiation that can exhibit high redshift \red{cite something here}.  
+Redshift is a phenomenon in which the SED of a source of light is stretched toward longer (redder) wavelengths.  This effect can be caused by the source rapidly moving away from the observer or due to the expansion of the universe~\cite{harrison1993redshift}.  
+Quasars, or quasi-stellar radio sources, are extremely distant and energetic sources of electromagnetic radiation that can exhibit high redshift~\cite{silk1997quasars}.  
 Estimates and accurate characterization of uncertainty of redshift measurements from photometry have the potential to guide the study of certain quasars with higher resolution instruments.  
 Furthermore, accurate models can aid the automation of identifying and classifying faintly observed quasars in large photometric surveys.  
-%Identifying and measuring the redshift of a quasars from photometric data is a necessary task due to the widespread availability of large photometric surveys.  
+%Identifying and measuring the redshift of a quasars from photometric data is a necessary task due to the widespread availability of large photometric surveys.
 
 %Study of distant quasars allow astronomers to observe the universe as it was many billions of years ago \red{need lots of references.}. 
 Our model jointly describes both high-resolution spectroscopic data and low-resolution photometric observations of quasars in terms of their latent SEDs, luminosity, and redshift.  We represent a quasar's spectral energy as a latent variable, and describe a fully-Bayesian inference procedure to compute the marginal probability distribution of a quasar's redshift given observed photometric fluxes and their uncertainties.  The following section provides relevant application and statistical background, as well as related work on the ``photo-z'' problem.  Section~\ref{sec:model} describes our probabilistic model of SEDs and broadband photometric measurements.  Section~\ref{sec:inference} outlines our MCMC-based inference method for efficiently computing statistics of the posterior distribution. Section~\ref{sec:experiments} presents redshift and SED predictions from photometric measurements, among other model summaries.  We conclude with a discussion and directions for future work.  
@@ -163,9 +163,11 @@ Our model jointly describes both high-resolution spectroscopic data and low-reso
 \label{sec:background}
 The SED of an object describes the distribution of energy it radiates as a function of wavelength.  
 For example, most stars are well-modeled as ideal blackbody radiators, so their SED closely follows Planck's law, which describes a parametric form for the spectral energy distribution. 
-Quasars, on the other hand, have a complicated spectral energy distribution characterized by some salient features (\red{mention Ly-$\alpha$ and Ly-$\alpha$ forest?}).
+Quasars, on the other hand, have a complicated spectral energy distribution characterized by some salient features. One example is the Lyman-$\alpha$ forest, which refers to a phenomenon that causes
+ultraviolet light emissions from quasars to appear as visible light (which is not blocked by
+the atmosphere) to observers on Earth~\cite{weinberg2003lymanalpha}.
 
-Furthermore, quasars can be much more luminous and at a much higher redshift than stars and galaxies.  
+The reason for these differences is that quasars can be much more luminous and at a much higher redshift than stars and galaxies.  
 Redshift affects our observation of SEDs by stretching the input space of wavelengths, $\lambda \in \Lambda$, of the quasar's \emph{rest-frame} SED.  
 This skews the mass of the distribution toward longer (redder) wavelengths. Denoting the \emph{rest-frame} SED of a quasar $n$ as a function, $f_n^{(\text{rest})} : \Lambda \rightarrow \R_+$, the effect of redshift on the \emph{observation-frame} SED is summarized by the relationship 
 \begin{align}
@@ -278,7 +280,7 @@ The BOSS spectra (and our rest-frame basis) are stored in units ergs/cm$^2$/s/$\
 
 \subsection{Photometric flux model }
 Photometric data summarize the amount of energy observed over a large swath of the wavelength spectrum.  Roughly, a photometric flux measures (proportionally) the number of photons hitting the instrument's lens over the duration of an exposure, filtered by a band-specific sensitivity curve. 
-We will express measurements of flux in nanomaggies \red{reference}, a linear unit of flux, in our model.
+We will express measurements of flux in nanomaggies~\cite{sdssnanomaggies}, a linear unit of flux, in our model.
 
 Photometric fluxes and measurement error derived from broadband imagery have been computed directly from pixels \cite{luptonsdss}.  
 SDSS photometric data are measured in $ugriz$ bands, giving us a vector, $\mathbf{y}_n$, of five flux values and their variances, $\tau_{n, b}$ for $b \in ugriz$. 
@@ -287,7 +289,17 @@ The filter sensitivities for the SDSS $ugriz$ bands are depicted in Figure~\ref{
 \begin{align}
   \mu_b(f_n^{(\text{rest})}, z_n) &= \int f^{(\text{obs})}_n(\lambda) S_b(\lambda) C(\lambda) d \lambda 
 \end{align}
-where $C(\lambda)$ is a conversion factor to go from the units of $f_n(\lambda)$ to nanomaggies \red{ write out the conversion }. We use $\mu_b$ to represent the full function from 
+where $C(\lambda)$ is a conversion factor to go from the units of $f_n(\lambda)$ to nanomaggies.
+The factor is the following constant:
+\begin{equation*}
+C(\lambda) = 10^{(48.6-2.5\times17+22.5)/2.5}
+\end{equation*}
+The constants in the expression above correspond to arbitrary zero-points and constants
+used in astronomical units: $48.6$ is a zero-point for an astronomical measurement called
+AB magnitude, $17$ is used to match fluxes which are in units of $10^{-17}$ ergs and $22.5$ and
+$2.5$ are constants used to convert from logarithmic to linear units of brightness.
+
+ We use $\mu_b$ to represent the full function from 
 a rest spectrum and red shift to a band-specific flux. This projection onto SDSS bands results in five fluxes $y_{n,b}$, which are modeled as independent Gaussian random variables with known variance
 \begin{align}
   y_{n,b} | \mathbf{w}_n, z_n, m_n, B &\sim \mathcal{N}( \mu_b(f_n^{(\text{obs})}, z_n), \tau_{n,b} ) \, .
@@ -324,10 +336,11 @@ where we condition the photometric weights on the spectroscopically fit weights.
 \label{sec:inference}
 The ``photo-z'' tasks requires that we compute posterior marginal distributions of $z$, $\mathbf{w}$, and $m$.  To compute these distributions, we construct an MCMC sampling algorithm that constructs a Markov chain over the state space including $z$, $\mathbf{w}$, $\mathbf{m}$, and $B$ that leaves the target posterior distribution invariant.  
  
-For example, to compute expectations with respect to the marginal posterior distribution over quasar redshift, we will want to produce posterior samples of $z_n$, $\mathbf{w}_n$, and $B$
+For example, to compute expectations with respect to the marginal posterior distribution over quasar redshift, we will want to produce posterior samples of $z_n$, $\mathbf{w}_n$, and $B$. In the following
+equations, $g$ represents an arbitrary function of redshift, and $N$ is the total number of samples:
 \begin{align}
   E[ g(z_n) | \mathbf{y}_n, \mathbf{X} ] 
-    &\approx \sum_{i} g(z_n^{(i)}) \\
+    &\approx \frac{1}{N} \sum_{i} g(z_n^{(i)}) \\
     z_n^{(i)}, \mathbf{w}_n | \mathbf{y}_n, B^{(i)} &\sim p(z_n, \mathbf{w}_n^{(i)} | \mathbf{y}_n, B^{(i)}) \\
     B^{(i)} &\sim p(B | \mathbf{X}) \, .
 \end{align}
