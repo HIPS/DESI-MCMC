@@ -43,7 +43,7 @@ def load_basis_fit(fname):
         parser     = pickle.load(handle)
     return th, lam0, lam0_delta, parser
 
-def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, Kinv_beta, sig2_omega, sig2_mu):
+def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu):
     parser = ParamParser()
     V      = len(lam0)
     N      = X.shape[0]
@@ -86,12 +86,10 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, Kinv_beta, sig2_omeg
     loss_grad = grad(loss_fun)
 
     ## joint prior over parameters
-    def prior_loss(th, Kinv_beta = Kinv_beta):
-        """ Prior over weights and basis.
+    def prior_loss(th):
+        """ WHITENED SPACE PRIOR 
             - th_mat    : K x (N + V) matrix holding all weights and basis params
             - N         : number of examples in training set
-            - Kinv_beta : Inverse covariance of beta (log basis)
-                          functions (for encoding smooth and spikes)
             - sig2_omega: prior variance on log weights
         """
         mus    = parser.get(th, 'mus')
@@ -99,7 +97,6 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, Kinv_beta, sig2_omeg
         omegas = parser.get(th, 'omegas')
         loss_mus    = .5 / (sig2_mu) * np.sum(np.square(mus))
         loss_omegas = .5 / (sig2_omega) * np.sum(np.square(omegas))
-        #loss_betas  = .5 * np.sum(np.dot(betas, Kinv_beta) * betas)
         loss_betas  = .5 * np.sum(np.square(betas))
         return loss_omegas + loss_mus + loss_betas 
     prior_loss_grad = grad(prior_loss)
@@ -111,7 +108,6 @@ def train_model(th, loss_fun, loss_grad, prior_loss, prior_grad,
                 cvx_iter=20000, sgd_iter = 5000,
                 learning_rate = 1e-5, momentum = .9, verbose=100):
 
-
     ## get to a reasonable spot w/ CVX OPT
     #res = minimize(fun = lambda(th): loss_fun(th) + prior_loss(th), 
     #               jac = lambda(th): loss_grad(th) + prior_grad(th),
@@ -121,50 +117,50 @@ def train_model(th, loss_fun, loss_grad, prior_loss, prior_grad,
     #th = res.x
 
     # dynamically set learning rate heuristically
-    #initial_rate = learning_rate
+    initial_rate = learning_rate
 
     # gradient descent + momentum
-    #cur_dir = np.zeros(th.shape)
-    #lls     = np.zeros(sgd_iter)
-    #print "{0:15}|{1:15}|{2:15}|{3:15}|{4:15}".format(
-    #    "  Iter   ", 
-    #    "  Train Err ", 
-    #    "  Objective Fun ", 
-    #    "  Step_size  ", 
-    #    "  Grad Mag   ")
-    #for epoch in range(sgd_iter):
+    cur_dir = np.zeros(th.shape)
+    lls     = np.zeros(sgd_iter)
+    print "{0:15}|{1:15}|{2:15}|{3:15}|{4:15}".format(
+        "  Iter   ", 
+        "  Train Err ", 
+        "  Objective Fun ", 
+        "  Step_size  ", 
+        "  Grad Mag   ")
+    for epoch in range(sgd_iter):
 
-    #    # compute gradient of objective function, reset learning rate
-    #    grad_th  = loss_grad(th) + prior_grad(th)
-    #    grad_mag = np.sqrt(np.sum(grad_th*grad_th))
-    #    learning_rate = 1. / grad_mag
+        # compute gradient of objective function, reset learning rate
+        grad_th  = loss_grad(th) + prior_grad(th)
+        grad_mag = np.sqrt(np.sum(grad_th*grad_th))
+        learning_rate = 1. / grad_mag
 
-    #    # compute step direction, accounts for momentum
-    #    cur_dir    = momentum * cur_dir + (1.0 - momentum) * grad_th
-    #    step_mag   = np.sqrt(np.sum(np.square(learning_rate * cur_dir)))
+        # compute step direction, accounts for momentum
+        cur_dir    = momentum * cur_dir + (1.0 - momentum) * grad_th
+        step_mag   = np.sqrt(np.sum(np.square(learning_rate * cur_dir)))
 
-    #    # take a step
-    #    step_vec   = .01 / grad_mag * cur_dir
-    #    step_mag   = np.sqrt(np.sum(step_vec * step_vec))
+        # take a step
+        step_vec   = .25 / grad_mag * cur_dir
+        step_mag   = np.sqrt(np.sum(step_vec * step_vec))
 
-    #    th        -= step_vec
-    #    lls[epoch] = loss_fun(th)
+        th        -= step_vec
+        lls[epoch] = loss_fun(th)
 
-    #    # make sure it's not nan
-    #    #while np.isnan(lls[epoch]): 
-    #    #    th            += learning_rate * cur_dir   # undo step
-    #    #    #learning_rate /= 2
-    #    #    #th            -= learning_rate * cur_dir
-    #    #    lls[epoch] = loss_fun(th)
-    #    #learning_rate = initial_rate
+        # make sure it's not nan
+        #while np.isnan(lls[epoch]): 
+        #    th            += learning_rate * cur_dir   # undo step
+        #    #learning_rate /= 2
+        #    #th            -= learning_rate * cur_dir
+        #    lls[epoch] = loss_fun(th)
+        #learning_rate = initial_rate
 
-    #    if epoch % verbose == 0:
-    #        print "{0:15}|{1:15}|{2:15}|{3:15}|{4:15}".format(
-    #            epoch, 
-    #            "%.12g"%lls[epoch],
-    #            "%.12g"%(lls[epoch] + prior_loss(th)),
-    #            "%2.4f"%step_mag, 
-    #            "%2.4f"%grad_mag)
+        if epoch % verbose == 0:
+            print "{0:15}|{1:15}|{2:15}|{3:15}|{4:15}".format(
+                epoch, 
+                "%.12g"%lls[epoch],
+                "%.12g"%(lls[epoch] + prior_loss(th)),
+                "%2.4f"%step_mag, 
+                "%2.4f"%grad_mag)
 
     #### Optimize w/ LBFGS with NO PRIOR 
     print "Switching to CVX Optimization Method"
@@ -173,7 +169,7 @@ def train_model(th, loss_fun, loss_grad, prior_loss, prior_grad,
                    jac = lambda(th): loss_grad(th) + prior_grad(th),
                    x0  = th, 
                    method = 'L-BFGS-B',
-                   options = {'gtol':1e-6, 'ftol':1e-6, 'disp':True, 'maxiter':cvx_iter})
+                   options = {'gtol':1e-6, 'ftol':1e-8, 'disp':True, 'maxiter':cvx_iter})
     th = res.x
 
     # go from whitened space to GP space
@@ -193,14 +189,14 @@ if __name__=="__main__":
     N              = qtrain['spectra'].shape[0]
 
     ## initialize a basis using existing eigenQuasar Model
-    lam_subsample = 10
-    header     = fitsio.read_header('../../data/eigen_specs/spEigenQSO-55732.fits')
-    eigQSOfits = fitsio.FITS('../../data/eigen_specs/spEigenQSO-55732.fits')
-    lam0       = 10.**(header['COEFF0'] + np.arange(header['NAXIS1']) * header['COEFF1'])
-    lam0       = lam0[::lam_subsample]
-    lam0_delta = np.concatenate((lam0[1:] - lam0[:-1], [lam0[-1] - lam0[-2]]))
-    eigQSO     = eigQSOfits[0].read()[:, ::lam_subsample]
-    K          = eigQSO.shape[0]
+    lam_subsample = 5
+    header        = fitsio.read_header('../../data/eigen_specs/spEigenQSO-55732.fits')
+    eigQSOfits    = fitsio.FITS('../../data/eigen_specs/spEigenQSO-55732.fits')
+    lam0          = 10.**(header['COEFF0'] + np.arange(header['NAXIS1']) * header['COEFF1'])
+    lam0          = lam0[::lam_subsample]
+    lam0_delta    = np.concatenate((lam0[1:] - lam0[:-1], [lam0[-1] - lam0[-2]]))
+    eigQSO        = eigQSOfits[0].read()[:, ::lam_subsample]
+    K             = eigQSO.shape[0]
 
     # resample spectra and spectra inverse variance onto common rest frame
     spectra_resampled, spectra_ivar_resampled, lam_mat = \
@@ -211,10 +207,10 @@ if __name__=="__main__":
                             lam0)
 
     ## construct smooth + spiky prior over betas
+    print "   Computing covariance cholesky "
     beta_kern = GPy.kern.Matern52(input_dim=1, variance=1., lengthscale=40)
     K_beta = beta_kern.K(lam0.reshape((-1, 1)))
     K_chol = np.linalg.cholesky(K_beta)
-    K_inv  = np.linalg.inv(K_beta)
 
     ## clean nans in data and inverse variance 
     X                  = spectra_resampled
@@ -225,21 +221,32 @@ if __name__=="__main__":
     ## set up the likelihood and prior functions
     parser, loss_fun, loss_grad, prior_loss, prior_loss_grad  = \
         make_functions(X, Lam, lam0, lam0_delta, K, 
-                       Kinv_beta  = K_inv, 
                        K_chol     = K_chol,
                        sig2_omega = 1., 
                        sig2_mu    = 10.)
 
     ## initialize basis and weights
-    basis_cache = 'cache/basis_fit_K-4_V-1364.pkl'
+    th = np.zeros(parser.N)
+    parser.set(th, 'betas', .01 * K_chol.dot(np.random.randn(len(lam0), K)).T)
+    parser.set(th, 'omegas', .01 * npr.randn(N, K))
+    parser.set(th, 'mus', .01 * npr.randn(N))
+
+    ## use cache if available
+    basis_cache = 'cache/basis_fit_K-4_V-2728.pkl'
     USE_CACHE = True
     if os.path.exists(basis_cache) and USE_CACHE:
-        th, lam0, lam0_delta, parser = load_basis_fit(basis_cache)
-    else:
-        th = np.zeros(parser.N)
-        parser.set(th, 'betas', .01 * K_chol.dot(np.random.randn(len(lam0), K)).T)
-        parser.set(th, 'omegas', .01 * npr.randn(N, K))
-        parser.set(th, 'mus', .01 * npr.randn(N))
+        th_cache, lam0_cache, lam0_delta_cache, parser_cache = load_basis_fit(basis_cache)
+        betas_cache = parser_cache.get(th, 'betas')
+        betas       = parser.get(th, 'betas')
+        if betas_cache.shape[1] != len(lam0):
+            print "    Interpolating cached basis to new lam0. "
+            for k in range(betas_cache.shape[0]):
+                betas[k, :] = np.interp(lam0, lam0_cache, betas_cache[k, :])
+            parser.set(th, 'betas', betas)
+            parser.set(th, 'mus', parser_cache.get(th_cache, 'mus'))
+            parser.set(th, 'omegas', parser_cache.get(th_cache, 'omegas'))
+        else: 
+            th = th_cache
 
     ## sanity check gradient
     check_grad(fun = lambda th: loss_fun(th) + prior_loss(th), # X, Lam), 
@@ -249,8 +256,8 @@ if __name__=="__main__":
     ## train model
     parser.set(th, 'betas', np.linalg.solve(K_chol, parser.get(th, 'betas').T).T)
     th = train_model(th, loss_fun, loss_grad, prior_loss, prior_loss_grad,
-                          cvx_iter=50000, sgd_iter=10,
-                          learning_rate = 1e-4, momentum=.9, verbose=10)
+                          cvx_iter=100000, sgd_iter=10,
+                          learning_rate = 1e-3, momentum=.9, verbose=10)
     print "Fit loss: ", loss_fun(th)
     dth = loss_grad(th)
     print "Gradient mag: ", np.sqrt((dth*dth).sum())

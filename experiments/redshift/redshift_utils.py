@@ -227,7 +227,7 @@ def project_to_bands(spectra, wavelengths):
         # interpolate sensitivity curve onto wavelengths
         sensitivity = np.interp(wavelengths, planck.wavelength_lookup[band]*(10**10), 
                                              planck.sensitivity_lookup[band])
-        norm        = sum(sensitivity)
+        norm        = np.sum(sensitivity)
         # conversion
         flambda2fnu  = wavelengths**2 / 2.99792e18
         fthru        = np.sum(sensitivity * spectra * flambda2fnu) / norm 

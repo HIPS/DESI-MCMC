@@ -62,7 +62,7 @@ def gen_redshift_samples(chain_idx, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf, USE_ML
     """ Generate posterior samples of red-shift using HMC """
     ll_samps = np.zeros(Nsamps)
     B        = get_basis_sample(0, USE_MLE)
-    
+
     ## initialize samples
     samps                    = np.zeros((Nsamps, B.shape[0] + 2))
     samps[0,:]               = .001 * npr.randn(B.shape[0] + 2)
@@ -124,6 +124,111 @@ def gen_redshift_samples(chain_idx, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf, USE_ML
                           K=B.shape[0], V=B.shape[1], qso_info = qso_n_info)
     return samps, ll_samps
 
+def gen_redshift_samples_tempering(Nchains, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf, USE_MLE):
+    """ Generate posterior samples of red-shift using HMC + Parallel Tempering """
+
+    print "=== PARALLEL TEMPERING WITH %d CHAINS === "%d
+
+    # grab basis for dimensions
+    B = get_basis_sample(0, USE_MLE)
+
+    # set up tempering parameters
+    z_inits = np.linspace(.5, 3.0, Nchains)
+    temps   = np.linspace(.2, 1., Nchains)
+
+    # set up a list of Nchains markov chains
+    chains_samps = [np.zeros((Nsamps, B.shape[0] + 2)) for c in range(Nchains)]
+    chains_lls   = [np.zeros(Nsamps) for c in range(Nchains)]
+    for ci, chs in enumerate(chains_samps): 
+        chs[0, :]  = .001 * npr.randn(B.shape[0] + 2)
+        chs[0, 0]  = z_inits[ci]
+        chs[0, -1] = np.log(INIT_MAG)
+        chains_lls[ci][0] = temps[ci] * lnpdf(samps[0, :], B)
+
+    ## sanity check gradient
+    check_grad(fun = lambda(x): temps[1] * lnpdf(x, B),
+               jac = lambda(x): temps[1] * dlnpdf(x, B),
+               th  = samps[0,:])
+
+    ## sample
+    Naccepts   = np.zeros(Nchains)
+    Nswaps     = 0
+    step_sizes = .01 * np.ones(Nchains)
+    avg_rates  = .9 * np.ones(Nchains)
+    adapt_step = True
+    print "{0:10}|{1:10}|{2:10}|{3:10}|{4:15}|{5:15}".format(
+        " iter ",
+        " ll ",
+        " step_sz ",
+        " Nswaps ",
+        " Naccepts",
+        " z (z_spec)")
+    for s in np.arange(1, Nsamps):
+        # stop adapting after warmup
+        if s > Nsamps/2:
+            adapt_step = False
+
+        # Nchains HMC draws
+        for ci in range(Nchains):
+            B = get_basis_sample(s, USE_MLE)
+            chains_samps[ci][s, :], step_sizes[ci], avg_rates[ci] = hmc(
+                     U                 = lambda(x): temps[ci] * lnpdf(x, B),
+                     grad_U            = lambda(x): temps[ci] * dlnpdf(x, B),
+                     step_sz           = step_sizes[ci],
+                     n_steps           = STEPS_PER_SAMPLE,
+                     q_curr            = chains_samps[ci][s-1,:],
+                     negative_log_prob = False, 
+                     adaptive_step_sz  = adapt_step,
+                     min_step_sz       = 0.00005,
+                     avg_accept_rate   = avg_rates[ci], 
+                     tgt_accept_rate   = .85)
+            chains_lls[ci][s] = temps[ci] * lnpdf(chains_samps[ci][s, :], B)
+            if chains_lls[ci][s] != chains_lls[ci][s-1]:
+                Naccepts[ci] += 1
+
+        # propose swaps cascading down from first 
+        for ci in range(Nchains-1):
+            # cache raw ll's for each (already computed)
+            ll_ci = chains_lls[ci][s] / temps[ci]
+            ll_ci_plus = chains_lls[ci+1][s] / temps[ci + 1]
+
+            # propose swap between chain index ci and ci + 1
+            ll_prop = ll_ci_plus * temps[ci] + ll_ci * temps[ci+1]
+            ll_curr = chains_lls[ci][s] + chains_lls[ci+1][s]
+            if np.log(npr.rand()) < ll_prop - ll_curr:
+                ci_samp                  = chains_samps[ci][s, :].copy()
+
+                # move chain sample ci+1 into ci
+                chains_samps[ci][s, :]   = chains_samps[ci+1][s, :]
+                chains_lls[ci][s]        = ll_ci_plus * temps[ci]
+
+                # move chain sample ci into ci + 1
+                chains_samps[ci+1][s, :] = ci_samp
+                chains_lls[ci+1][s]      = ll_ci * temps[ci+1]
+                if ci+1 == Nchains - 1:
+                    Nswaps += 1
+
+        if s % 1 == 0:
+            print "{0:10}|{1:10}|{2:10}|{3:10}|{4:15}|{5:15}".format(
+                "%d/%d"%(s, Nsamps),
+                " %2.4f"%chains_lls[-1][s],
+                " %2.5f"%step_sizes[-1],
+                " %d (%2.2f)"%(Nswaps, avg_rates[-1]), 
+                " (%d) (%d) (%d)"%(Naccepts[0], Naccepts[-2], Naccepts[-1]),
+                " (0: %2.2f), (-2: %2.2f), (-1: %2.2f) (%2.2f)"%(
+                    chains_samps[0][s, 0], chains_samps[-2][s, 0], 
+                    chains_samps[-1][s, 0], z_n))
+        if s % 10:
+            save_redshift_samples(chain_samps[-1], chains_lls[-1], q_idx=n, chain_idx=chain_idx,
+                                  K=B.shape[0], V=B.shape[1], qso_info = qso_n_info)
+    ### save samples 
+    save_redshift_samples(chain_samps[-1], chains_lls[-1], q_idx=n, chain_idx=chain_idx,
+                          K=B.shape[0], V=B.shape[1], qso_info = qso_n_info)
+    #only return the chain we care about
+    return chains_samps[-1], chains_lls[-1]
+
+
+
 #############################################################################
 ## IO functions
 #############################################################################
@@ -154,7 +259,8 @@ def load_redshift_samples(fname):
 ############################################################################
 
 ### load MLE basis 
-th, lam0, lam0_delta, parser = load_basis_fit('cache/basis_fit_K-4_V-1364.pkl')
+V_mle = 2728
+th, lam0, lam0_delta, parser = load_basis_fit('cache/basis_fit_K-4_V-%d.pkl'%V_mle)
 mus    = parser.get(th, 'mus')
 betas  = parser.get(th, 'betas')
 omegas = parser.get(th, 'omegas')
@@ -163,43 +269,6 @@ W_mle /= np.sum(W_mle, axis=1, keepdims=True)
 B_mle  = np.exp(betas)
 B_mle /= np.sum(B_mle * lam0_delta, axis=1, keepdims=True)
 M_mle = np.exp(mus)
-
-### load and curate basis samples
-np.random.seed(55)
-beta_kern = GPy.kern.Matern52(input_dim=1, variance=1., lengthscale=40.)
-K_beta    = beta_kern.K(lam0.reshape((-1, 1)))
-K_chol    = np.linalg.cholesky(K_beta)
-sample_files = glob('cache_remote/photo_experiment0/basis_samples_K-4_V-1364_chain_*.npy')[1:]
-B_chains = []
-for si, sfile in enumerate(sample_files):
-    print "pre-processing chain %d of %d"%(si, len(sample_files))
-    th_samples, ll_samps, lam0, lam0_delta, parser, chain_idx = \
-        load_basis_samples(sfile)
-    Nsamps = th_samples.shape[0]
-    # discard first half and randomly permute
-    th_samples = th_samples[Nsamps/2:, :]
-    ll_samps   = ll_samps[Nsamps/2:]
-    chain_perm = np.random.permutation(th_samples.shape[0])[0:2500]
-    chain_perm = np.arange(2500)
-    # assemble a few thousand samples
-    B0 = parser.get(th_samples[0], 'betas')
-    B_samps = np.zeros((len(chain_perm), B0.shape[0], B0.shape[1]))
-    for i, idx in enumerate(chain_perm):
-        betas = K_chol.dot(parser.get(th_samples[idx, :], 'betas').T).T
-        B_samp = np.exp(betas)
-        B_samp /= np.sum(B_samp * lam0_delta, axis=1, keepdims=True)
-        B_samps[i, :, :] = B_samp
-    B_chains.append(B_samps)
-B_samps = np.vstack(B_chains)
-B_samps = B_samps[npr.permutation(B_samps.shape[0]), :, :]
-
-def get_basis_sample(idx, mle = False, ): 
-    """ Method to return a basis sample to condition on 
-    (or the MLE if specified) """
-    if mle: 
-        return B_mle
-    else:
-        return B_samps[idx]
 
 ##############################################################################
 ### Start Script
@@ -210,16 +279,56 @@ if __name__=="__main__":
     ## set sampling parameters
     ##########################################################################
     narg    = len(sys.argv)
-    test_n  = int(sys.argv[1]) if narg > 1 else 0
+    test_n  = int(sys.argv[1]) if narg > 1 else 426
     Nsamps  = int(sys.argv[2]) if narg > 2 else 200
     Nchains = int(sys.argv[3]) if narg > 3 else 2
-    USE_MLE = True if narg > 4 and sys.argv[4] == "USE_MLE" else False
+    USE_MLE = True if narg > 4 and sys.argv[4] == "USE_MLE" else True
 
     # HMC parameters
     INIT_REDSHIFT    = 1.0
     INIT_MAG         = 10000.
     STEP_SIZE        = 0.00001
     STEPS_PER_SAMPLE = 10
+
+    ##########################################################################
+    ### load and curate basis samples
+    ##########################################################################
+    if not USE_MLE:
+        np.random.seed(55)
+        beta_kern = GPy.kern.Matern52(input_dim=1, variance=1., lengthscale=40.)
+        K_beta    = beta_kern.K(lam0.reshape((-1, 1)))
+        K_chol    = np.linalg.cholesky(K_beta)
+        sample_files = glob('cache_remote/photo_experiment0/basis_samples_K-4_V-1364_chain_*.npy')[1:]
+        B_chains = []
+        for si, sfile in enumerate(sample_files):
+            print "pre-processing chain %d of %d"%(si, len(sample_files))
+            th_samples, ll_samps, lam0, lam0_delta, parser, chain_idx = \
+                load_basis_samples(sfile)
+            Nsamps = th_samples.shape[0]
+            # discard first half and randomly permute
+            th_samples = th_samples[Nsamps/2:, :]
+            ll_samps   = ll_samps[Nsamps/2:]
+            chain_perm = np.random.permutation(th_samples.shape[0])[0:2500]
+            chain_perm = np.arange(2500)
+            # assemble a few thousand samples
+            B0 = parser.get(th_samples[0], 'betas')
+            B_samps = np.zeros((len(chain_perm), B0.shape[0], B0.shape[1]))
+            for i, idx in enumerate(chain_perm):
+                betas = K_chol.dot(parser.get(th_samples[idx, :], 'betas').T).T
+                B_samp = np.exp(betas)
+                B_samp /= np.sum(B_samp * lam0_delta, axis=1, keepdims=True)
+                B_samps[i, :, :] = B_samp
+            B_chains.append(B_samps)
+        B_samps = np.vstack(B_chains)
+        B_samps = B_samps[npr.permutation(B_samps.shape[0]), :, :]
+
+    def get_basis_sample(idx, mle = False, ): 
+        """ Method to return a basis sample to condition on 
+        (or the MLE if specified) """
+        if mle: 
+            return B_mle
+        else:
+            return B_samps[idx]
 
     ##########################################################################
     ## Load in spectroscopically measured quasars + fluxes
@@ -248,7 +357,7 @@ if __name__=="__main__":
     print "    FIBERID             = %d"%qso_n_info['FIBERID']
     print "    qso_idx             = %d"%n
     print "    test_idx            = %d"%test_n
-    print "    z_n (percenttile)   = %2.2f (%2.2f)"%(z_n, np.sum(all_zs < z_n) / float(len(all_zs)))
+    print "    z_n (percentile)   = %2.2f (%2.2f)"%(z_n, np.sum(all_zs < z_n) / float(len(all_zs)))
     print "    r-flux (percentile) = %2.2f (%2.2f)"%(y_flux[2], np.sum(r_fluxes < y_flux[2])/float(len(r_fluxes)))
 
     ##########################################################################
@@ -292,19 +401,29 @@ if __name__=="__main__":
     ##########################################################################
     ## Draw samples of redshift and weights
     ##########################################################################
-    z_inits = [.5, 1.0, 3.0, 5.0]
-    chain_samps = []
-    chain_lls   = []
-    for chain_idx, z_init in enumerate(z_inits):
-        samps, ll_samps = gen_redshift_samples(
-            chain_idx     = chain_idx,
-            Nsamps        = Nsamps,
-            INIT_REDSHIFT = z_init,
-            lnpdf         = lnpdf,
-            dlnpdf        = dlnpdf,
+    #z_inits = [.5, 1.0, 3.0, 5.0]
+    #chain_samps = []
+    #chain_lls   = []
+    #for chain_idx, z_init in enumerate(z_inits):
+    #    samps, ll_samps = gen_redshift_samples(
+    #        chain_idx     = chain_idx,
+    #        Nsamps        = Nsamps,
+    #        INIT_REDSHIFT = z_init,
+    #        lnpdf         = lnpdf,
+    #        dlnpdf        = dlnpdf,
+    #        USE_MLE       = USE_MLE)
+    #    chain_samps.append(samps)
+    #    chain_lls.append(ll_samps)
+
+    #%lprun -f pixel_likelihood -f project_to_bands \
+    samps, ll_samps = gen_redshift_samples_tempering( \
+            Nchains       = 5, \
+            Nsamps        = 1000, \
+            INIT_REDSHIFT = 2., \
+            lnpdf         = lnpdf,  \
+            dlnpdf        = dlnpdf, \
             USE_MLE       = USE_MLE)
-        chain_samps.append(samps)
-        chain_lls.append(ll_samps)
+    
 
     ###########################################################################
     ## debug reconstructions
