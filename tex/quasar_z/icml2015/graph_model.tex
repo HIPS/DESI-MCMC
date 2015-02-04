@@ -18,8 +18,9 @@
   \node[main, node distance = 5mm] (m) [below=of w] {$m_n$};
   \node[main, node distance = 5mm] (z) [below=of m] {$z_n$};
   \node[main, node distance = 18mm] (B) [above=of w] {$B_k$};
-  \node[main, fill=gray] (y) [right=of w] {$y_{n,\beta}$};
-  \node[main, fill=gray] (tau) [below=of y] {$\tau^2_{n,\beta}$};
+  \node[main] (ell) [left=of B] {$\ell, \nu$};
+  \node[main, fill=gray] (y) [right=of w] {$y_{n,b}$};
+  \node[main, fill=gray] (tau) [below=of y] {$\tau^2_{n,b}$};
   \path (B) edge [connect] (x)
            (B) edge [connect] (y)
            (w) edge [connect] (x)
@@ -29,13 +30,14 @@
            (z) edge [connect] (x)
            (z) edge [connect] (y)
            (sigma) edge [connect] (x)
-           (tau) edge [connect] (y);
+           (tau) edge [connect] (y)
+           (ell) edge [connect] (B) ;
     
   % draw plates
-  \node[plate=, inner sep=11pt, fit=(x) (sigma), label={[xshift=-34pt,yshift=14pt]south east:$\lambda \in \Lambda$}] (plate1) {};
-  \node[plate=, inner sep=11pt, fit=(y) (tau), label={[xshift=-45pt,yshift=14pt]south east:$b \in ugriz$}] (plate1) {};
-  \node[plate=, inner sep=11pt, fit=(B), label={[xshift=-15pt,yshift=14pt]south east:$K$}] (plate1) {};
-  \node[plate, minimum width=80mm, minimum height=60mm, inner sep=4.4mm,draw=black!100, fit= (x) (w) (y) (tau) (sigma) (m) (z), label={[xshift=-15pt,yshift=14pt]south east:$N$}] {};
+  \node[plate=, inner sep=15pt, fit=(x) (sigma), label={[xshift=-34pt,yshift=14pt]south east:$\lambda \in \Lambda$}] (plate1) {};
+  \node[plate=, inner sep=15pt, fit=(y) (tau), label={[xshift=-73pt,yshift=16pt]south east:$b \in \{u,g,r,i,z\}$}] (plate1) {};
+  \node[plate=, inner sep=15pt, fit=(B), label={[xshift=-15pt,yshift=14pt]south east:$K$}] (plate1) {};
+  \node[plate, minimum width=80mm, minimum height=55mm, inner sep=4.4mm,draw=black!100, fit= (x) (w) (y) (tau) (sigma) (m) (z), label={[xshift=-15pt,yshift=14pt]south east:$N$}] {};
 \end{tikzpicture}
 
 %\end{figure}
