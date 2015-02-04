@@ -438,6 +438,20 @@ Our sampler yields posterior samples of the templates themselves; one sample is 
 \end{figure*}
 %---------------
 
+%----- Red Shift, spec vs photo -------------------------------------------------
+\begin{figure*}[t]
+\vskip 0.2in
+\begin{center}
+\centerline{\includegraphics[width=2\columnwidth]{../figs/rank_4_basis}}
+\centerline{\includegraphics[width=2\columnwidth]{../figs/idx_0_rank_4_reconstruction.pdf}}
+\centerline{\includegraphics[width=2\columnwidth]{../figs/idx_4_rank_4_reconstruction.pdf}}
+\vskip -0.2in
+\caption{Top: an estimate of the maximum likelihood of the latent templates $B = \{B_k\}_{k=1}^K$.  Note the different ranges of the $x$-axis (wavelength).  Each basis function distributes its mass across different regions of the spectrum to explain different salient features of quasar spectra in the rest-frame.  Bottom: non-negative  model reconstructions of two training-sample SEDs }
+\label{fig:basis}
+\end{center}
+\end{figure*}
+%---------------
+
 %---- TABLE, coverage --------------------------------------
 \begin{table*}[ht]
 \caption{Top: mean absolute and mean absolute percentage error of photometric redshift predictions with respect to spectroscopic ``ground truth''.  Bottom: number of predicted values covered by Bayesian credible intervals of varying size. }

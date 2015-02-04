@@ -343,10 +343,12 @@ if __name__=="__main__":
 
     # set TEST INDICES 
     npr.seed(13)
-    test_idx = npr.permutation(len(qso_df))
+    test_idx       = npr.permutation(len(qso_df))
+    high_shift_idx = np.where(all_zs > 4.08557)[0]
 
     ## grab the we're sampling
     n             = test_idx[test_n]
+    n             = high_shift_idx[test_n]
     qso_n_info    = qso_df[n]
     z_n           = qso_n_info['Z_VI']
     y_flux        = qso_n_info['PSFFLUX']
@@ -436,43 +438,10 @@ if __name__=="__main__":
         #plt.savefig("z_compare_idx_%d.pdf"%n, bbox_inches='tight')
         plt.show()
 
-    ## reconstruct the basis from samples
-    #samp_idxs = np.arange(Nsamps/2, Nsamps)
-    #recon_samps = np.zeros((lam_obs_samps.shape[1], len(lam_obs)))
-    #for i in range(len(samp_idxs)):
-    #    idx = samp_idxs[i]
-    #    rest_samp    = th_samps[idx, 0:-1].dot(B)
-    #    lam_obs_samp = lam0 * (1 + th_samps[idx, -1])
-    #    recon_samps[i, :] = np.interp(lam_obs, lam_obs_samp, rest_samp)
 
-    ### save some sample plots
-    #out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/figs/"
-    #if not os.path.exists(out_dir) or not os.path.isdir(out_dir):
-    #    out_dir = "figs/"
-
-    #fig = plt.figure(figsize=(18,6))
-    #pers = np.percentile(recon_samps, [1, 50, 99], axis=0)
-    #plt.plot(lam_obs, spec_n, alpha = .5)
-    #plt.plot(lam_obs, pers[1])
-    #plt.plot(lam_obs, pers[0], color='grey')
-    #plt.plot(lam_obs, pers[2], color='grey')
-    #plt.title("Quasar %d reconstruction from SDSS"%n)
-    #plt.xlabel("wavelength")
-    #plt.ylabel("$f(\lambda)$")
-    #plt.savefig(out_dir + "quasar_%d_mcmc_recon.pdf"%n, bbox_inches='tight')
-
-    #fig = plt.figure()
-    #cnts, bins, patches = plt.hist(th_samps[(Nsamps/2):, -1], 20, alpha=.5, normed=True)
-    #plt.xlabel("$z$ (red-shift)")
-    #plt.ylabel("$p(z | X, B)$")
-    #plt.vlines(z_n, 0,  cnts.max(), linewidth=2, color="black", label="$z_{spec}$")
-    #plt.vlines(th_samps[(Nsamps/2):,-1].mean(), 0, cnts.max(), linewidth=2, color='red', label="$E[z | x]$")
-    #plt.legend()
-    #plt.title("Quasar %d: red-shift posterior"%n)
-    #plt.xlim(th_samps[(Nsamps/2):,-1].min() - .25, th_samps[(Nsamps/2):, -1].max() + .25)
-    #plt.savefig(out_dir + "quasar_%d_posterior_z.pdf"%n, bbox_inches='tight')
-
-    ########### DEBUG ################
+    ##########################################################################
+    ############ DEBUG #######################################################
+    ##########################################################################
     if False:
         #n=95
         #z_n    = qtest['Z'][n]
@@ -513,5 +482,41 @@ if __name__=="__main__":
     #    axarr[1].plot(w_grid, np.exp(z_grid - z_grid.max()))
     #    axarr[1].vlines(z_n, pz_grid.min(), pz_grid.max())
     #    plt.show()
+
+    ## reconstruct the basis from samples
+    #samp_idxs = np.arange(Nsamps/2, Nsamps)
+    #recon_samps = np.zeros((lam_obs_samps.shape[1], len(lam_obs)))
+    #for i in range(len(samp_idxs)):
+    #    idx = samp_idxs[i]
+    #    rest_samp    = th_samps[idx, 0:-1].dot(B)
+    #    lam_obs_samp = lam0 * (1 + th_samps[idx, -1])
+    #    recon_samps[i, :] = np.interp(lam_obs, lam_obs_samp, rest_samp)
+
+    ### save some sample plots
+    #out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/figs/"
+    #if not os.path.exists(out_dir) or not os.path.isdir(out_dir):
+    #    out_dir = "figs/"
+
+    #fig = plt.figure(figsize=(18,6))
+    #pers = np.percentile(recon_samps, [1, 50, 99], axis=0)
+    #plt.plot(lam_obs, spec_n, alpha = .5)
+    #plt.plot(lam_obs, pers[1])
+    #plt.plot(lam_obs, pers[0], color='grey')
+    #plt.plot(lam_obs, pers[2], color='grey')
+    #plt.title("Quasar %d reconstruction from SDSS"%n)
+    #plt.xlabel("wavelength")
+    #plt.ylabel("$f(\lambda)$")
+    #plt.savefig(out_dir + "quasar_%d_mcmc_recon.pdf"%n, bbox_inches='tight')
+
+    #fig = plt.figure()
+    #cnts, bins, patches = plt.hist(th_samps[(Nsamps/2):, -1], 20, alpha=.5, normed=True)
+    #plt.xlabel("$z$ (red-shift)")
+    #plt.ylabel("$p(z | X, B)$")
+    #plt.vlines(z_n, 0,  cnts.max(), linewidth=2, color="black", label="$z_{spec}$")
+    #plt.vlines(th_samps[(Nsamps/2):,-1].mean(), 0, cnts.max(), linewidth=2, color='red', label="$E[z | x]$")
+    #plt.legend()
+    #plt.title("Quasar %d: red-shift posterior"%n)
+    #plt.xlim(th_samps[(Nsamps/2):,-1].min() - .25, th_samps[(Nsamps/2):, -1].max() + .25)
+    #plt.savefig(out_dir + "quasar_%d_posterior_z.pdf"%n, bbox_inches='tight')
 
 

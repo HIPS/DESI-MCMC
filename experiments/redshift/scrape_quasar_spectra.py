@@ -5,23 +5,29 @@ import fitsio
 import numpy as np
 import seaborn as sns
 from redshift_utils import load_sdss_fluxes_clean_split
-import urllib2
+import urllib
+
+
+## scrape values corresponding to sampled quasars
+qso_sample_files = glob('cache_remote/photo_experiment0/redshift_samples*chain_0.npy')
+qso_ids = []
+for i in to_inspect:
+    _, _, _, qso_info, _ = load_redshift_samples(qso_sample_files[i])
+    qso_ids.append([qso_info[b] for b in ['PLATE', 'MJD', 'FIBERID']])
 
 ## load up the DR10QSO file
-dr10qso = fitsio.FITS('../../data/DR10QSO/DR10Q_v2.fits')
-qso_df = dr10qso[1].read()
-
+#dr10qso = fitsio.FITS('../../data/DR10QSO/DR10Q_v2.fits')
+#qso_df = dr10qso[1].read()
 #remove those with zwarning nonzero
-qso_df = qso_df[ qso_df['ZWARNING']==0 ]
-
+#qso_df = qso_df[ qso_df['ZWARNING']==0 ]
 #randomly select 100 quasars
-Nquasar = len(qso_df)
-np.random.seed(42)
-perm    = np.random.permutation(Nquasar)
-idx     = perm[0:1000]
+#Nquasar = len(qso_df)
+#np.random.seed(42)
+#perm    = np.random.permutation(Nquasar)
+#idx     = perm[0:1000]
 
 # get their PLATE-MJD-FIBER, and assemble filenames
-qso_ids   = qso_df[['PLATE', 'MJD', 'FIBERID']][idx]
+#qso_ids   = qso_df[['PLATE', 'MJD', 'FIBERID']][idx]
 spec_url_template  = "http://data.sdss3.org/sas/dr12/boss/spectro/redux/v5_7_0/spectra/%04d/spec-%04d-%05d-%04d.fits\n"
 qso_lines = [spec_url_template%(qid[0], qid[0], qid[1], qid[2]) for qid in qso_ids]
 
@@ -41,12 +47,11 @@ for i, qso_url in enumerate(qso_lines):
         continue
 
     # otherwise, download it
-    urllib.urlretrieve(qso_url.strip(), fpath, reporthook=dlProgress)
     def dlProgress(count, blockSize, totalSize):
       percent = int(count*blockSize*100/totalSize)
       sys.stdout.write("\r    " + bname + "...%d%% (%d of %d)" % (percent, i, len(qso_lines)) )
       sys.stdout.flush()
-
+    urllib.urlretrieve(qso_url.strip(), fpath, reporthook=dlProgress)
     print ""
 
 

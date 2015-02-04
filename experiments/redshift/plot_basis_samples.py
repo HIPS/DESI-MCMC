@@ -9,14 +9,16 @@ from glob import glob
 npr.seed(42)
 
 ## grab some plotting defaults
-sns.set_style("white")
+sns.set_style("ticks")
 current_palette = sns.color_palette()
 
 if __name__=="__main__":
 
+    ### Paper out directory
+    out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/figs/"
 
     ### load MCMC sample files
-    sample_files = glob('cache_remote/basis_samples_K-4_V-1364_chain_*.npy')
+    sample_files = glob('cache_remote/photo_experiment0/basis_samples_K-4_V-1364_chain_*.npy')
     chains = {}
     for sfile in sample_files:
         th_samples, ll_samps, lam0, lam0_delta, parser, chain_idx = \
@@ -24,7 +26,7 @@ if __name__=="__main__":
         chains[chain_idx] = {'th':th_samples, 'lls':ll_samps, 'parser':parser}
 
     # visualize LL trace for each chain
-    for i in range(2): 
+    for i in range(len(chains)): 
         plt.plot(chains[i]['lls'][-1000:])
     plt.show()
 
@@ -55,11 +57,20 @@ if __name__=="__main__":
     K, V     = chains[2]['parser'].idxs_and_shapes['betas'][1]
     Ntrain   = chains[2]['parser'].idxs_and_shapes['mus'][1][0]
 
+    # set up prior cholesky
+    sig2_omega = 1.
+    sig2_mu    = 500.
+    beta_kern = GPy.kern.Matern52(input_dim=1, variance=1., lengthscale=40) #length_scale)
+    K_beta    = beta_kern.K(lam0.reshape((-1, 1)))
+    K_chol    = np.linalg.cholesky(K_beta)
+    K_inv     = np.linalg.inv(K_beta)
+
     B_samps = np.zeros((Nsamps, K, V))
     W_samps = np.zeros((Nsamps, Ntrain, K))
     M_samps = np.zeros((Nsamps, Ntrain))
     for n in range(Nsamps):
         betas = K_chol.dot(parser.get(th_samps[n, :], 'betas').T).T
+        #betas = parser.get(th_samps[n, :], 'betas')
         mus   = parser.get(th_samps[n, :], 'mus')
         omegas = parser.get(th_samps[n, :], 'omegas')
         W = np.exp(omegas)
@@ -71,9 +82,26 @@ if __name__=="__main__":
         M_samps[n, :] = M.squeeze()
         W_samps[n, :] = W
 
-    plt.plot(lam0, B_samps.mean(axis=0).T)
-    plt.show()
 
+    ######################################################################
+    ## Plot Basis
+    ######################################################################
+    fig, axarr = plt.subplots(K, 1, figsize=(16, 10))
+    ranges = [[1000, 4000], [800, 1800], [0, 10000], [800, 2000]]
+    for k in range(K):
+        #plt.plot(lam0, B_samps.mean(axis=0).T)
+        axarr[k].plot(lam0, B_samps[2000, k, :], color=sns.color_palette()[k])
+        axarr[k].set_xlim(ranges[k])
+        #if k != 3:
+        #    axarr[k].set_xticks([])
+    plt.xlabel(" wavelength $(\AA)$ ", fontsize=16, labelpad=20)
+    sns.despine(top=True)
+    plt.savefig(out_dir + "basis_samp_K_%d.pdf"%K, bbox_inches="tight")
+    plt.close('all')
+
+    #######################################################################
+    ### Get a handle on basis marginasl
+    #######################################################################
     qidx = 30
     n, bins, patches = plt.hist(M_samps[:, qidx], 25, normed=True)
     plt.vlines(M_mle[qidx], ymin=0, ymax=n.max())
@@ -81,7 +109,6 @@ if __name__=="__main__":
 
     n, bins, patches = plt.hist(W_samps[:, qidx, 1], 30, normed=True)
     plt.vlines(W_mle[qidx, 1], ymin=0, ymax=n.max(), linewidth=3 )
-
 
     def plot_recon(spec_recon, z, spec, spec_ivar):
         fig = plt.figure(figsize=(18,6))
