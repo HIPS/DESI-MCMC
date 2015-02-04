@@ -127,7 +127,7 @@ def gen_redshift_samples(chain_idx, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf, USE_ML
 def gen_redshift_samples_tempering(Nchains, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf, USE_MLE):
     """ Generate posterior samples of red-shift using HMC + Parallel Tempering """
 
-    print "=== PARALLEL TEMPERING WITH %d CHAINS === "%d
+    print "=== PARALLEL TEMPERING WITH %d CHAINS === "%Nchains
 
     # grab basis for dimensions
     B = get_basis_sample(0, USE_MLE)
@@ -143,12 +143,12 @@ def gen_redshift_samples_tempering(Nchains, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf
         chs[0, :]  = .001 * npr.randn(B.shape[0] + 2)
         chs[0, 0]  = z_inits[ci]
         chs[0, -1] = np.log(INIT_MAG)
-        chains_lls[ci][0] = temps[ci] * lnpdf(samps[0, :], B)
+        chains_lls[ci][0] = temps[ci] * lnpdf(chs[0, :], B)
 
     ## sanity check gradient
     check_grad(fun = lambda(x): temps[1] * lnpdf(x, B),
                jac = lambda(x): temps[1] * dlnpdf(x, B),
-               th  = samps[0,:])
+               th  = chains_samps[1][0,:])
 
     ## sample
     Naccepts   = np.zeros(Nchains)
@@ -218,24 +218,28 @@ def gen_redshift_samples_tempering(Nchains, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf
                 " (0: %2.2f), (-2: %2.2f), (-1: %2.2f) (%2.2f)"%(
                     chains_samps[0][s, 0], chains_samps[-2][s, 0], 
                     chains_samps[-1][s, 0], z_n))
-        if s % 10:
-            save_redshift_samples(chain_samps[-1], chains_lls[-1], q_idx=n, chain_idx=chain_idx,
+        if s % 200:
+            save_redshift_samples(chains_samps[-1], chains_lls[-1], q_idx=n, 
+                                  chain_idx="temper", use_mle=USE_MLE,
                                   K=B.shape[0], V=B.shape[1], qso_info = qso_n_info)
     ### save samples 
-    save_redshift_samples(chain_samps[-1], chains_lls[-1], q_idx=n, chain_idx=chain_idx,
+    save_redshift_samples(chains_samps[-1], chains_lls[-1], q_idx=n, 
+                          chain_idx="temper", use_mle=USE_MLE,
                           K=B.shape[0], V=B.shape[1], qso_info = qso_n_info)
     #only return the chain we care about
     return chains_samps[-1], chains_lls[-1]
 
 
-
 #############################################################################
 ## IO functions
 #############################################################################
-def save_redshift_samples(th_samps, ll_samps, q_idx, K, V, qso_info, chain_idx):
+def save_redshift_samples(th_samps, ll_samps, q_idx, K, V, qso_info, chain_idx, use_mle):
     """ save basis fit info """
     #dump separately - pickle is super inefficient
-    fbase = 'cache/redshift_samples_K-%d_V-%d_qso_%d_chain_%d'%(K, V, q_idx, chain_idx)
+    if chain_idx == "temper":
+        fbase = 'cache/redshift_samples_K-%d_V-%d_qso_%d_chain_%s_mle_%r'%(K, V, q_idx, chain_idx, use_mle)
+    else:
+        fbase = 'cache/redshift_samples_K-%d_V-%d_qso_%d_chain_%d_mle_%r'%(K, V, q_idx, chain_idx, use_mle)
     np.save(fbase + '.npy', th_samps)
     with open(fbase + '.pkl', 'wb') as handle:
         pickle.dump(ll_samps, handle)
@@ -279,8 +283,8 @@ if __name__=="__main__":
     ## set sampling parameters
     ##########################################################################
     narg    = len(sys.argv)
-    test_n  = int(sys.argv[1]) if narg > 1 else 426
-    Nsamps  = int(sys.argv[2]) if narg > 2 else 200
+    test_n  = int(sys.argv[1]) if narg > 1 else 0
+    Nsamps  = int(sys.argv[2]) if narg > 2 else 20
     Nchains = int(sys.argv[3]) if narg > 3 else 2
     USE_MLE = True if narg > 4 and sys.argv[4] == "USE_MLE" else True
 
@@ -361,25 +365,6 @@ if __name__=="__main__":
     print "    r-flux (percentile) = %2.2f (%2.2f)"%(y_flux[2], np.sum(r_fluxes < y_flux[2])/float(len(r_fluxes)))
 
     ##########################################################################
-    ## Load in basis fit (or basis samples)
-    ##########################################################################
-    ### load ML basis from cache (beta and omega values)
-    #basis_cache = 'cache/basis_fit_K-4_V-1364.pkl'
-    #USE_CACHE = True
-    #if os.path.exists(basis_cache) and USE_CACHE:
-    #    th, lam0, lam0_delta, parser = load_basis_fit(basis_cache)
-
-    ## compute actual weights and basis values (normalized basis + weights)
-    #mus    = parser.get(th, 'mus')
-    #betas  = parser.get(th, 'betas')
-    #omegas = parser.get(th, 'omegas')
-    #W = np.exp(omegas)
-    #W = W / np.sum(W, axis=1, keepdims=True)
-    #B = np.exp(betas)
-    #B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
-    #M = np.exp(mus)
-
-    ##########################################################################
     ## functions to pass into HMC
     ##########################################################################
     def lnpdf(q, B):
@@ -418,7 +403,7 @@ if __name__=="__main__":
     #%lprun -f pixel_likelihood -f project_to_bands \
     samps, ll_samps = gen_redshift_samples_tempering( \
             Nchains       = 5, \
-            Nsamps        = 1000, \
+            Nsamps        = Nsamps, \
             INIT_REDSHIFT = 2., \
             lnpdf         = lnpdf,  \
             dlnpdf        = dlnpdf, \
