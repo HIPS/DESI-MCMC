@@ -5,54 +5,78 @@ import fitsio
 import numpy as np
 import seaborn as sns
 from redshift_utils import load_sdss_fluxes_clean_split
-import urllib
+import urllib, os, sys
 
-
-## scrape values corresponding to sampled quasars
-qso_sample_files = glob('cache_remote/photo_experiment0/redshift_samples*chain_0.npy')
-qso_ids = []
-for i in to_inspect:
-    _, _, _, qso_info, _ = load_redshift_samples(qso_sample_files[i])
-    qso_ids.append([qso_info[b] for b in ['PLATE', 'MJD', 'FIBERID']])
-
-## load up the DR10QSO file
-#dr10qso = fitsio.FITS('../../data/DR10QSO/DR10Q_v2.fits')
-#qso_df = dr10qso[1].read()
-#remove those with zwarning nonzero
-#qso_df = qso_df[ qso_df['ZWARNING']==0 ]
-#randomly select 100 quasars
-#Nquasar = len(qso_df)
-#np.random.seed(42)
-#perm    = np.random.permutation(Nquasar)
-#idx     = perm[0:1000]
-
-# get their PLATE-MJD-FIBER, and assemble filenames
-#qso_ids   = qso_df[['PLATE', 'MJD', 'FIBERID']][idx]
-spec_url_template  = "http://data.sdss3.org/sas/dr12/boss/spectro/redux/v5_7_0/spectra/%04d/spec-%04d-%05d-%04d.fits\n"
-qso_lines = [spec_url_template%(qid[0], qid[0], qid[1], qid[2]) for qid in qso_ids]
-
-# write to little file for wget...
-f = open('qso_list.csv', 'w')
-f.writelines(qso_lines)
-f.close()
-
-# zip through and download spec files
-for i, qso_url in enumerate(qso_lines):
-
+def download_spec_file(plate, mjd, fiberid, redownload=False):
+    """ grabs the spec file given plate, mjd and fiber id """
+    spec_url_template  = "http://data.sdss3.org/sas/dr12/boss/spectro/redux/v5_7_0/spectra/%04d/spec-%04d-%05d-%04d.fits\n"
+    spec_url = spec_url_template%(plate, plate, mjd, fiberid)
+ 
     # check if ../../data/DR10QSO/spec/<FNAME> exists! if so, skip it!
-    bname = os.path.basename(qso_url.strip())
+    bname = os.path.basename(spec_url.strip())
     fpath = "../../data/DR10QSO/specs/%s"%bname
-    if os.path.exists(fpath):
+    if not redownload and os.path.exists(fpath):
         print "    already there, skipping", bname
-        continue
+        return fpath
 
     # otherwise, download it
     def dlProgress(count, blockSize, totalSize):
       percent = int(count*blockSize*100/totalSize)
-      sys.stdout.write("\r    " + bname + "...%d%% (%d of %d)" % (percent, i, len(qso_lines)) )
+      sys.stdout.write("\r    " + bname + "...%d%%" % (percent))
       sys.stdout.flush()
-    urllib.urlretrieve(qso_url.strip(), fpath, reporthook=dlProgress)
+    urllib.urlretrieve(spec_url.strip(), fpath, reporthook=dlProgress)
     print ""
+    return fpath
+   
+
+if __name__=="__main__":
+
+    ## scrape values corresponding to sampled quasars
+    #qso_sample_files = glob('cache_remote/photo_experiment0/redshift_samples*chain_0.npy')
+    qso_sample_files = glob('cache_remote/temper_experiment/redshift_samples*.npy')
+    qso_ids = []
+    for i in to_inspect:
+        _, _, _, qso_info, _ = load_redshift_samples(qso_sample_files[i])
+        qso_ids.append([qso_info[b] for b in ['PLATE', 'MJD', 'FIBERID']])
+
+    ## load up the DR10QSO file
+    #dr10qso = fitsio.FITS('../../data/DR10QSO/DR10Q_v2.fits')
+    #qso_df = dr10qso[1].read()
+    #remove those with zwarning nonzero
+    #qso_df = qso_df[ qso_df['ZWARNING']==0 ]
+    #randomly select 100 quasars
+    #Nquasar = len(qso_df)
+    #np.random.seed(42)
+    #perm    = np.random.permutation(Nquasar)
+    #idx     = perm[0:1000]
+    
+    # get their PLATE-MJD-FIBER, and assemble filenames
+    #qso_ids   = qso_df[['PLATE', 'MJD', 'FIBERID']][idx]
+    spec_url_template  = "http://data.sdss3.org/sas/dr12/boss/spectro/redux/v5_7_0/spectra/%04d/spec-%04d-%05d-%04d.fits\n"
+    qso_lines = [spec_url_template%(qid[0], qid[0], qid[1], qid[2]) for qid in qso_ids]
+
+    # write to little file for wget...
+    f = open('qso_list.csv', 'w')
+    f.writelines(qso_lines)
+    f.close()
+
+# zip through and download spec files
+    for i, qso_url in enumerate(qso_lines):
+
+        # check if ../../data/DR10QSO/spec/<FNAME> exists! if so, skip it!
+        bname = os.path.basename(qso_url.strip())
+        fpath = "../../data/DR10QSO/specs/%s"%bname
+        if os.path.exists(fpath):
+            print "    already there, skipping", bname
+            continue
+
+        # otherwise, download it
+        def dlProgress(count, blockSize, totalSize):
+          percent = int(count*blockSize*100/totalSize)
+          sys.stdout.write("\r    " + bname + "...%d%% (%d of %d)" % (percent, i, len(qso_lines)) )
+          sys.stdout.flush()
+        urllib.urlretrieve(qso_url.strip(), fpath, reporthook=dlProgress)
+        print ""
 
 
 ##data.sdss3.org/sas/dr10/boss/spectro/redux/v5_5_12/spectra/
