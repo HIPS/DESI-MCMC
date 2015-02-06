@@ -16,6 +16,7 @@
 \usepackage{amsmath,amsfonts,amssymb,bbm}
 \usepackage{tikz}
 \usetikzlibrary{fit,positioning}
+\usepackage{todonotes}
 
 % For citations
 \usepackage{natbib}
@@ -101,7 +102,7 @@
 ]
 
 \begin{abstract} 
-We describe a method for combining two disparate sources of astronomical data, spectroscopy and photometry, which carry information about sources of light (e.g.~stars, galaxies, and quasars) at extremely different resolutions. 
+We describe a method for combining two disparate sources of astronomical data, spectroscopy and photometry, which carry information about sources of light (e.g., stars, galaxies, and quasars) at extremely different resolutions. 
 Our model treats the spectral energy distribution (SED) of the radiation of a source as a latent variable, hierarchically generating both photometric and spectroscopic observations.  
 Furthermore, we view the problem of SED inference as a density estimation problem, placing a flexible nonparametric prior over the SED of a light source that admits a physically interpretable decomposition and allows us to tractably perform Bayesian inference using Markov chain Monte Carlo (MCMC).  
 We use our model to predict the distribution of the redshift of a quasar from five-band (low-resolution) photometric data, the so called ``photo-z'' problem. 
@@ -113,14 +114,14 @@ Our method shows that tools from machine learning and Bayesian statistics allow 
 \section{Introduction}
 Enormous amounts of astronomical data are collected by a range of instruments at multiple resolutions, providing information about billions of sources of light in the observable universe~\cite{kent1994sdss, martin2005galex}.  
 Among these data are measurements of the spectral energy distribution (SED) of a source.  
-The SED describes the distribution of energy radiated by a source over the spectrum of wavelengths or energy levels.  
+The SED describes the distribution of energy radiated by a source over the spectrum of wavelengths or energy levels. \todo{what are energy levels?}  
 For intuition, the SED of a star at around 5,800 $K$ (like our sun) radiates most of its energy in the 4,000 $\angstrom$ to 7,000 $\angstrom$ range, which corresponds roughly to the range of visible light.  
 However, stars tend to have simple distributions (well-modeled by Planck's law), whereas other objects, such as galaxies and quasars, can have much more complicated SEDs.  
 The SED of a source is an object of interest because it conveys information about the physical properties of the particular object, including type of source, effective temperature, distance to earth, and redshift. 
 
 Measurements of SEDs, however, are produced by instruments at widely varying resolutions.  
 Spectroscopic data describe a source's SED in finer detail than broadband photometric data.  For example, the Baryonic Oscillation Spectroscopic Survey \cite{dawson2013baryon} measures SED samples at over four thousand wavelengths between 3,500 and 10,500 $\angstrom$.
-In contrast, the photometry from the Sloan Digital Sky Survey (SDSS)~\cite{kent1994sdss} collect pixel-level fluxes in the $u,g,r,i,$ and $z$ bands.  
+In contrast, the photometry from the Sloan Digital Sky Survey (SDSS)~\cite{kent1994sdss} collects pixel-level fluxes in the relatively broad $u,g,r,i,$ and $z$ bands.  
 Photometric preprocessing models can then aggregate pixel information into five band-specific fluxes and their uncertainties \cite{luptonsdss}.  
 These measurements reflect the weighted average response over a large swath of the wavelength spectrum. 
 The two methods of spectral information collection are graphically compared in Figure~\ref{fig:filters}. 
@@ -131,7 +132,9 @@ The two methods of spectral information collection are graphically compared in F
 \begin{center}
 \centerline{\includegraphics[width=2\columnwidth]{../figs/quasar_spectrum_sdss_filters}}
 \vskip -0.18in
-\caption{Example of a BOSS-measured quasar SED with SDSS \emph{ugriz} band filters, $S_{b}(\lambda)$, $b \in \{u, g, r, i, z\}$, overlaid.  Spectroscopic measurements include noisy samples at thousands of wavelengths, where as SDSS photometric fluxes reflect the (weighted) response over a large range of wavelengths.}
+\caption{%
+Example of a BOSS-measured quasar SED with SDSS \emph{ugriz} band filters, $S_{b}(\lambda)$, $b \in \{u, g, r, i, z\}$, overlaid.
+Spectroscopic measurements include noisy samples at thousands of wavelengths, where as SDSS photometric fluxes reflect the (weighted) response over a large range of wavelengths.}
 \label{fig:filters}
 \end{center}
 \vskip -0.28in
@@ -141,14 +144,19 @@ The two methods of spectral information collection are graphically compared in F
 Despite carrying less information, broadband photometry is more widely available and exists for a larger number of sources than spectroscopic measurements. 
 This work develops a method for extracting information from observations of light sources by \emph{jointly} modeling spectroscopic and photometric data.  
 In particular, we use our model to measure the redshift of quasars for which we only have photometric observations.  
-Redshift is a phenomenon in which the observed SED of a source of light is stretched toward longer (redder) wavelengths.  This effect is due to a combination of a high radial velocity with respect to the observer and the expansion of the universe (termed \emph{cosmological redshift})~\cite{hogg1999distance, harrison1993redshift}.  
+Redshift is a phenomenon in which the observed SED of a source of light is stretched toward longer (redder) wavelengths.
+This effect is due to a combination of a high radial velocity with respect to the observer and the expansion of the universe (termed \emph{cosmological redshift})~\cite{hogg1999distance, harrison1993redshift}.  
 Quasars, or quasi-stellar radio sources, are extremely distant and energetic sources of electromagnetic radiation that can exhibit high redshift~\cite{silk1997quasars}.  
 Accurate estimates and uncertainties of redshift measurements from photometry have the potential to guide the use of higher resolution instruments to study sources of interest.  
 Furthermore, accurate photometric models can aid the automation of identifying source types and estimating physical characteristics of faintly observed sources in large photometric surveys \cite{regier2015}.  
 
 Our model jointly describes high-resolution spectroscopic data and low-resolution photometric observations of quasars in terms of their latent SEDs, apparent brightnesses, and redshifts. 
 Representing a quasar's SED as a latent random measure, we describe a Bayesian inference procedure to compute the marginal probability distribution of a quasar's redshift given observed photometric fluxes and their uncertainties.  
-The following section provides relevant application and statistical background, as well as related work on the ``photo-z'' problem.  Section~\ref{sec:model} describes our probabilistic model of SEDs and broadband photometric measurements.  Section~\ref{sec:inference} outlines our MCMC-based inference method for efficiently computing statistics of the posterior distribution. Section~\ref{sec:experiments} presents redshift and SED predictions from photometric measurements, among other model summaries.  We conclude with a discussion and an outline of directions for future work.  
+The following section provides relevant application and statistical background, as well as related work on the ``photo-z'' problem.
+Section~\ref{sec:model} describes our probabilistic model of SEDs and broadband photometric measurements.
+Section~\ref{sec:inference} outlines our MCMC-based inference method for efficiently computing statistics of the posterior distribution.
+Section~\ref{sec:experiments} presents redshift and SED predictions from photometric measurements, among other model summaries.
+We conclude with a discussion and an outline of directions for future work.  
 
 %------ example of obs vs rest frame data --------------------------------------
 \begin{figure*}[ht]
@@ -157,7 +165,13 @@ The following section provides relevant application and statistical background, 
 \centerline{\includegraphics[width=1.9\columnwidth]{../figs/quasar_redshift_obs_frame}}
 \centerline{\includegraphics[width=1.9\columnwidth]{../figs/quasar_redshift_rest_frame}}
 \vskip -0.18in
-\caption{Spectroscopic measurements of multiple quasars at different redshifts, $z$.  The top graphic depicts the sample spectrograph in the observation frame, intuitively thought of as ``stretched'' by a factor $(1+z)$.  The lower figure depicts the ``de-redshifted'' version of the same quasar spectra.  This effectively squashes observations, and reconstructs the quasar spectra as it would be seen in the quasar's rest frame.  One salient feature of this operation is the alignment of large peaks around $1,250 \angstrom$. }
+\caption{%
+\todo[inline]{Sorta wish the x-axes lined up here, but I suppose it would squish too much.}
+Spectroscopic measurements of multiple quasars at different redshifts, $z$.
+The top graphic depicts the sample spectrograph in the observation frame, intuitively thought of as ``stretched'' by a factor $(1+z)$.
+The lower figure depicts the ``de-redshifted'' version of the same quasar spectra.
+This effectively squashes observations, and reconstructs the quasar spectra as it would be seen in the quasar's rest frame.
+One salient feature of this operation is the alignment of large peaks around 1,250 $\angstrom$. }
 \label{fig:frames}
 \end{center}
 \vskip -0.28in
@@ -167,22 +181,22 @@ The following section provides relevant application and statistical background, 
 
 \section{Background}
 \label{sec:background}
-The SED of a source describes the distribution of energy it radiates as a function of wavelength.  
-For example, most stars are well-modeled as ideal blackbody radiators, as their SED is well-described by a parametric form given by Planck's law. 
-Quasars, on the other hand, have a complicated SED characterized by some salient features. 
-One example is the Lyman-$\alpha$ forest, which refers to a phenomenon that causes ultraviolet light emissions from quasars to appear as visible light (which is not blocked by the atmosphere) to observers on Earth~\cite{weinberg2003lymanalpha}.
+The SED of a source describes the distribution of the energy it radiates as a function of wavelength.  
+For example, most stars are well-modeled as ideal black-body radiators, as their SED is well-described by a parametric form given by Planck's law. 
+Quasars, on the other hand, have a complicated SED characterized by some salient features, such the Lyman-$\alpha$ forest, which refers to a phenomenon that causes ultraviolet light emissions from quasars to appear as visible light (which is not blocked by the atmosphere) to observers on Earth~\cite{weinberg2003lymanalpha}.
 
-Moreover, one interesting property of quasars (and galaxies) conveyed by the SED is redshift. 
-Redshift affects our observation of SEDs by stretching the input space of wavelengths, $\lambda \in \Lambda$, of the quasar's \emph{rest-frame} SED, skewing toward longer (redder) wavelengths. Denoting the \emph{rest-frame} SED of a quasar $n$ as a function, $f_n^{(\text{rest})} : \Lambda \rightarrow \R_+$, the effect of redshift on the \emph{observation-frame} SED is summarized by the relationship 
+One of the most important and interesting properties of quasars (and galaxies) conveyed by the SED is redshift. 
+Redshift affects our observation of SEDs by ``stretching'' the wavelengths, ${\lambda \in \Lambda}$, of the quasar's \emph{rest-frame} SED, skewing toward longer (redder) wavelengths.
+Denoting the \emph{rest-frame} SED of a quasar~$n$ as a function,~${f_n^{(\text{rest})} : \Lambda \rightarrow \R_+}$, the effect of redshift on the \emph{observation-frame} SED is summarized by the relationship 
 \begin{align}
   f_n^{(\text{obs})}(\lambda) &\propto f_n^{(\text{rest})}(\lambda \cdot (1 + z_n)) \, .
 \end{align}
-Observed quasar spectra and their ``de-redshifted'' rest frame spectra are depicted in Figure~\ref{fig:frames}.
+Some observed quasar spectra and their ``de-redshifted'' rest frame spectra are depicted in Figure~\ref{fig:frames}.
 
 \subsection{Gaussian processes}
-Due to the complicated shape of SEDs, we use Gaussian processes to flexibly encode our prior beliefs about the structure and shape quasar SEDs. 
-A Gaussian process (GP) is a stochastic process, $f: \mathcal{X} \rightarrow \R$, such that any finite collection of random variables, ${f(x_1),\dots, f(x_N) \in \R}$, is distributed according to a multivariate normal distribution.  
-GPs are frequently used as priors over unknown functions, $f$, where the random variables $f(x_1), \dots, f(x_N)$ correspond to evaluations of the function at inputs $x_1, \dots, x_N \in \mcX$.  
+Due to the complicated shape of SEDs, we use Gaussian processes to flexibly encode our prior beliefs about the structure and shape of quasar SEDs. 
+A Gaussian process (GP) is a stochastic process, ${f: \mathcal{X} \rightarrow \R}$, such that any finite collection of random variables, ${f(x_1),\dots, f(x_N) \in \R}$, is distributed according to a multivariate normal distribution.  
+GPs are frequently used as priors over unknown functions, $f$, where the random variables $f(x_1), \dots, f(x_N)$ correspond to evaluations of the function at inputs ${x_1, \dots, x_N \in \mcX}$.  
 The prior covariance between any two outputs, $f(x_i)$ and $f(x_j)$, encodes prior beliefs about the function~$f$; carefully chosen covariance functions can encode beliefs about a wide range of properties, including differentiability, smoothness, and periodicity.  
 
 Throughout this paper we will use the the Mat\'{e}rn \cite{Matern1986spatial} covariance function
@@ -192,10 +206,10 @@ Throughout this paper we will use the the Mat\'{e}rn \cite{Matern1986spatial} co
        \left( \frac{\sqrt{\nu} r}{\ell} \right) ^\nu
        K_\nu\left( \frac{\sqrt{2\nu} r}{\ell}\right)
 \end{align}
-where $r = |x_1 - x_2|$.  The parameter $\nu$ controls the smoothness and $\ell$ is the length scale of the function.  
-We choose the Mat\'{e}rn covariance function for its ability to tradeoff between smooth and flexible sample paths.  
+where ${r = |x_1 - x_2|}$.  The parameter $\nu$ controls the smoothness and $\ell$ is the length scale of the function.  
+We choose the Mat\'{e}rn covariance function for its ability to trade off between smooth and flexible sample paths.  
 Because this covariance is strictly a function of the distance between two points in the space $\mcX$, it is said to be stationary. 
-See \cite{rasmussen2006gaussian} for a thorough treatment of Gaussian processes.  
+See \citet{rasmussen2006gaussian} for a thorough treatment of Gaussian processes in machine learning. 
 
 \subsection{Related work}
 Many machine learning and statistical methods have been applied to the ``photo-$z$'' problem. The review by \citet{walcher2011fitting} divides ``photo-$z$'' methods into two categories, empirical and template-fitting.  Empirical methods are often discriminative, regression-based approaches, whereas template-fitting methods are often SED model-based approaches.  
@@ -209,10 +223,10 @@ Template-based approaches use information derived from spectroscopy to assist re
 \citet{budavari2001photometric} and \citet{richards2001photometric} present a clustering algorithm for reconstructing quasar SEDs from photometric observations and templates derived from noisy spectroscopic measurements.  
 Their method clusters quasars into individual template categories using a $K$-means-like update, relying on weighted template averages of noisy SED measurements and unique cluster assignments that do not express uncertainty over quasar ``types''. 
 
-Instead of a pure clustering method, we use a non-negative factor analysis-like model to represent the latent structure of quasar SEDs and a continuous, low-dimensional range of quasar types.  
+Instead of a pure clustering method, we use a non-negative factor analysis-type model to represent the latent structure of quasar SEDs and a continuous, low-dimensional range of quasar types.  
 Furthermore, our method presents a fully probabilistic model of SEDs and a Bayesian inference procedure that integrates out uncertainty over latent variables, including quasar type and apparent brightness, to measure redshift.    
 
-Other models blur the line between regression-based and generative models.  \citet{bovy2012photometric} develops a method termed $XDQSOz$ to use a large dataset of astronomical objects to simultaneously infer redshift and classify quasars.  
+Other models blur the line between regression-based and generative models.  \citet{bovy2012photometric} develops the $XDQSOz$ method to use a large dataset of astronomical objects to simultaneously infer redshift and classify quasars.  
 They model the joint distribution over object type, fluxes, and redshift.  However, their method does not model SEDs themselves, nor the SED-to-flux generative process. 
 %They do this by inferring a joint distribution over object type, fluxes, and redshift. In particular, they factor this joint distribution
 %into one part that describes the distribution over star brightness, which involves binning based on a single-channel flux, and
@@ -240,7 +254,11 @@ They model the joint distribution over object type, fluxes, and redshift.  Howev
 \vskip -.08in
 \input{graph_model}
 \vskip -.16in
-\caption{Graphical model representation of the joint photometry and spectroscopy model.  The left shaded variables represent spectroscopically measured samples and their variances.  The right shaded variables represent photometrically measured fluxes and their variances.  Note that $\Nspec + \Nphoto$ replicates of $\mathbf{w}_n, m_n$ and $z_n$ are instantiated. }
+\caption{%
+Graphical model representation of the joint photometry and spectroscopy model. 
+The left shaded variables represent spectroscopically measured samples and their variances.
+The right shaded variables represent photometrically measured fluxes and their variances.
+Note that ${\Nspec + \Nphoto}$ replicates of $\mathbf{w}_n, m_n$ and $z_n$ are instantiated. }
 \label{fig:graphical}
 \vskip -.16in
 \end{figure}
