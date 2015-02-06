@@ -85,13 +85,24 @@ for idx in full_idx:
 
 ## plot example spectrograph and overlay SDSS filter bands 
 #normalize first spectral density
-normalizer = .0072 * integrate.cumtrapz(quasar_spectra[4,:], lam_obs)[-1]
+
+## plot double
+spec_file = glob("../../data/DR10QSO/specs/spec-*-*-*.fits")[5]
+sdf = fitsio.FITS(spec_file)
+spec_flux = sdf[1]['flux'].read()
+spec_lam  = np.power(10., sdf[1]['loglam'].read())
+psf_flux = sdf[2]['PSFFLUX'].read()
+psf_flux_ivar = sdf[2]['PSFFLUX_IVAR'].read()
+spec_flux[spec_flux.argmax()] = 0
+
+normalizer = .0072 * integrate.cumtrapz(spec_flux, spec_lam)[-1]
 fig = plt.figure(figsize=(18, 4))
 plt.ylim(0, (quasar_spectra[0, :]/normalizer).max())
 #plt.title("Quasar full spectrum", fontsize=16)
-plt.xlabel("wavelength $(\AA)$", fontsize=18)
-plt.ylabel("$f^{(obs)}(\lambda)$", fontsize=18)
+plt.xlabel("wavelength $(\AA)$", fontsize=20)
+plt.ylabel("$f^{(obs)}(\lambda)$", fontsize=20)
 colors = ['g', 'r', 'c', 'm', 'y', 'k']
+plt.plot(spec_lam, 2.5*spec_flux/normalizer, label="SED", linewidth=2, alpha=.95)
 for n, b in enumerate(planck.bands): 
     plt.plot(planck.wavelength_lookup[b] * 1e10, 
              planck.sensitivity_lookup[b], 
@@ -99,11 +110,24 @@ for n, b in enumerate(planck.bands):
     plt.fill_between(planck.wavelength_lookup[b] * 1e10, 
                      planck.sensitivity_lookup[b], 
                      alpha=.5, color=colors[n], label="%s band"%b)
-plt.plot(lam_obs, 4*quasar_spectra[4, :]/normalizer, label="SED", linewidth=2)
 plt.xlim(3000, 10500)
+plt.ylim(0, .55)
+plt.xticks(fontsize=16)
 plt.legend(fontsize='xx-large', ncol=2)
 plt.savefig(out_dir + "quasar_spectrum_sdss_filters.pdf", bbox_inches = 'tight')
+plt.close('all')
 
+## plot corresponding fluxes and uncertainties 
+fig = plt.figure(figsize=(6, 4))
+xs = np.arange(5)
+plt.bar(xs, psf_flux, alpha=.4, width=.8, yerr = 2*np.sqrt(1./spec_ivar),
+        error_kw = {'linewidth':5},
+        color=sns.color_palette()[1], label='PSFFLUX')
+plt.legend(loc='upper left', fontsize=18)
+plt.ylabel('flux (nanomaggies)', fontsize=18, labelpad=10)
+plt.xlabel("band", fontsize = 18)
+plt.xticks(xs + .4, ['u', 'g', 'r', 'i', 'z'], fontsize=18)
+plt.savefig(out_dir + "quasar_spectrum_bands.pdf", bbox_inches='tight')
 
 
 ### define a set of quasars to look at, and grab their pixel values

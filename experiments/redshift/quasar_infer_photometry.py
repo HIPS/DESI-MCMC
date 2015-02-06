@@ -41,8 +41,8 @@ def dprior_omega(omega):
     return -omega
 
 # TODO(awu): Gaussian for now
-MEAN_Z_DIST = 2.5
-STDEV_Z_DIST = 1.0
+MEAN_Z_DIST = 3.5
+STDEV_Z_DIST = 3.0
 def prior_z(z): 
     return -(z - MEAN_Z_DIST)*(z- MEAN_Z_DIST) / (2. * STDEV_Z_DIST * STDEV_Z_DIST)
 def dprior_z(z):
