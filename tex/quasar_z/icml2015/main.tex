@@ -458,8 +458,8 @@ HMC is an auxiliary variable method that uses gradient information to generate p
 %----------------------------------------------------------------------------------
 \section{Results}
 \label{sec:experiments}
-We fit our model on a sample of 400 spectroscopically measured quasars from the DR10QSO dataset \cite{paris2014sloan}, including spectroscopically confirmed redshifts in the range $z \in (.11,  5.08)$.  
-We test the photometric component of our method by inferring redshifts and SEDs of sample of 2,000 spectroscopically and photometrically measured quasars with redshift in the range $z \in (.30, 5.85)$.  
+We fit our model on a sample of 400 spectroscopically measured quasars from the DR10QSO dataset \cite{paris2014sloan}, including spectroscopically confirmed redshifts in the range ${z \in (.11,  5.08)}$.  
+We test the photometric component of our method by inferring redshifts and SEDs of sample of 2,000 spectroscopically and photometrically measured quasars with redshift in the range ${z \in (.30, 5.85)}$.  
 The following sections outline the resulting model fit and inferred SEDs and redshifts. 
 %We compute the posterior distribution by iterating our sampler over the conditional distributions described in the previous section.  For each of the 1,000 test quasars, we run 7 chains for 5000 iterations to assess mixing.  We discard the first 2,500 samples from each chain as burn-in.  The following subsections summarize and discuss model predictions and output. 
 
@@ -470,7 +470,10 @@ The following sections outline the resulting model fit and inferred SEDs and red
 \vskip 0in
 \centerline{\includegraphics[width=\columnwidth]{../figs/red-shift-test-predictions}}
 \vskip -0.2in
-\caption{Comparison of spectroscopically ($x$-axis) and photometrically ($y$-axis) measured redshifts for a held out sample of 2,000 quasars (subsampled for clarity).  Red estimates are maximal posterior modes, and grey lines display the interval consisting of samples within quantiles $[5, 95]$.  Note that this is not a representative sample - we included over 1,000 $z > 4.0$ quasars to test predictions on higher redshift quasars.}
+\caption{%
+Comparison of spectroscopically ($x$-axis) and photometrically ($y$-axis) measured redshifts for a held out sample of 2,000 quasars (subsampled for clarity).
+Red estimates are maximal posterior modes, and grey lines display the interval consisting of samples within quantiles $[5, 95]$.
+Note that this is not a representative sample: we included over 1,000 ${z > 4.0}$ quasars to test predictions on higher redshift quasars.}
 \label{fig:vs}
 \vskip -.35in
 \end{figure}
@@ -499,7 +502,14 @@ The following sections outline the resulting model fit and inferred SEDs and red
 %\includegraphics[width=.66\columnwidth]{../figs/quasar_plots/quasar_2_posterior_z}
 %}
 \vskip -0.2in
-\caption{Left: inferred SEDs from photometric data.  The black line is a PCA-based model fit to the full spectral data.  The red line is a sample from the posterior, $f^{(obs)}_n(\lambda) | \mathbf{X}, \mathbf{y}_n, B$, which imputes the entire SED from only five flux measurements. Right: corresponding posterior predictive distributions, $p(z_n | \mathbf{X}, \mathbf{y}_n)$ for three photometrically measured quasars. The black line marks the spectroscopically confirmed redshift, and the red line marks the posterior mean $E(z_n |\mathbf{X}, \mathbf{y}_n)$. }
+\caption{%
+Left: inferred SEDs from photometric data.
+The black line is a PCA-based model fit to the full spectral data.
+The red line is a sample from the posterior, $f^{(obs)}_n(\lambda) | \mathbf{X}, \mathbf{y}_n, B$, which imputes the entire SED from only five flux measurements.
+Right: corresponding posterior predictive distributions, $p(z_n | \mathbf{X}, \mathbf{y}_n)$ for three photometrically measured quasars.
+The black line marks the spectroscopically confirmed redshift, and the red line marks the posterior mean $E(z_n |\mathbf{X}, \mathbf{y}_n)$. 
+\todo[inline]{Maybe mention that the x-axis of those histograms is super zoomed in?}
+}
 \label{fig:recon}
 \vskip -0.1in
 \end{figure*}
@@ -524,36 +534,49 @@ The following sections outline the resulting model fit and inferred SEDs and red
 \centerline{\includegraphics[width=2\columnwidth]{../figs/idx_0_rank_4_reconstruction.pdf}}
 %\centerline{\includegraphics[width=2\columnwidth]{../figs/idx_4_rank_4_reconstruction.pdf}}
 \vskip -0.2in
-\caption{Top: an estimate of the maximum likelihood of the latent templates $B = \{B_k\}_{k=1}^K$.  Note the different ranges of the $x$-axis (wavelength).  Each basis function distributes its mass across different regions of the spectrum to explain different salient features of quasar spectra in the rest-frame.  Bottom: non-negative  model reconstructions of two training-sample SEDs }
+\caption{%
+Top: an estimate of the maximum likelihood of the latent templates ${B = \{B_k\}_{k=1}^K}$.
+Note the different ranges of the $x$-axis (wavelength).
+Each basis function distributes its mass across different regions of the spectrum to explain different salient features of quasar spectra in the rest-frame.
+Bottom: non-negative model reconstructions of two training-sample SEDs. }
 \label{fig:basis}
 \vskip -.1in
 \end{figure*}
 %---------------
 
 \subsection{SED Basis}
-We depict the maximum likelihood estimate of $B_1, \dots, B_k$ given $\mathbf{X}$ in Figure~\ref{fig:basis}.  Our basis decomposition enjoys the benefit of physical interpretability due to our density-estimate formulation of the problem. For instance, $B_2$ contains the spike corresponding to the Lyman-$\alpha$ peak \red{verify this with dustin or david}.  Furthermore, because of the flexible nonparametric priors on $B_k$ our model automatically learned this feature from the data.  The positivity of the basis and corresponding weights distinguishes our model from PCA-based methods, which sacrifice physical interpretability.   
+We depict the maximum likelihood estimate of $B_1, \dots, B_k$ given $\mathbf{X}$ in Figure~\ref{fig:basis}.
+Our basis decomposition enjoys the benefit of physical interpretability due to our density-estimate formulation of the problem.
+For instance, $B_2$ contains the spike corresponding to the Lyman-$\alpha$ peak \red{verify this with dustin or david}.
+Furthermore, because of the flexible nonparametric priors on $B_k$ our model automatically learned this feature from the data.
+The positivity of the basis and corresponding weights distinguishes our model from PCA-based methods, which sacrifice physical interpretability.   
 
 \subsection{Photometric measurements}
-For each test quasar, we construct a 5-chain parallel tempering sampler run for 3,000 iterations.  We discard the first 1,500 samples as burn-in.  
-Given posterior samples of $z_n$, we formulate two point estimates - the posterior mean and the location with highest posterior mode.  
-To determine this location, we choose the sample with highest probability under a kernel density estimate of the samples with a fixed bandwidth, $\beta = .08$.  
+For each test quasar, we construct a 5-chain parallel tempering sampler and run for 3,000 iterations.
+We discard the first 1,500 samples as burn-in. \todo{Any tests run for convergence?}
+Given posterior samples of~$z_n$, we formulate two point estimates: the posterior mean and the location with highest posterior mode.
+To determine this location, we choose the sample with highest probability under a kernel density estimate of the samples with a fixed bandwidth, ${\beta = .08}$.  
 Figure~\ref{fig:vs} compares photometric mode estimate to spectroscopic measurements and the grey lines denote posterior sample quantiles. 
 
-We see that in general there is a strong correspondence between spectroscopically measured redshift and our posterior estimate.  In cases where the posterior point estimate is off, our distribution often covers the spectroscopically confirmed value with probability mass.
+We see that in general there is a strong correspondence between spectroscopically measured redshift and our posterior estimate.
+In cases where the posterior point estimate is off, our distribution often covers the spectroscopically confirmed value with probability mass.
 This is clear upon inspection of posterior marginal distributions that exhibit extreme multi-modal behavior.  
-It is necessary to inject the model with more information to eliminate plausible hypotheses.  
-This information could be in the form of another measurement (e.g.~ a new photometric band), or it could come from structured prior knowledge over the relationship between $z_n, \mathbf{w}_n$, and $m_n$.  Formulating this distribution from spectroscopically confirmed samples is left for future work.  
+It is necessary to inject the model with more information to eliminate plausible hypotheses; this information could be in the form of another measurement (e.g., a new photometric band), or it could come from structured prior knowledge over the relationship between $z_n, \mathbf{w}_n$, and $m_n$.
+Formulating this distribution from spectroscopically confirmed samples is left for future work.  
 
 \paragraph{Average error and test distribution}
 We use mean absolute error (MAE) and mean absolute percentage error (MAPE) to measure predictive performance.  
 Table~\ref{tab:error} enumerates average prediction error using the posterior mean and the highest posterior mode, divided into nested subsets of test data.  
 We also quantify average prediction error and posterior quantile interval coverage for sets of quasars with increasing redshift.  
 
-It is worth noting that accurate redshift measurements are attainable even for quasars with redshift outside of the range of our original spectroscopic sample.  Twenty-five test quasars fall above the range of redshift in our spectroscopic sample, yet predictions for quasars above $z=5.0$ averages only 8\% error.  
-Moreover, the redshift distribution of the photometric and spectroscopic in our procedure are quite different - we test on over 1,000 quasars with $z > 4.0$, whereas our spectroscopic sample sample only contains 25 such examples, yet we achieve a MAPE of only 6\%.  
+It is worth noting that accurate redshift measurements are attainable even for quasars with redshift outside of the range of our original spectroscopic sample.
+Twenty-five test quasars fall above the range of redshift in our spectroscopic sample, yet predictions for quasars above~${z=5.0}$ averages only 8\% error.  
+Moreover, the redshift distribution of the photometric and spectroscopic data are quite different; we test on over 1,000 quasars with ${z > 4.0}$, whereas our spectroscopic sample sample only contains 25 such examples.
+We nevertheless achieve a MAPE of only 6\%.  
 
 It is clear that from only $400$ noisy spectroscopic measurements, our structured prior is able to accurately predict and characterize uncertainty about the redshift of photometrically measured quasars.  
-Furthermore, because we are directly modeling the latent SED, our method admits a probabilistic estimate of the entire SED sample path conditioned only on observed photometric fluxes.  Figure~\ref{fig:recon} displays posterior SED samples and their corresponding redshift marginals for test-set quasars inferred from only SDSS photometric measurements.  
+Furthermore, because we are directly modeling the latent SED, our method admits a probabilistic estimate of the entire SED sample path conditioned only on observed photometric fluxes.
+Figure~\ref{fig:recon} displays posterior SED samples and their corresponding redshift marginals for test-set quasars inferred from only SDSS photometric measurements.  
 
 %\subsection{Quasar types}
 %Our sampler yields posterior samples of the templates themselves; one sample is depicted in Figure~\ref{fig:basis}.  The loadings of individual quasars onto these bases intuitively describe the ``type'' of quasar being modeled.  \red{Visualize $w_n$ clusters and look at individual types. Show utility of this decomposition}.  Furthermore, because we restrict the templates to be positive functions, we obtain a more physically interpretable clustering of quasars than PCA-based methods, which will have both negative principal components and negative weights.  
