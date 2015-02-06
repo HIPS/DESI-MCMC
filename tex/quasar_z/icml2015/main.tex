@@ -267,89 +267,99 @@ Note that ${\Nspec + \Nphoto}$ replicates of $\mathbf{w}_n, m_n$ and $z_n$ are i
 This section describes the details of our probabilistic model of spectroscopic and photometric observations.  
 
 \subsection{Spectroscopic flux model}
-The SED of a quasar is a nonnegative valued function $f : \Lambda \rightarrow \R^+$, where $\Lambda$ denotes the range of wavelengths and $\R^+$ are nonnegative real-valued numbers.  However, quasar SEDs are highly structured, and we model this structure by imposing the assumption that each SED is a convex mixture of $K$ latent, positive basis functions (or templates). 
-Following \citet{budavari2001photometric} we set $K = 4$.  We also note that this is the number of PCA components that have been shown to carry over 90\% of the variation of quasar spectroscopy~\citet{suzuki2006quasar}. 
-This model assumes there are a small number of latent ``types'' and that each quasar can be described by a short vector of mixing weights over ``types''. 
-Our model specifies a quasar's \emph{rest-frame} SED as a random measure. 
-We place a log-Gaussian process prior on each of these basis functions, and a prior over positive-weight values for each quasar.  
+The SED of a quasar is a non-negative function~${f : \Lambda \rightarrow \R^+}$, where~$\Lambda$ denotes the range of wavelengths and~$\R^+$ are non-negative real numbers.
+Quasar SEDs are highly structured, and we model this structure by imposing the assumption that each SED is a convex mixture of~$K$ latent, positive basis functions (or templates). 
+Following \citet{budavari2001photometric} we set ${K = 4}$. \todo{Did you try other values?}
+We also note that this is the number of PCA components that have been shown to carry over 90\% of the variation of quasar spectroscopy~\citet{suzuki2006quasar}. 
+This model assumes there are a small number of latent ``types'' and that each quasar can be described by a short vector of mixing weights over ``types''. \todo{Are these really types?} 
+Our model specifies a quasar's \emph{rest-frame} SED as a random measure. \todo{Is this useful beyond having said it is a random positive function? Does the measure aspect of it come up?} 
+We place a log-Gaussian process prior on each of these basis functions, and a \todo{what kind of prior?} prior over positive basis weights for each quasar.  
 
-The generative procedure for quasar spectra begins with a shared positive basis of normalized SEDs that map wavelengths to positive numbers:
+The generative procedure for quasar spectra begins with a shared basis of normalized positive SEDs that map wavelengths to positive numbers:
 \begin{align}
-  \beta_k(\cdot) &\sim \mathcal{GP}(0, K_\theta) \, , k=1, \dots, K\\
-  B_k(\cdot) &= \frac{\exp(\beta_k(\cdot))}{\int_\Lambda \exp(\beta_k(\lambda)) d\lambda}   \, ,
+  \beta_k(\cdot) &\sim \mathcal{GP}(0, K_\theta),\; k=1, \dots, K\\
+  B_k(\cdot) &= \frac{\exp(\beta_k(\cdot))}{\int_\Lambda \exp(\beta_k(\lambda))\, d\lambda}   \, ,
 \end{align}
-where $K_{\theta}$ is the Mat\'{e}rn kernel and $B_k$ is a normalized version of
-the $\beta_k$. For each quasar, $n$
+where $K_{\theta}$ is the Mat\'{e}rn kernel and $B_k$ is the exponentiated and normalized version of $\beta_k$. For each quasar $n$
 \begin{align}
   \mathbf{w}_n &\sim p(\mathbf{w}) \, , \text{ s.t. } \sum_{w_k} w_k = 1  \\
   m_n  &\sim p(m) \, , \text{ s.t. } m_n > 0 \\
   z_n &\sim p(z)
 \end{align}
-where $\mathbf{w}_n$ mixes over the latent types, $m_n$ is the apparent brightness, $z_n$ is the quasar's redshift, and distributions $p(\mathbf{w})$, $p(m)$, and $p(z)$ are generic priors.  
-The latent normalized SED is then constructed
+where $\mathbf{w}_n$ mixes over the latent types, $m_n$ is the apparent brightness,~$z_n$ is the quasar's redshift, and distributions~$p(\mathbf{w})$,~$p(m)$, and~$p(z)$ are generic priors. \todo{generic prior?}
+The latent normalized SED is then constructed via
 \begin{align}
   f^{(\text{rest})}_n(\cdot) &= \sum_{k} w_{n,k} B_k(\cdot)
   \label{eqn:restsed}
 \end{align}
-and we define the unnormalized spectral radiance $\tilde f^{(\text{rest})}_n(\cdot) \equiv m_n \cdot f^{(\text{rest})}_n(\cdot)$.  Each positive SED basis function, $B_k$ is normalized to integrate to one, and each quasar's weight vector $\mathbf{w}_n$ also sums to one.  This allows us to interpret the $f^{(\text{rest})}_n(\cdot)$ function as a density, scaled by $m_n$. 
+and we define the unnormalized spectral radiance~${\tilde f^{(\text{rest})}_n(\cdot) \equiv m_n \cdot f^{(\text{rest})}_n(\cdot)}$. \todo{What is spectral radiance?}
+Each positive SED basis function,~$B_k$ is normalized to integrate to one, and each quasar's weight vector~$\mathbf{w}_n$ also sums to one.
+This allows us to interpret the~$f^{(\text{rest})}_n(\cdot)$ function as a density, scaled by $m_n$. \todo{It's a density if it is differentiable, but only probability densities have to integrate to one.  Is there a value in calling it a density here?}
 
-For each quasar $n$, we observe noisy samples of the redshifted and scaled spectral energy distribution at a grid of wavelengths $\lambda \in \{\lambda_1, \dots, \lambda_P \}$.  Our \emph{observation frame} samples are conditionally distributed
+For each quasar with spectroscopic data, we observe noisy samples of the redshifted and scaled spectral energy distribution at a grid of $P$ wavelengths ${\lambda \in \{\lambda_1, \dots, \lambda_P \}}$.
+For quasar $n$, our \emph{observation frame} samples are conditionally distributed as
 \begin{align}
   x_{n, \lambda} 
     &\sim \mathcal{N}\left( \frac{1}{(1 + z_n)} \tilde f_n^{(\text{rest})}( \lambda \cdot (1 + z_n) ), \sigma_{n,\lambda}^2 \right)
     \label{eq:spec} 
 \end{align}
-where $\sigma_{n, \lambda}^2$ is known measurement variance from the instruments
-used to make the observations.
-The BOSS spectra (and our rest-frame basis) are stored in units $10^{-17} \cdot \text{erg} \cdot \text{cm}^{-2} \cdot \text{s}^{-1} \cdot \angstrom^{-1}$.  
+\todo{Where does the $1+z_n$ denom come from?}
+where $\sigma_{n, \lambda}^2$ is known measurement variance from the instruments used to make the observations. 
+The BOSS spectra (and our rest-frame basis) are stored in units ${10^{-17} \cdot \text{erg} \cdot \text{cm}^{-2} \cdot \text{s}^{-1} \cdot \angstrom^{-1}}$.  
 
 \subsection{Photometric flux model }
-Photometric data summarize the amount of energy observed over a large swath of the wavelength spectrum.  Roughly, a photometric flux measures (proportionally) the number of photons hitting the instrument's lens over the duration of an exposure, filtered by a band-specific sensitivity curve. 
+Photometric data summarize the amount of energy observed over a large swath of the wavelength spectrum. 
+Roughly, a photometric flux measures (proportionally) the number of photons hitting the instrument's lens over the duration of an exposure, filtered by a band-specific sensitivity curve. 
 We will express measurements of flux in nanomaggies~\cite{sdssnanomaggies}, a linear unit of flux. 
 
 Photometric fluxes and measurement error derived from broadband imagery have been computed directly from pixels \cite{luptonsdss}.  
-For each quasar $n$, SDSS photometric data are measured in five bands, $b \in \{u,g,r,i,z\}$, yielding a vector of five flux values and their variances, $\mathbf{y}_n$ and $\tau^2_{n, b}$.  
+For each quasar $n$, SDSS photometric data are measured in five bands, ${b \in \{u,g,r,i,z\}}$, yielding a vector of five flux values and their variances,~$\mathbf{y}_n$ and~$\tau^2_{n, b}$.  
 Each band, $b$, measures photon observations at each wavelength in proportion to a known filter sensitivity, $S_{b}(\lambda)$. 
-The filter sensitivities for the SDSS $ugriz$ bands are depicted in Figure~\ref{fig:filters}, with an example observation frame quasar SED overlaid.  The actual measured fluxes can be computed by integrating the full object's spectrum, $m_n \cdot f_n^{(\text{obs})}(\lambda)$ against the filters.  For a band $b \in \{u, g, r, i, z \}$
+The filter sensitivities for the SDSS $ugriz$ bands are depicted in Figure~\ref{fig:filters}, with an example observation frame quasar SED overlaid.  
+The actual measured fluxes can be computed by integrating the full object's spectrum,~${m_n \cdot f_n^{(\text{obs})}(\lambda)}$ against the filters.
+For a band~${b \in \{u, g, r, i, z \}}$
 \begin{align}
-  \mu_b(f_n^{(\text{rest})}, z_n) &= \int f^{(\text{obs})}_n(\lambda) S_b(\lambda) C(\lambda) d \lambda 
+  \mu_b(f_n^{(\text{rest})}, z_n) &= \int f^{(\text{obs})}_n(\lambda) \,S_b(\lambda)\, C(\lambda) \,d \lambda \,,
 \end{align}
-where $C(\lambda)$ is a conversion factor to go from the units of $f_n(\lambda)$ to nanomaggies.
+where $C(\lambda)$ is a conversion factor to go from the units of~$f_n(\lambda)$ to nanomaggies.
 The factor is the following constant:
 \begin{equation*}
-C(\lambda) = 10^{(48.6-2.5\times17+22.5)/2.5}
+C(\lambda) = 10^{(48.6-2.5\times 17+22.5)/2.5}
 \end{equation*}
-The values in the expression above correspond to arbitrary zero-points and constants
-used in astronomical units: $48.6$ is a zero-point for an astronomical measurement called
-AB magnitude, $17$ is used to match fluxes which are in units of $10^{-17}$ ergs and $22.5$ and
-$2.5$ are constants used to convert from logarithmic to linear units of brightness.
+\todo{Why doesn't the right hand side have a $\lambda$?}
+The values in the expression above correspond to arbitrary zero-points and constants used in astronomical units: $48.6$ is a zero-point for an astronomical measurement called AB magnitude, $17$ is used to match fluxes which are in units of $10^{-17}$ ergs and $22.5$ and $2.5$ are constants used to convert from logarithmic to linear units of brightness.
 
- We use $\mu_b$ to represent the full function from 
-a rest spectrum and red shift to a band-specific flux. The results of this projection onto SDSS bands are modeled as independent Gaussian random variables with known variance
+ We use $\mu_b$ to represent the full function from a rest spectrum and red shift to a band-specific flux.
+ The results of this projection onto SDSS bands are modeled as independent Gaussian random variables with known variance
 \begin{align}
-  y_{n,b} | f_n^{(\text{rest})}, z_n &\sim \mathcal{N}( \mu_b(f_n^{(\text{rest})}, z_n), \tau^2_{n,b} ) \, .
+  y_{n,b}\, |\, f_n^{(\text{rest})}, z_n &\sim \mathcal{N}( \mu_b(f_n^{(\text{rest})}, z_n), \tau^2_{n,b} ) \, .
 \end{align}
-Conditioned on the basis, $B = \{B_k\}$, we can represent $f_n^{(\text{rest})}$ with a low-dimensional vector.  Note that $f_n^{(\text{rest})}$ is a function of $\mathbf{w}_n, z_n, m_n, B$ (see Equation~\ref{eqn:restsed}), so we can think of $\mu_b$
-as a function of $\mathbf{w}_n, z_n, m_n, B$. We overload notation, and re-write the conditional likelihood of photometric observations as
+Conditioned on the basis, ${B = \{B_k\}}$, we can represent $f_n^{(\text{rest})}$ with a low-dimensional vector.
+Note that~$f_n^{(\text{rest})}$ is a function of~${\mathbf{w}_n, z_n, m_n}$, and $B$~(see Equation~\ref{eqn:restsed}), so we can think of $\mu_b$ as a function of~${\mathbf{w}_n, z_n, m_n}$, and~$B$.
+We overload notation, and re-write the conditional likelihood of photometric observations as
 \begin{align}
-    y_{n,b} | \mathbf{w}_n, z_n, m_n, B &\sim \mathcal{N}( \mu_b(\mathbf{w}_n, z_n, m_n, B), \tau^2_{n,b} ) \, .
+    y_{n,b} \,|\, \mathbf{w}_n, z_n, m_n, B &\sim \mathcal{N}( \mu_b(\mathbf{w}_n, z_n, m_n, B), \tau^2_{n,b} ) \, .
    \label{eq:phot}
 \end{align}
-Intuitively, what gives us statistical traction in inferring the posterior distribution over $z_n$ is the structure learned in the latent basis $B$ - the features that corresponds to distinguishing bumps and dips in the SED.  
+Intuitively, what gives us statistical traction in inferring the posterior distribution over $z_n$ is the structure learned in the latent basis $B$, i.e., the features that correspond to distinguishing bumps and dips in the SED.
 
 \subsection{Joint model}
-Given a sample of $\Nspec$ noisy full spectra and their sample locations, $\mathbf{X} \equiv \{\mathbf{x}_n, \lambda^{(\text{obs})}_n \}$, and a set of $\Nphoto$ photometric fluxes, $\mathbf{Y} \equiv \{\mathbf{y}_n\}$, our full likelihood in terms of $\{ \mathbf{w}_n, z_n, m_n \}, \{ B_1, \dots, B_K \}$ is 
+Given a sample of $\Nspec$ noisy full spectra and their sample locations, ${\mathbf{X} \equiv \{\mathbf{x}_n, \lambda^{(\text{obs})}_n \}}$, and a set of~$\Nphoto$ photometric fluxes,~${\mathbf{Y} \equiv \{\mathbf{y}_n\}}$, our full likelihood in terms of~$\{ \mathbf{w}_n, z_n, m_n \}, \{ B_1, \dots, B_K \}$ is 
 \begin{align*}
   L( \{ \mathbf{w}_n, ~&z_n, m_n \}, \{ B_1, \dots, B_K \} )  \\
     = & \prod_{n=1}^\Nspec p( \mathbf{x}_n | \mathbf{w}_n, z_n, m_n, \{ B_k \})  \\
-      & \times \prod_{n=\Nspec+1}^{\Nspec + \Nphoto} p( \mathbf{y}_n | \mathbf{w}_n, z_n, m_n, \{ B_k \})
+      & \times \prod_{n=\Nspec+1}^{\Nspec + \Nphoto} p( \mathbf{y}_n | \mathbf{w}_n, z_n, m_n, \{ B_k \})\,,
 \end{align*}
-where the probability distribution of the first term in the product is given by \ref{eq:spec}, and the distribution for the second term in the product is given by \ref{eq:phot}.  
+where the probability distribution of the first term in the product is given by Equation~\ref{eq:spec}, and the distribution for the second term in the product is given by Equation~\ref{eq:phot}.  
 
-Whether measured spectroscopically or photometrically, all of the quasars' SEDs share the same basis, hierarchically tying them together.  This basis provides a highly compact representation of a quasar SED, and is what drives photometric redshift predictions.  
+Whether measured spectroscopically or photometrically, all of the quasars' SEDs share the same basis, hierarchically tying them together.
+This basis provides a highly compact representation of a quasar SED, and is what drives photometric redshift predictions.  
 The joint distribution is depicted as a graphical model in Figure~\ref{fig:graphical}.
 
-\paragraph{Note on priors} We place independent priors on the components of $\mathbf{w}_n$, which is a simplifying assumption.  There exists rich structure even within the $K=4$ dimensional space specifying quasar SEDs.  We plan to model this structure in future iterations of the model.  
+\paragraph{Note on priors}
+We place independent priors on the components of $\mathbf{w}_n$, which is a simplifying assumption. \todo{What form of these?}
+There exists rich structure even within the~${K=4}$ dimensional space specifying quasar SEDs. 
+We plan to model this structure in future iterations of the model.  
 
 % and a log-Gaussian process prior over each basis  o
 %We express the joint prior distribution over weights $\mathbf{w}_n$, $\mathbf{w}_m$, and %basis $\{B_k\}$ as:
@@ -362,7 +372,9 @@ The joint distribution is depicted as a graphical model in Figure~\ref{fig:graph
 
 %---- TABLE, coverage --------------------------------------
 \begin{table*}[t]
-\caption{Top: mean absolute and mean absolute percentage error of photometric redshift predictions with respect to spectroscopic ``ground truth''.  Bottom: number of predicted values covered by posterior sample quantiles of varying size. }
+\caption{%
+Top: mean absolute and mean absolute percentage error of photometric redshift predictions with respect to spectroscopic ``ground truth''.
+Bottom: number of predicted values covered by posterior sample quantiles of varying size. }
 \label{tab:error}
 \vskip 0in
 \begin{center}
