@@ -395,18 +395,22 @@ Bottom: number of predicted values covered by posterior sample quantiles of vary
 \section{Inference}
 \label{sec:inference}
 The Bayesian ``photo-z'' task requires that we compute posterior marginal distributions of $z$, integrating out $\mathbf{w}$, and $m$.  
-To compute these distributions, we construct a Markov chain over the state space including $z$, $\mathbf{w}$, and $\mathbf{m}$ that leaves the target posterior distribution invariant.  
+To compute these distributions, we construct a Markov chain over the state space including $z$, $\mathbf{w}$, and $\mathbf{m}$ that leaves the target posterior distribution invariant.
+We then simulate that Markov chain.  
  
 For example, to compute expectations with respect to the marginal posterior distribution over quasar redshift, we will want to produce posterior samples of $z_n$, $\mathbf{w}_n$, and $B$, yielding Monte Carlo approximations
 \begin{align}
-  E[ g(z_n) | \mathbf{y}_n, \mathbf{X} ] 
+  \mathbb{E}[ g(z_n) | \mathbf{y}_n, \mathbf{X} ] 
     &\approx \frac{1}{N} \sum_{i} g(z_n^{(i)}) \\
     z_n^{(i)}, \mathbf{w}_n | \mathbf{y}_n, B &\sim p(z_n, \mathbf{w}_n^{(i)} | \mathbf{y}_n, B) 
     %B^{(i)} &\sim p(B | \mathbf{X}, \mathbf{Y}) \, 
 \end{align}
 where $g$ represents an arbitrary function of redshift, and $N$ is the total number of Monte Carlo samples.  
 
-For computational tractability, we compute posterior samples of approximate profile posteriors, conditioned on a maximum likelihood estimate of the basis, $B_{mle}$.  However, we note that our model places a full distribution over $B_k$ and efficiently integrating out those parameters is left for future work.   The following section outlines our MCMC procedure to compute posterior samples of $\mathbf{w}_n, z_n$, and $m_n$ given the sample of spectra, $\mathbf{X}$, photometric fluxes $\mathbf{y}_{ugriz}$, and $B_{mle}$.  Note that due to analytic intractability, we numerically integrate expressions involving $\int_\Lambda f_n^{(obs)}(\lambda) d\lambda$. 
+For computational tractability, we compute posterior samples of approximate profile posteriors, conditioned on a maximum likelihood estimate of the basis,~$B_{\text{mle}}$. \todo{This sounds exactly like Monte Carlo EM, so we might want to call it that and provide a reference.}
+However, we note that our model places a full distribution over~$B_k$; efficiently integrating out those parameters is left for future work.
+The following section outlines our MCMC procedure to compute posterior samples of $\mathbf{w}_n, z_n$, and $m_n$ given the sample of spectra, $\mathbf{X}$, photometric fluxes $\mathbf{y}_{ugriz}$, and $B_{\text{mle}}$.
+Note that due to analytic intractability, we numerically integrate expressions involving $\int_\Lambda f_n^{(obs)}(\lambda) d\lambda$.
 
 %\subsection{Sampling $B$}
 %To accelerate computation, we use only information present in $\mathbf{X}$ to draw samples of $B_1, \dots, B_K$.  That is, we approximate the full conditional distribution 
@@ -423,25 +427,31 @@ For computational tractability, we compute posterior samples of approximate prof
 %We draw posterior samples using Hamiltonian Monte Carlo \cite{neal2011mcmc}, an auxiliary variable method that uses gradient information to efficiently mix.  Empirically, naive Metropolis-Hastings mixes too slowly for practical purposes. 
 
 \subsection{Sampling $\mathbf{w}_n, m_n$, and $z_n$}
-For computational reasons, we treat the inference problem for each photometrically measured quasar, $\mathbf{y}_n$, independently.  
-Conditioned on a basis $B_k, k=1,\dots, K$, our goal is to draw posterior samples of $\mathbf{w}_n$, $m_n$ and $z_n$ for each $n$.  
+For computational reasons, we treat the inference problem for each photometrically measured quasar, $\mathbf{y}_n$, independently.
+Conditioned on a basis~${B_k, k=1,\dots, K}$, our goal is to draw posterior samples of $\mathbf{w}_n$, $m_n$ and $z_n$ for each $n$.  
 The unnormalized posterior can be expressed
 \begin{align}
   &p(\mathbf{w}_n, m_n, z_n | \mathbf{y}_n, B) \\
   &\propto p(\mathbf{y}_n | \mathbf{w}_n, m_n, z_n, B) p(\mathbf{w}_n, m_n, z_n) \end{align}
-where the left likelihood term is defined in Equation~\ref{eq:phot}.  Because the observation $\mathbf{y}_n$ can often be well explained by various redshifts and weight settings, the resulting marginal posterior, $p(z_n | \mathbf{X}, \mathbf{y}_n, B)$, are often multi-modal, with regions of near zero probability between modes.  
-Intuitively, this is due to the information loss in the SED-to-photometric flux integration step. 
+where the left likelihood term is defined in Equation~\ref{eq:phot}.
+Because the observation $\mathbf{y}_n$ can often be well explained by various redshifts and weight settings, the resulting marginal posterior, $p(z_n | \mathbf{X}, \mathbf{y}_n, B)$, are often multi-modal, with regions of near zero probability between modes.
+Intuitively, this is due to the information loss in the SED-to-photometric flux integration step.
 
-This multi-modal property is problematic for many standard MCMC techniques.  Naive Metropolis-Hastings would have to jump between modes or travel through a region of near-zero probability, resulting in slow mixing.  
-To combat this effect, we use parallel tempering \cite{brooks2011handbook}, a method that is well-suited to constructing Markov chains on multi-modal distributions.  Parallel tempering instantiates $C$ independent chains, each sampling from the target distribution raised to an inverse temperature.  Given a target distribution, $p(x)$, the constructed chains sample 
+This multi-modal property is problematic for many standard MCMC techniques. 
+Naive Metropolis-Hastings would have to jump between modes or travel through a region of near-zero probability, resulting in slow mixing.  
+To combat this effect, we use parallel tempering \cite{brooks2011handbook}, a method that is well-suited to constructing Markov chains on multi-modal distributions.
+Parallel tempering instantiates $C$ independent chains, each sampling from the target distribution raised to an inverse temperature.
+Given a target distribution, $\pi(x)$, the constructed chains sample 
 \begin{align}
-  p_c(x) &\propto p(x)^{1/T_c}
+  \pi_c(x) &\propto \pi(x)^{1/T_c}
 \end{align}
-where $T_c$ controls how ``hot'' (i.e.~how close to uniform) each posterior is.  At each iteration, swaps between chains are proposed and accepted with a standard Metropolis-Hastings acceptance probability 
+where $T_c$ controls how ``hot'' (i.e.,~how close to uniform) each posterior is. 
+At each iteration, swaps between chains are proposed and accepted with a standard Metropolis-Hastings acceptance probability 
 \begin{align}
-  Pr(\text{accept swap } c, c') = \frac{ p_c(x_{c'}) p_{c'}(x_c) }{ p_c(x_c) p_{c'}(x_{c'}) } \, .
+  \Pr(\text{accept swap } c, c') = \frac{ \pi_c(x_{c'}) \pi_{c'}(x_c) }{ \pi_c(x_c) \pi_{c'}(x_{c'}) } \, .
 \end{align}
-To further expedite mixing, we use to Hamiltonian Monte Carlo (HMC) \cite{neal2011mcmc} for proposals within each of the parallel chains.  HMC is an auxiliary variable method that uses gradient information to generate proposals and efficiently explore the target distribution.
+To further expedite mixing, we use Hamiltonian Monte Carlo (HMC) \cite{neal2011mcmc} for proposals within each of the parallel chains.
+HMC is an auxiliary variable method that uses gradient information to generate proposals and efficiently explore the target distribution by avoiding random-walk behavior.
 
 %----------------------------------------------------------------------------------
 %----------------------------------------------------------------------------------
