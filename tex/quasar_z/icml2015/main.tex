@@ -586,18 +586,25 @@ Figure~\ref{fig:recon} displays posterior SED samples and their corresponding re
 %----------------------------------------------------------------------------------
 %----------------------------------------------------------------------------------
 \section{Discussion}
-We have presented a generative model to combine two sources of information at very different resolutions to form an estimate of the latent spectral energy distribution of quasars.  We described the details of the model, its implied structure, and a computationally tractable MCMC-based inference algorithm. 
+We have presented a generative model to combine two sources of information at very different resolutions to form an estimate of the latent spectral energy distribution of quasars.
+We described the details of the model, its implied structure, and a computationally tractable MCMC-based inference algorithm. 
 Our model accurately predicted and characterized uncertainty about redshifts from only photometric observations and a small number of separate spectroscopic examples. 
 %Our experiments showed the utility of our model for the task of inferring quasar redshift from photometric data, showing that we can accurately predict and characterize uncertainty about redshift values with a small number of spectroscopic examples.  
 Moreover, we showed that we can make reasonable estimates of the unobserved SED itself, from which we can make inferences about other physical properties informed by the full SED.  
  
-We see multiple avenues of future work.  Firstly, we can extend the model of SEDs to incorporate more expert knowledge.  One such augmentation would include a fixed collection of ``templates'' or features curated by an expert, corresponding to physical properties already known about a class of sources.  
-We can also extend our model to directly incorporate photometric pixel observations. Our current specification uses the output of a photometric preprocessing step, however, a logical extension is to model photon counts at the pixel level and perform inference over a joint model. 
+We see multiple avenues of future work.
+Firstly, we can extend the model of SEDs to incorporate more expert knowledge.
+One such augmentation would include a fixed collection of ``templates'' or features curated by an expert, corresponding to physical properties already known about a class of sources.  
+We can also extend our model to directly incorporate photometric pixel observations.
+Our current specification uses the output of a photometric preprocessing step, however, a logical extension is to model photon counts at the pixel level and perform inference over a joint model. 
 Because pixel appearance models conditioned on the SED of a source are well-known, we see this as a feasible next step. 
 
-We can also extend our model to include information from different sources of photometry and spectroscopy.  Other photometric surveys measure different ranges of the spectrum, yielding more information about the underlying SED.  Methods that incorporate photometry from different sources have been shown to improve redshift estimates \cite{brescia2013photometric}.  
+We can also extend our model to include information from different sources of photometry and spectroscopy.
+Other photometric surveys measure different ranges of the spectrum, yielding more information about the underlying SED.
+Methods that incorporate photometry from different sources have been shown to improve redshift estimates \cite{brescia2013photometric}.  
 
-Lastly, we can extend our methodology to model the SED of galaxies, which can be quite complicated.  For instance, galaxy observations have spatial extent - they are not well modeled as a single point in the sky.  
+Lastly, we can extend our methodology to model the SED of galaxies, which can be quite complicated.
+For instance, galaxy observations have spatial extent and they are therefore not well modeled as a single point in the sky.  
 Models for spatial extent have been developed and applied to photometric data \cite{hogg2013replacing, regier2015}.  
 However, a galaxy's SED can vary \emph{spatially}, leading to far more complex models.    
 The combination of SED and spatial appearance modeling and computationally efficient inference procedures is a promising route toward the automatic characterization of millions of sources from the enormous amounts of data available in massive photometric surveys.  
