@@ -1,0 +1,138 @@
+\documentclass[aos,preprint]{imsart}
+\pdfoutput=1
+\usepackage[OT1]{fontenc}
+\usepackage[numbers]{natbib}
+\usepackage[colorlinks,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage{hypernat}
+\usepackage{geometry}
+\geometry{
+  body={6in, 9in},
+  left=1.25in,
+  top=1in
+}
+\setattribute{journal}{name}{}
+\setlength{\parskip}{.5\baselineskip}%
+\setlength{\parindent}{0cm}
+
+%% shared defs
+%\RequirePackage{natbib}
+\include{includes/defs}
+\setlength{\figwidth}{6in}
+\setlength{\halfwidth}{3in}
+
+%% define some URLS
+\urldef\acmweb\url{http://people.seas.harvard.edu/~acm/}
+\urldef\rpaweb\url{http://people.seas.harvard.edu/~rpa/}
+\urldef\kgweb\url{http://kirkgoldsberry.com/}
+
+%
+% end preamble/begin doc
+%
+\begin{document}
+
+\begin{frontmatter}
+
+  \title{A Stochastic Process Model of Quasar Spectral Energy Distributions}
+  \runtitle{Model of Quasar Spectral Energy Distributions}
+
+  \begin{aug}
+    \author{\fnms{Andrew} \snm{Miller}%
+      \ead[label=e1]{acm@seas.harvard.edu}%
+      \ead[label=u1,url]{http://people.seas.harvard.edu/\textasciitilde{}acm/}%
+      \thanksref{t1, t5}%
+      },
+    \author{\fnms{Albert} \snm{Wu}%
+      \ead[label=e2]{awu@college.harvard.edu}%
+      \thanksref{t1}%
+      },
+    \author{\fnms{Jeffrey} \snm{Regier}%
+      \ead[label=e4]{jeff@stat.berkeley.edu}%
+      \thanksref{t2}%
+      },
+    \author{\fnms{Jon} \snm{McAuliffe}%
+      \ead[label=e4]{jon@stat.berkeley.edu}%
+      \thanksref{t2}%
+    },
+    %\and
+    \author{\fnms{Dustin} \snm{Lang}%
+      \ead[label=e4]{dstn@cmu.edu}%
+      \thanksref{t3}%
+    },
+    %\and
+    \author{\fnms{Prabhat} \snm{}%
+      \ead[label=e4]{prabhat@lbl.gov}%
+      \thanksref{t4}%
+    },
+    \author{\fnms{David} \snm{Schlegel}%
+      \ead[label=e4]{djschlegel@lbl.gov}%
+      \thanksref{t4}%
+    },
+    \author{\fnms{Ryan} \snm{Adams}%
+      \ead[label=e3]{rpa@seas.harvard.edu}%
+      \ead[label=u3,url]{http://people.seas.harvard.edu/\textasciitilde{}rpa/}%
+      \thanksref{t1}%
+    }
+
+    %front page footnote
+    \thankstext{t1}{School of Engineering and Applied Sciences, Harvard University}
+    \thankstext{t2}{Department of Statistics, University of California, Berkeley}
+    \thankstext{t3}{McWilliams Center for Cosmology, Carnegie Mellon University}
+    \thankstext{t4}{Lawrence Berkeley National Laboratory}
+    \thankstext{t5}{\acmweb}
+    
+    %\thankstext{t1}{ \acmweb }
+    %\thankstext{t2}{ \lbweb }
+    %\thankstext{t3}{ \rpaweb }
+    %\thankstext{t4}{ \kgweb }
+
+    %last page author info
+    \address{Andrew Miller\\
+      School of Engineering and Applied Sciences\\
+      Harvard University\\
+      Cambridge, MA 02138, USA\\
+      \printead{e1}\\
+      \printead{u1}}
+    
+    \address{Ryan Adams\\
+      School of Engineering and Applied Sciences\\
+      Harvard University\\
+      Cambridge, MA 02138, USA\\
+      \printead{e3}\\
+      \printead{u3}}
+    
+    \runauthor{A.~Miller et al.}
+    
+  \end{aug}
+
+\begin{abstract} 
+We describe a method for combining two disparate sources of astronomical data, spectroscopy and photometry, which carry information about sources of light (e.g., stars, galaxies, and quasars) at extremely different spectral resolutions. 
+Our model treats the spectral energy distribution (SED) of the radiation from a source as a latent variable, hierarchically generating both photometric and spectroscopic observations.  
+Furthermore, we view the problem of SED inference as a density estimation problem, placing a flexible nonparametric prior over the SED of a light source that admits a physically interpretable decomposition and allows us to tractably perform Bayesian inference using Markov chain Monte Carlo (MCMC).  
+We use our model to predict the distribution of the redshift of a quasar from five-band (low spectral resolution) photometric data, the so called ``photo-z'' problem. 
+Our method shows that tools from machine learning and Bayesian statistics allow us to leverage multiple spectral resolutions of information to make accurate predictions with well-characterized uncertainties. 
+\end{abstract} 
+
+\begin{keyword}
+\kwd{astronomy}
+\kwd{Gaussian process}
+\kwd{Bayesian statistics}
+\kwd{hierarchical model}
+\end{keyword}
+
+\end{frontmatter}
+
+%%%%%
+%%% Main paper content
+%%%%%
+\input{content.tex}
+
+\bibliographystyle{plainnat}
+\bibliography{../refs}
+
+
+
+\end{document} 
+
+
+
+

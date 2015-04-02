@@ -1,13 +1,18 @@
-import planck
+import CelestePy.planck
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.stats import gamma
 from scipy.optimize import fmin 
-from celeste import celeste_likelihood_multi_image, gen_src_prob_layers, gen_point_source_psf_image, gen_src_image
-from util.plot_util import compare_to_model, subplot_imshow_colorbar
-#from mcmc_transitions import sampleAuxSourceCounts
-from util.slicesample import slicesample
-import matplotlib.pyplot as plt
-from util.timer_util import *
+from CelestePy import PointSrcParams
+from CelestePy import celeste_likelihood_multi_image, \
+                      gen_src_prob_layers, \
+                      gen_point_source_psf_image, \
+                      gen_src_image
+from CelestePy.util.misc.plot_util import compare_to_model, subplot_imshow_colorbar
+from CelestePy.util.infer.slicesample import slicesample
+from CelestePy.util.misc.timer_util import *
+from CelestePy.celeste_galaxy_conditionals import galaxy_source_like, galaxy_source_like_grad
+import CelestePy.mixture_profiles as mp
 
 def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True): 
     """ maximizes log likelihood over fixed-num-source parameters 
@@ -144,6 +149,13 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
             ## into a joint update of t_s (or an iterative routine)
             ## 3) maximize u_s given \hat b_s, \hat t_s
 
+
+            ##############################
+            ## Galaxy params optimization
+            ## 
+            #galaxy_source_like(th, u, bs, Z_s, images, check_overlap=True, pixel_grid=None):
+ 
+
         ll = celeste_likelihood_multi_image(srcs, imgs)
         ll_trace.append(ll)
         printif(".... current marginal likelihood = %2.2f"%ll, verbose)
@@ -159,128 +171,6 @@ def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True):
 
 
 
-def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True): 
-    """ Does a single gibbs sweep - samples all Z_{n,m,s} and then samples
-        all u_s, t_s, b_s for each source (repeats subiter times)
-        Input: 
-            srcs: python list of PointSrcParams
-            imgs: python list of FitsImage objects
-            maxiter : max number of EM iterations
-            debug : turn on plotting
-    """
-
-    # for each image, sample the source specific counts (Z_{n,m,s})
-    printif("    sampling Z's", verbose)
-    all_src_images = []
-    for img in imgs:
-        #src_image = sampleAuxSourceCounts(srcs, img, eta=0)
-        src_probs = gen_src_prob_layers(srcs, img)
-        src_image = np.zeros(src_probs.shape)
-        for (i,j), xij in np.ndenumerate(img.nelec):
-            src_image[:,i,j] = np.random.multinomial(int(xij), src_probs[:,i,j])
-        all_src_images.append(src_image)
-
-        #### debug #####
-        if debug:
-            if img.band == 'r':
-                fig, axarr = plt.subplots(1, src_image.shape[0])
-                subplot_imshow_colorbar(src_image, fig, axarr)
-                plt.show()
-        #### end debug ####
-    printif("      .... done", verbose)
-
-    # compute optimal noise param for each image
-    printif("    sampling image specific epsilons", verbose)
-    a_0 = 5      # convolution parameter - higher tends to avoid 0
-    b_0 = .005   # inverse scale parameter
-    for i,img in enumerate(imgs):
-        a_n = a_0 + np.sum(all_src_images[i][0,:,:])
-        b_n = b_0 + img.nelec.size
-        eps_tmp = img.epsilon
-        img.epsilon = np.random.gamma(a_n, 1./b_n)
-        printif("      img %d eps %2.2f => %2.2f (eps0 = %2.2f)"%(i, eps_tmp, img.epsilon, img.epsilon0), 
-                verbose and i < 5)
-    printif("      .... done", verbose)
-
-    # for each source, sample source specific params
-    # TODO: add some sort of prior over brightness and temp (maybe location)
-    for s in range(len(srcs)):
-
-        #### iterate a bunch - sample locs and brightness/temps
-        for gibbs_iter in range(subiter):
-
-            # sample temp/brightness
-            printif( "    source %d: slice sampling t's and b's"%s, verbose)
-
-            # cache existing state
-            tmp_t = srcs[s].t
-            tmp_b = srcs[s].b
-
-            # compute fraction of photons this image will see
-            sum_fs   = np.zeros(len(imgs))  
-            for n, img in enumerate(imgs):
-                sum_fs[n] = min(1., np.sum(gen_point_source_psf_image(srcs[s].u, img)))
-            for it in range(2):
-                th     = np.array([srcs[s].t, srcs[s].b])
-                th, ll = slicesample(xx       = th,
-                                     llh_func = lambda(th): temp_bright_like(th, sum_fs, s, imgs, all_src_images),
-                                     step     = [1000, .1], 
-                                     step_out = True,
-                                     x_l      = [0., 0.])
-            srcs[s].t = th[0]
-            srcs[s].b = th[1]
-            printif("        t: %2.2f => %2.2f"%(tmp_t, srcs[s].t),
-                    verbose and s < 5)
-            printif("        b: %.4g  => %.4g"%(tmp_b, srcs[s].b), 
-                    verbose and s < 5)
-
-            # sample location
-            tmp_u = srcs[s].u
-            u, ll = slicesample(xx       = srcs[s].u,
-                                llh_func = lambda(u): loc_like(u, s, srcs, imgs, all_src_images),
-                                step     = [.1, .1], 
-                                step_out = False)
-            srcs[s].u = u
-            printif("        u: (%.4g, %4g) => (%.4g, %.4g)"%(tmp_u[0], tmp_u[1], u[0], u[1]), 
-                    verbose and s < 5)
-    return None
-
-
-#### likelihood factor that only depends on locatio
-def loc_like(u, s, srcs, imgs, all_src_images): 
-    ll = 0
-    srcs[s].u = u
-    for n, img in enumerate(imgs):
-        if not img.contains(srcs[s].u):
-            continue
-        f_sn = gen_src_image(srcs[s], img)
-
-        # mask to remove the negative infinities
-        mask = (all_src_images[n][s+1,:,:] > 0) & (f_sn > 0)
-        ll  += np.sum(np.log(f_sn[mask])*all_src_images[n][s+1,mask]) \
-               - f_sn.sum()
-    return ll
-
-
-#### joint Temp, Brightness source specific opt func
-def temp_bright_like(th, fs_sum, s, imgs, all_src_images):
-    ll = 0
-    for i, img in enumerate(imgs): 
-        expected_num_photons = fs_sum[i] * \
-            planck.photons_expected_brightness(th[0], th[1], img.band)
-        if expected_num_photons > 0:
-            ll += np.sum(all_src_images[i][s+1,:,:]) * \
-                  np.log(expected_num_photons) - expected_num_photons
-
-    # prior over temperature, prior over brightness
-    #ll += gamma(4, scale=1/.0005).logpdf(th[0])
-    #ll += gamma(1., scale=1.).logpdf(th[1])
-    #ll += fast_gamma_lnpdf(th[0], 4., .0005)
-    #ll += fast_gamma_lnpdf(th[1], 1., 1.)
-    ll += unif_lnpdf(th[0], 20., 20000.)
-    ll += unif_lnpdf(th[1], 0., 1.)
-    return ll
-
 
 def unif_lnpdf(x, a0, b0):
     if x <= a0 or x >= b0:
@@ -293,6 +183,21 @@ def fast_gamma_lnpdf(x, a0, b0):
         return -np.inf
     return (a0-1.)*np.log(x) - b0*x
 
+
+# priors over galaxy parameters
+half_pi = np.pi/2
+def galaxy_log_prior(theta, phi, sigma, rho):
+    # uniform between devac and expo
+    if theta <= 0. or theta >= 1.:
+        return -np.inf
+    # uniform between [0, pi/2]
+    if phi <= 0. or phi >= half_pi:
+        return -np.inf
+    # ratio of minor/major axis length is bewteen 0,1
+    if rho <=0. or rho >= 1.:
+        return -np.inf
+    # scale free prior 
+    return - np.log(sigma)
 
 def printif(statement, condition):
     if condition:

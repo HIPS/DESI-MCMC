@@ -3,9 +3,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import sys
 import os.path
-sys.path.append(
-    os.path.abspath(os.path.join(os.path.dirname('..'), os.path.pardir)))
-from celeste import gen_model_image
+from CelestePy import gen_model_image
 
 def plot_comparison(band, file_ra_dec, model_image):   
     ## 0. Create an image
@@ -80,5 +78,39 @@ def subplot_imshow_colorbar(imgs, fig=None, axarr=None):
         cax = divider.append_axes('right', size='10%', pad=.05)
         cbar = fig.colorbar(im, cax=cax)
     return fig, axarr
+
+
+def compare_pair(img0, img1, axarr=None, standardize=True): 
+    vmin = min(img0.min(), img1.min())
+    vmax = max(img0.max(), img1.max())
+
+    if axarr is None:
+        fig, axarr = plt.subplots(1, 3)
+    else:
+        fig = axarr[0].get_figure()
+
+    # plot images
+    im1 = axarr[0].imshow(img0, interpolation='none', origin='lower', vmin=vmin, vmax=vmax)
+    axarr[0].set_title('Image 0')
+    im2 = axarr[1].imshow(img1, interpolation='none', origin='lower', vmin=vmin, vmax=vmax)
+    axarr[1].set_title('Image 1')
+
+    # plot diff
+    if standardize:
+        im3 = axarr[2].imshow((img0-img1) / img1, interpolation='none', origin='lower')
+        axarr[2].set_title("diff / mu_1")
+    else: 
+        im3 = axarr[2].imshow((img0-img1)**2, interpolation='none', origin='lower')
+        axarr[2].set_title("Squared Difference")
+
+    # add colorbar to the right
+    fig.subplots_adjust(right=0.9)
+    cbar_ax = fig.add_axes([0.92, 0.25, 0.01, 0.5])
+    fig.colorbar(im3, cax=cbar_ax)
+
+    # append colorbar
+    #divider2 = make_axes_locatable(axarr[2])
+    #cax2 = divider2.append_axes('right', size='10%', pad=.05)
+    #cbar2 = fig.colorbar(im2, cax=cax2)
 
 

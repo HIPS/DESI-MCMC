@@ -5,6 +5,9 @@
 import fitsio
 import numpy as np
 
+# autograd array wrapper
+from autograd import grad
+
 class FitsImage():
     """ FitsImage - simple organization of fits file images that 
         Dustin has been passing us.  Each FitsImage maintains it's own 
@@ -36,11 +39,13 @@ class FitsImage():
           - nelec = NxM array : number of electrons corresponding to each 
                                 pixel, indexed nelec[y, x]
     """
-    def __init__(self, band, fits_file_template="data/stamps/stamp-%s-130.1765-52.7501.fits"): 
+    def __init__(self, band, 
+            fits_file_template = "data/stamps/stamp-%s-130.1765-52.7501.fits",
+            exposure_num       = 0): 
         self.band      = band
         self.band_file = fits_file_template%band
-        self.img       = fitsio.read(self.band_file)
-        header         = fitsio.read_header(self.band_file)
+        self.img       = fitsio.FITS(self.band_file)[exposure_num].read()
+        header         = fitsio.read_header(self.band_file, ext=exposure_num)
         self.header    = header
 
         # Compute the number of electrons, resource: 
@@ -100,15 +105,15 @@ class FitsImage():
 
     def equa2pixel(self, s_equa):
         phi1rad = self.phi_n[1] / 180. * np.pi
-        s_iwc = np.array([ (s_equa[0] - self.phi_n[0]) * np.cos(phi1rad),
-                           (s_equa[1] - self.phi_n[1]) ])
-        s_pix = self.Ups_n_inv.dot(s_iwc) + self.rho_n
+        s_iwc = np.wrapped_array([ (s_equa[0] - self.phi_n[0]) * np.cos(phi1rad),
+                                   (s_equa[1] - self.phi_n[1]) ])
+        s_pix = np.dot(self.Ups_n_inv, s_iwc) + self.rho_n
         return s_pix
 
     def pixel2equa(self, s_pixel):
         phi1rad = self.phi_n[1] / 180. * np.pi
-        s_iwc   = self.Ups_n.dot(s_pixel - self.rho_n) 
-        s_equa = np.array([ s_iwc[0]/np.cos(phi1rad) + self.phi_n[0], 
-                            s_iwc[1] + self.phi_n[1] ])
+        s_iwc   = np.dot(self.Ups_n, s_pixel - self.rho_n) 
+        s_equa = np.wrapped_array([ s_iwc[0]/np.cos(phi1rad) + self.phi_n[0], 
+                                    s_iwc[1] + self.phi_n[1] ])
         return s_equa
 

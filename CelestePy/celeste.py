@@ -11,9 +11,11 @@
 #
 
 import numpy as np
+from autograd import grad
 from scipy.misc import logsumexp
-from gmm_like import gmm_like
+from util.like.gmm_like import gmm_like
 #from gmm_like_fast import gmm_like_2d_covinv_logdet as fast_gmm_like
+import celeste_galaxy_conditionals as gal_funs
 from planck import photons_expected, photons_expected_brightness
 from fits_image import FitsImage
 import mixture_profiles as mp
@@ -38,8 +40,9 @@ def gen_src_image(src, image, pixel_grid = None):
 
     elif src.a == 1:  # galaxy
         # expected number of photons in this band is given by the flux value
-        f_s = gen_galaxy_psf_image(src, image, pixel_grid=pixel_grid)
-        return f_s * src.fluxes[image.band]
+        f_s        = gen_galaxy_psf_image(src, image, pixel_grid = pixel_grid)
+        image_flux = (src.fluxes[image.band] / image.calib) * image.kappa
+        return f_s * image_flux
 
     elif src.a is None and src.fluxes is not None:
         #TODO: rid all of this code of Nanomaggy to photon count (kappa) variables - 
@@ -62,37 +65,49 @@ def gen_galaxy_psf_image(src, image, check_overlap=True, pixel_grid = None):
     another MoG)
     """
     assert src.a == 1, "generating glaxay psf image for non galaxy."
-    v_s = image.equa2pixel(src.u)
-    thetas = [src.theta, 1.-src.theta]
+    th = np.array([src.theta, src.sigma, src.phi, src.rho])
+    return gal_funs.gen_galaxy_psf_image(th, src.u, image,
+                                         check_overlap = check_overlap,
+                                         pixel_grid    = pixel_grid,
+                                         unconstrained = False)
 
-    ## mixture of 40ish (yeesh) gaussians - instantiate parameters
-    num_components = len(image.weights) * sum([len(gp.amp) for gp in galaxy_profs])
-    weights = np.zeros(num_components)
-    means   = np.zeros((num_components, 2))
-    covars  = np.zeros((num_components, 2, 2))
-    cnt = 0
-    for k in range(len(image.weights)):                 # num PSF Componenets
-        for i in range(2):                              # two galaxy types
-            for j in range(len(galaxy_profs[i].amp)):   # galaxy type components
-                weights[cnt] = image.weights[k] * thetas[i] * galaxy_profs[i].amp[j]
-                means[cnt, :] = v_s + image.means[k,:]
-                covars[cnt, :, :] = image.covars[k,:,:] + \
-                    galaxy_profs[i].var[j,:,:].dot( src.Phi.dot(src.Phi.T) )
-                cnt += 1
+    #v_s    = image.equa2pixel(src.u)
+    #thetas = [src.theta, 1.-src.theta]
 
-    # instantiate a pixel grid if necessary
-    if pixel_grid is None: 
-        y_grid = np.arange(image.nelec.shape[0], dtype=np.float) + 1
-        x_grid = np.arange(image.nelec.shape[1], dtype=np.float) + 1
-        yy, xx = np.meshgrid(x_grid, y_grid, indexing='xy')
-        pixel_grid = np.column_stack((xx.ravel(), yy.ravel()))
+    ## compute spatial covariance matrix
+    #R = np.array([[np.cos(src.phi), -np.sin(src.phi)],
+    #              [np.sin(src.phi), np.cos(src.phi)]])
+    #S = np.diag([src.sigma*src.sigma, src.sigma*src.sigma*src.rho*src.rho])
+    #W = R.T.dot(S).dot(R)
 
-    ## evaluate equation 11-13 in jeff's november writeup
-    psf_grid = gmm_like(x = pixel_grid, 
-                        ws = weights,
-                        mus = means,
-                        sigs = covars)
-    return psf_grid.reshape(image.nelec.shape).T
+    ### mixture of 40ish (yeesh) gaussians - instantiate parameters
+    #num_components = len(image.weights) * sum([len(gp.amp) for gp in galaxy_profs])
+    #weights = np.zeros(num_components)
+    #means   = np.zeros((num_components, 2))
+    #covars  = np.zeros((num_components, 2, 2))
+    #cnt = 0
+    #for k in range(len(image.weights)):                 # num PSF Componenets
+    #    for i in range(2):                              # two galaxy types
+    #        for j in range(len(galaxy_profs[i].amp)):   # galaxy type components
+    #            weights[cnt] = image.weights[k] * thetas[i] * galaxy_profs[i].amp[j]
+    #            means[cnt, :] = v_s + image.means[k,:]
+    #            covars[cnt, :, :] = image.covars[k,:,:] + \
+    #                galaxy_profs[i].var[j,:,:].dot(W)
+    #            cnt += 1
+
+    ## instantiate a pixel grid if necessary
+    #if pixel_grid is None: 
+    #    y_grid = np.arange(image.nelec.shape[0], dtype=np.float) + 1
+    #    x_grid = np.arange(image.nelec.shape[1], dtype=np.float) + 1
+    #    yy, xx = np.meshgrid(x_grid, y_grid, indexing='xy')
+    #    pixel_grid = np.column_stack((xx.ravel(), yy.ravel()))
+
+    ### evaluate equation 11-13 in jeff's november writeup
+    #psf_grid = gmm_like(x = pixel_grid, 
+    #                    ws = weights,
+    #                    mus = means,
+    #                    sigs = covars)
+    #return psf_grid.reshape(image.nelec.shape).T
 
 def gen_point_source_psf_image(
         u,                         # source location in equatorial coordinates
@@ -233,9 +248,35 @@ class PointSrcParams():
           ell : luminosity of source (in Suns)
           d : distance to source (in light years)
     """
-    def __init__(self, u, a=None, fluxes=None,
-                 b=None, t=None, ell=None, d=None,
-                 theta=None, Phi=None, header=None):
+    # define source parameter D_type
+    src_dtype = [ ('a', 'u1'),
+                  ('t', 'f4'),
+                  ('b', 'f4'),
+                  ('u', 'f4', (2,)), 
+                  ('v', 'f4', (2,)),
+                  ('theta', 'f4'),
+                  ('phi', 'f4'),
+                  ('sigma', 'f4'),
+                  ('rho', 'f4'),
+                  ('fluxes', 'f4', (5,)) ]
+
+    def __init__(self,
+                 u,
+                 a      = None,
+                 # star specific params
+                 b      = None,
+                 t      = None,
+                 # galaxy specific params
+                 v      = None,
+                 theta  = None,
+                 phi    = None,
+                 sigma  = None,
+                 rho    = None,
+                 fluxes = None,
+                 # extra, aux params
+                 ell    = None,
+                 d      = None,
+                 header = None):
 
         ## binary indicator that source is a star (0) or galaxy (1)
         self.a = a
@@ -246,9 +287,12 @@ class PointSrcParams():
         self.t = t
 
         ## galaxy params
+        self.v      = v        # location - different from star location
         self.theta  = theta    # mixture between exponential and devacalours galaxies
-        self.Phi    = Phi      # 2x2 warping of model galaxies
-        self.fluxes = fluxes   # 5 band fluxes
+        self.phi    = phi      # rotation angle of the galaxy
+        self.sigma  = sigma    # scale of the galaxy extent
+        self.rho    = rho      # eccentricity = major/minor axis ratio
+        self.fluxes = fluxes   # galaxy 5 band fluxes
 
         ## unused/extra params
         self.ell = ell
@@ -263,7 +307,7 @@ class PointSrcParams():
 
     def __str__(self): 
         if self.a == 0: 
-            return "StrSrc: u=%(%2.2f, %2.2f), b=%2.2f"%(self.u[0], self.u[1], self.b)
+            return "StrSrc: u=(%2.2f, %2.2f), b=%.4g, t=%2.2f"%(self.u[0], self.u[1], self.b, self.t)
         elif self.a==1:
             return "GalSrc: u=(%2.2f, %2.2f), theta=%2.2f"%(self.u[0], self.u[1], self.theta)
         else: 
