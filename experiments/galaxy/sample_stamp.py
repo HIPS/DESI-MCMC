@@ -10,10 +10,10 @@ from CelestePy.util.misc import init_utils, plot_util, check_grad
 import CelestePy.celeste_galaxy_conditionals as gal
 
 SAMPLE_FIELDS = ['epsilon', 'srcs', 'll']
-def sample_source_params(srcs, imgs, Niter = 10, monitor=False):
+def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False):
 
     ## keep figure around for likelihood and param monitoring of source 0
-    if monitor:
+    if plot:
         fig, axarr = plt.subplots(2, 3)
         plt.ion()
 
@@ -49,11 +49,11 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False):
             e_samps[n, n_img] = imgs[n_img].epsilon
         for s in range(len(srcs)):
             src_samps[n, s] = src_obj_to_array(srcs[s])
-            print src_samps[n, s]
 
         # plot model image, true image comparison
         if monitor:
             print_samp(src_samps[n,0])
+        if plot:
             model_image = gen_model_image(srcs[0:1], imgs[2])
             plot_util.compare_pair(imgs[2].nelec, model_image, axarr=axarr[0,0:3], standardize=True)
             plt.draw()
@@ -96,7 +96,6 @@ def array_to_src_obj(src_array):
         )
 
 def print_samp(th):
-    #theta, sigma, phi, rho = gal.constrain_params(th[0:4])
     print "    loc                : %2.2f, %2.2f"%(th['u'][0], th['u'][1])
     print "    r-flux             : %2.2f"%(th['fluxes'][2])
     print "    theta (prop dev)   : %2.5f"%(1.0 - th['theta'])
@@ -141,88 +140,13 @@ if __name__=="__main__":
     print "    %d catalog sources"%len(cat_srcs)
     print "    %d bright sources"%len(srcs)
 
-    # visualize peaks!
+    ## visualize peaks!
     if False:
         plt.ion()
         plt.imshow(imgs[3].nelec.T, origin='lower')
         for src in srcs:
             peak = imgs[3].equa2pixel(src.u) - 1
             plt.scatter(peak[0], peak[1], s=20)
-
-    #### initialize single source sample and image noises
-    #fake_zs = []
-    #fake_fluxes = {}
-    #for img in imgs: 
-    #    denoised = img.nelec - img.epsilon
-    #    denoised[denoised <= 0] = 0
-    #    fake_zs.append(denoised)
-    #    fake_fluxes[img.band] = denoised.sum() / img.kappa * img.calib #10. #denoised.sum()
-    #th = np.array([srcs[0].theta, srcs[0].sigma, srcs[0].phi, srcs[0].rho])
-    #th = np.array([0., -1., 0., 0.])
-    #th = np.concatenate((th, srcs[0].u))
-    #th = np.concatenate((th, [fake_fluxes[b] for b in ['u', 'g', 'r', 'i', 'z']]))
-    #print gal.galaxy_source_like(th, fake_zs, imgs)
-    #print gal.galaxy_source_like_grad(th, fake_zs, imgs)
-    #check_grad(lambda th: gal.galaxy_source_like(th, fake_zs, imgs),
-    #           lambda th: gal.galaxy_source_like_grad(th, fake_zs, imgs),
-    #           th)
-
-    #plt.ion()
-    #cur_dir = np.zeros(th.shape)
-    #momentum = .98
-    #learning_rate = 1e-5
-    #lls = []
-    #th_max = np.zeros(th.shape)
-    #for i in range(20):
-    #    th_grad = gal.galaxy_source_like_grad(th, fake_zs, imgs)
-    #    cur_dir = momentum * cur_dir + (1.0 - momentum) * th_grad
-    #    th      += learning_rate * cur_dir
-    #    th[4:6] = srcs[0].u
-    #    lls.append(gal.galaxy_source_like(th, fake_zs, imgs))
-    #    print "ll = ", lls[-1]
-    #    print th_grad
-
-    #    # cache the ma
-    #    if lls[-1] >= max(lls): 
-    #        th_max = th.copy()
-    #    print_prog(th, i)
-    #    plt.plot(lls)
-    #    plt.draw()
-
-    #srcs[0].theta, srcs[0].sigma, srcs[0].phi, srcs[0].rho = \
-    #    gal.constrain_params(th_max[0:4])
-    #srcs[0].fluxes = dict(zip(['u', 'g', 'r', 'i', 'z'], th_max[-5:]))
-    #srcs[0].u      = th_max[4:6]
-
-    # run simple optmizer for galaxy params
-    #import scipy.optimize as opt
-    #res = opt.minimize(
-    #    fun = lambda th: -1*galaxy_source_like(th, fake_zs, imgs),
-    #    jac = lambda th: -1*galaxy_source_like_grad(th, fake_zs, imgs),
-    #    x0  = th_max, 
-    #    method = 'L-BFGS-B',
-    #    options = {'disp': True}
-    #    )
-    #srcs[0].theta, srcs[0].sigma, srcs[0].phi, srcs[0].rho = transform_params(res.x[0:4])
-    #srcs[0].fluxes = dict(zip(['u', 'g', 'r', 'i', 'z'], res.x[-5:]))
-    #srcs[0].u      = th_max[4:6]
-
-
-    # compare likelihoods
-    #ml = celeste_likelihood_multi_image(srcs, imgs)
-    #srcs[0].fluxes['r'] = 75.
-    #ml_fix = celeste_likelihood_multi_image(srcs, imgs)
-    #print "ML vs ML_fix: %2.3f vs. %2.3f"%(ml, ml_fix)
-    #print "  mlfix better? ", ml_fix > ml
-
-    if False:
-        #cache initial likelihood, initial temp
-        ll0 = celeste_likelihood_multi_image(srcs, imgs)
-        model_image = gen_model_image(srcs[0:1], imgs[3])
-
-        plot_util.compare_pair(imgs[3].nelec, model_image, standardize=False)
-        plt.imshow(model_image, origin='lower'); plt.colorbar()
-        plt.show()
 
     ##
     ## randomly initalize sky noise
@@ -242,17 +166,75 @@ if __name__=="__main__":
     ##prun -s tottime samp_dict = sample_source_params(srcs, imgs, 2)
     samp_dict = sample_source_params(srcs, imgs, 
                                      Niter=100,
-                                     monitor=True,
-                                     th0 = )
+                                     monitor=True)
     save_samples(samp_dict, "celeste_gal_samps.bin")
 
-    ## visualize some model images visualization 
-    #Nsamps = samp_dict['u'].shape[0]
-    #src_samps = samp_dict['srcs']
-    #for i in range(500, Nsamps):
-    #    srcs  = [array_to_src_obj(sarray) for sarray in src_samps[i]]
-    #    img_i = gen_model_image(srcs, imgs[2])
-    #    plot_util.compare_pair(imgs[2].nelec, img_i); plt.colorbar()
-    #    plt.imshow(img_i, origin='lower'); plt.colorbar()
+
+
+#### initialize single source sample and image noises
+#fake_zs = []
+#fake_fluxes = {}
+#for img in imgs: 
+#    denoised = img.nelec - img.epsilon
+#    denoised[denoised <= 0] = 0
+#    fake_zs.append(denoised)
+#    fake_fluxes[img.band] = denoised.sum() / img.kappa * img.calib #10. #denoised.sum()
+#th = np.array([srcs[0].theta, srcs[0].sigma, srcs[0].phi, srcs[0].rho])
+#th = np.array([0., -1., 0., 0.])
+#th = np.concatenate((th, srcs[0].u))
+#th = np.concatenate((th, [fake_fluxes[b] for b in ['u', 'g', 'r', 'i', 'z']]))
+#print gal.galaxy_source_like(th, fake_zs, imgs)
+#print gal.galaxy_source_like_grad(th, fake_zs, imgs)
+#check_grad(lambda th: gal.galaxy_source_like(th, fake_zs, imgs),
+#           lambda th: gal.galaxy_source_like_grad(th, fake_zs, imgs),
+#           th)
+
+#plt.ion()
+#cur_dir = np.zeros(th.shape)
+#momentum = .98
+#learning_rate = 1e-5
+#lls = []
+#th_max = np.zeros(th.shape)
+#for i in range(20):
+#    th_grad = gal.galaxy_source_like_grad(th, fake_zs, imgs)
+#    cur_dir = momentum * cur_dir + (1.0 - momentum) * th_grad
+#    th      += learning_rate * cur_dir
+#    th[4:6] = srcs[0].u
+#    lls.append(gal.galaxy_source_like(th, fake_zs, imgs))
+#    print "ll = ", lls[-1]
+#    print th_grad
+
+#    # cache the ma
+#    if lls[-1] >= max(lls): 
+#        th_max = th.copy()
+#    print_prog(th, i)
+#    plt.plot(lls)
+#    plt.draw()
+
+#srcs[0].theta, srcs[0].sigma, srcs[0].phi, srcs[0].rho = \
+#    gal.constrain_params(th_max[0:4])
+#srcs[0].fluxes = dict(zip(['u', 'g', 'r', 'i', 'z'], th_max[-5:]))
+#srcs[0].u      = th_max[4:6]
+
+# run simple optmizer for galaxy params
+#import scipy.optimize as opt
+#res = opt.minimize(
+#    fun = lambda th: -1*galaxy_source_like(th, fake_zs, imgs),
+#    jac = lambda th: -1*galaxy_source_like_grad(th, fake_zs, imgs),
+#    x0  = th_max, 
+#    method = 'L-BFGS-B',
+#    options = {'disp': True}
+#    )
+#srcs[0].theta, srcs[0].sigma, srcs[0].phi, srcs[0].rho = transform_params(res.x[0:4])
+#srcs[0].fluxes = dict(zip(['u', 'g', 'r', 'i', 'z'], res.x[-5:]))
+#srcs[0].u      = th_max[4:6]
+
+
+# compare likelihoods
+#ml = celeste_likelihood_multi_image(srcs, imgs)
+#srcs[0].fluxes['r'] = 75.
+#ml_fix = celeste_likelihood_multi_image(srcs, imgs)
+#print "ML vs ML_fix: %2.3f vs. %2.3f"%(ml, ml_fix)
+#print "  mlfix better? ", ml_fix > ml
 
 
