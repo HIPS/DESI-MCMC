@@ -4,6 +4,7 @@ Galaxy (single source) conditional distributions and gradients
 import numpy as np
 import CelestePy.mixture_profiles as mp
 from autograd import grad
+from CelestePy.util.like import fast_inv_gamma_lnpdf
 
 def galaxy_source_like(th, Z_s, images, check_overlap=True, pixel_grid=None, unconstrained=True):
     """ log probability of Galaxy-specific pixels (z), conditioned on 
@@ -47,7 +48,7 @@ def galaxy_skew_like(th, u, fluxes, Z_s, images,
         image_flux   = (fluxes[img.band] / img.calib) * img.kappa
         lam          = image_flux * gal_prof_psf
         ll          += np.sum(Z_s[n] * np.log(lam) - lam)
-    return ll #+ galaxy_prior(th[0], th[1], th[2], th[3])
+    return ll
 galaxy_skew_like_grad = grad(galaxy_skew_like)
 
 
@@ -67,15 +68,15 @@ def gen_galaxy_transformation(sig_s, rho_s, phi_s):
     # Squish, rotate, and scale into degrees.
     # resulting G takes unit vectors (in r_e) to degrees
     # (~intermediate world coords)
-    G = re_deg * np.wrapped_array([[ cp, sp * rho_s], 
-                                   [-sp, cp * rho_s]])
+    G = re_deg * np.array([[ cp, sp * rho_s], 
+                           [-sp, cp * rho_s]])
 
     # "cd" takes pixels to degrees (intermediate world coords)
     cd = np.array([[0.396/3600, 0.         ],
                    [0.,         0.396/3600.]])
 
     # T takes pixels to unit vectors (effective radii).
-    T = np.dot(np.linalg.inv(G), cd)
+    T    = np.dot(np.linalg.inv(G), cd)
     Tinv = np.linalg.inv(T)
     return Tinv
 
@@ -143,14 +144,23 @@ def det2d(K):
     return K[0,0]*K[1,1] - K[1,0]*K[0,1]
 
 def inv2d(K):
-    return 1./det2d(K) * np.wrapped_array([ [ K[1,1], -K[1,0] ],
-                                            [-K[0,1],  K[0,0] ] ])
+    return 1./det2d(K) * np.array([ [ K[1,1], -K[1,0] ],
+                                    [-K[0,1],  K[0,0] ] ])
 
-def galaxy_prior(logit_theta, log_sig, logit_phi, logit_rho): 
+def galaxy_shape_prior_unconstrained(logit_theta, log_sig, logit_phi, logit_rho): 
     return -(1./50.) * (logit_theta * logit_theta + \
                         log_sig     * log_sig + \
                         logit_phi   * logit_phi + \
                         logit_rho   * logit_rho)
+
+def galaxy_shape_prior_constrained(theta, sig, phi, rho):
+    #confirm correct ranges
+    if theta <= 0. or theta >= 1. or \
+            sig <= 0. or \
+            phi <= 0. or phi >= np.pi or \
+            rho <= 0. or rho >= 1.:
+        return -np.inf
+    return fast_inv_gamma_lnpdf(sig*sig, a0=1., b0=1.)
 
 def constrain_params(th):
     """ takes unconstrained parameters, and constrains them to 

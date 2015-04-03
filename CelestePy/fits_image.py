@@ -105,7 +105,7 @@ class FitsImage():
 
     def equa2pixel(self, s_equa):
         phi1rad = self.phi_n[1] / 180. * np.pi
-        s_iwc = np.wrapped_array([ (s_equa[0] - self.phi_n[0]) * np.cos(phi1rad),
+        s_iwc = np.array([ (s_equa[0] - self.phi_n[0]) * np.cos(phi1rad),
                                    (s_equa[1] - self.phi_n[1]) ])
         s_pix = np.dot(self.Ups_n_inv, s_iwc) + self.rho_n
         return s_pix
@@ -113,7 +113,7 @@ class FitsImage():
     def pixel2equa(self, s_pixel):
         phi1rad = self.phi_n[1] / 180. * np.pi
         s_iwc   = np.dot(self.Ups_n, s_pixel - self.rho_n) 
-        s_equa = np.wrapped_array([ s_iwc[0]/np.cos(phi1rad) + self.phi_n[0], 
+        s_equa = np.array([ s_iwc[0]/np.cos(phi1rad) + self.phi_n[0], 
                                     s_iwc[1] + self.phi_n[1] ])
         return s_equa
 

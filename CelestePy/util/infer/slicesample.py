@@ -35,14 +35,14 @@ def slicesample(xx, llh_func, last_llh=None, step=1, step_out=True, x_l=None, x_
         rr = np.random.rand()
         if x_l is None:
             x_l    = xx.copy()
-            x_l[d] = max(x_l[d] - rr*step[d], lb)
+            x_l[d] = max(x_l[d] - rr*step[d], lb[d])
         else:
             x_l = np.atleast_1d(x_l)
             assert x_l.shape == xx.shape
             assert np.all(x_l <= xx)
         if x_r is None:
             x_r    = xx.copy()
-            x_r[d] = min(x_r[d] + (1-rr)*step[d], ub)
+            x_r[d] = min(x_r[d] + (1-rr)*step[d], ub[d])
         else:
             x_r = np.atleast_1d(x_r)
             assert x_r.shape == xx.shape
@@ -50,12 +50,12 @@ def slicesample(xx, llh_func, last_llh=None, step=1, step_out=True, x_l=None, x_
          
         if step_out:
             llh_l = llh_func(x_l)
-            while llh_l > llh0 and x_l[d] > lb:
-                x_l[d] = max(x_l[d] - step[d], lb)
+            while llh_l > llh0 and x_l[d] > lb[d]:
+                x_l[d] = max(x_l[d] - step[d], lb[d])
                 llh_l  = llh_func(x_l)
             llh_r = llh_func(x_r)
-            while llh_r > llh0 and x_r[d] < ub:
-                x_r[d] = min(x_r[d] + step[d], ub)
+            while llh_r > llh0 and x_r[d] < ub[d]:
+                x_r[d] = min(x_r[d] + step[d], ub[d])
                 llh_r  = llh_func(x_r)
 
 

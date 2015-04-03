@@ -148,6 +148,24 @@ def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
         fluxes     = np.random.gamma(a_n, 1./b_n)
         src.fluxes = dict(zip(bands, fluxes))
 
+
+    def slice_sample_skew(): 
+        th_curr = np.array([src.theta, src.sigma, src.phi, src.rho])
+        for i in range(2):
+            th_curr, llh = slicesample(
+                xx       = th_curr,
+                llh_func = lambda(th): gal.galaxy_skew_like(th,
+                                                            src.u,
+                                                            src.fluxes,
+                                                            Z_s    = src_imgs,
+                                                            images = imgs,
+                                                            unconstrained = False) + \
+                                       gal.galaxy_shape_prior_constrained(th[0], th[1], th[2], th[3]),
+                lb = np.array([0., 0., 0., .01]),
+                ub = np.array([1., 200., np.pi, 1.]),
+                step = 1.)
+        src.theta, src.sigma, src.phi, src.rho = th_curr
+
     def sample_skew():
         """ samples sig, rho, phi and theta conditioned on src images and
             band fluxes
@@ -194,7 +212,7 @@ def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
     ## iterate a bunch - sample fluxes, scaling/rotation, and then location
     for gibbs_iter in range(subiter):
         sample_galaxy_fluxes()
-        sample_skew()
+        slice_sample_skew()
 
 
 def sample_star_params(src, src_images, imgs, subiter=2, verbose=False):
@@ -273,13 +291,6 @@ def unif_lnpdf(x, a0, b0):
     if x <= a0 or x >= b0:
       return -np.inf
     return 0.
-
-def fast_gamma_lnpdf(x, a0, b0): 
-    """ Unnormalized gamma log pdf.  a0 = shape, b0 = rate """
-    if x <= 0:
-        return -np.inf
-    return (a0-1.)*np.log(x) - b0*x
-
 
 def printif(statement, condition):
     if condition:
