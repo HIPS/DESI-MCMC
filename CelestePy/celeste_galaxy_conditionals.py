@@ -128,13 +128,12 @@ def gen_galaxy_psf_image(th, u_s, image,
                         sigs = covars)
     return psf_grid.reshape(image.nelec.shape).T
 
-
 Z = 0.15915494309189535
 def gmm_like(x, ws, mus, sigs):
     N_elem = np.atleast_1d(x).shape[0] # number of rows of data
     probs = np.zeros(N_elem)
     for k in range(len(ws)):
-        inv_detK  = 1. / np.linalg.det(sigs[k])
+        inv_detK  = 1. / np.sqrt(np.linalg.det(sigs[k]))
         K_inv     = np.linalg.inv(sigs[k])
         quad_term = np.sum(np.dot(x-mus[k], K_inv) * (x - mus[k]), axis=1, keepdims=False)
         probs     = probs + ws[k] * Z * inv_detK * np.exp(-.5 * quad_term)
