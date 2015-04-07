@@ -24,7 +24,7 @@ def gen_src_image(src, image, pixel_grid = None):
     """ Generates expected photon image for a single point source.  Multiple
         model images (and the 'sky' term) will add together to form an
         expected image for a single observed image.
-          - src   : single PointSrcParam object
+          - src   : single SrcParam object
           - image : FitsImage object
     """
 
@@ -41,8 +41,7 @@ def gen_src_image(src, image, pixel_grid = None):
     elif src.a == 1:  # galaxy
         # expected number of photons in this band is given by the flux value
         f_s        = gen_galaxy_psf_image(src, image, pixel_grid = pixel_grid)
-        image_flux = (src.fluxes[image.band] / image.calib) * image.kappa
-        return f_s * image_flux
+        return f_s * image.nmgy2counts(src.fluxes[image.band])
 
     elif src.a is None and src.fluxes is not None:
         #TODO: rid all of this code of Nanomaggy to photon count (kappa) variables - 
@@ -222,95 +221,4 @@ def celeste_likelihood_multi_image(srcs, images):
     for img in images: 
         ll += celeste_likelihood(srcs, img)
     return ll
-
-class PointSrcParams():
-    """ Point source parameter object
-        Input:
-          u : 2-d np.array holdin right ascension and declination
-          b : Total brightness/flux.  Equal to 
-
-               b = ell / (4 * pi d^2)
-
-               where ell is the luminosity (in Suns) and d is the distance
-               to the source (in light years)
-
-          fluxes : python dictionary such that b['r'] = brightness value for 'r'
-              band.  Note that this is essentially the expected number
-              of photons to enter the lens and be recorded by a given band
-              over the length of one exposure (typically 1.25^2 meters^2 size
-              lens and 54 second exposure)
-
-              This will be kept in nanomaggies (must be scaled by 
-              image calibration). If this is present, it takes priority
-              over the combo of the next few parameters
-
-          t : effective temperature of source (in Kelvin)
-          ell : luminosity of source (in Suns)
-          d : distance to source (in light years)
-    """
-    # define source parameter D_type
-    src_dtype = [ ('a', 'u1'),
-                  ('t', 'f4'),
-                  ('b', 'f4'),
-                  ('u', 'f4', (2,)), 
-                  ('v', 'f4', (2,)),
-                  ('theta', 'f4'),
-                  ('phi', 'f4'),
-                  ('sigma', 'f4'),
-                  ('rho', 'f4'),
-                  ('fluxes', 'f4', (5,)) ]
-
-    def __init__(self,
-                 u,
-                 a      = None,
-                 # star specific params
-                 b      = None,
-                 t      = None,
-                 # galaxy specific params
-                 v      = None,
-                 theta  = None,
-                 phi    = None,
-                 sigma  = None,
-                 rho    = None,
-                 fluxes = None,
-                 # extra, aux params
-                 ell    = None,
-                 d      = None,
-                 header = None):
-
-        ## binary indicator that source is a star (0) or galaxy (1)
-        self.a = a
-
-        ## star params
-        self.u = u
-        self.b = b
-        self.t = t
-
-        ## galaxy params
-        self.v      = v        # location - different from star location
-        self.theta  = theta    # mixture between exponential and devacalours galaxies
-        self.phi    = phi      # rotation angle of the galaxy
-        self.sigma  = sigma    # scale of the galaxy extent
-        self.rho    = rho      # eccentricity = major/minor axis ratio
-        self.fluxes = fluxes   # galaxy 5 band fluxes
-
-        ## unused/extra params
-        self.ell = ell
-        self.d = d
-        self.header = header
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return np.array_equal(self.u, other.u) and self.b == other.b
-        else:
-            return False
-
-    def __str__(self): 
-        if self.a == 0: 
-            return "StrSrc: u=(%2.2f, %2.2f), b=%.4g, t=%2.2f"%(self.u[0], self.u[1], self.b, self.t)
-        elif self.a==1:
-            return "GalSrc: u=(%2.2f, %2.2f), theta=%2.2f"%(self.u[0], self.u[1], self.theta)
-        else: 
-            return "NoType: u=(%2.2f, %2.2f)"%(self.u[0], self.u[1])
-
 

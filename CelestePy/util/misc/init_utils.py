@@ -2,7 +2,7 @@ import os, sys, os.path
 import numpy as np
 from scipy.ndimage import filters
 import CelestePy.planck as planck
-from CelestePy import FitsImage, PointSrcParams
+from CelestePy import FitsImage, SrcParams
 import fitsio
 from numpy.lib.stride_tricks import as_strided as ast
 
@@ -40,7 +40,7 @@ def load_imgs_and_catalog(fits_cat_glob):
 
 
 def get_sources_from_catalog(cat_file):
-    """ Takes a catalog fits file and returns a python list of PointSrcParam Objects. 
+    """ Takes a catalog fits file and returns a python list of SrcParam Objects. 
         NOTE: The fits files store these brightness parameters in nanomaggies - they
         need to be adjusted by the _IMAGE SPECIFIC_ calibration parameter when they 
         enter into the likelihood. 
@@ -51,9 +51,9 @@ def get_sources_from_catalog(cat_file):
     catalog_srcs = []
     for src_info in cat_data: 
         src_info = [s for s in src_info]
-        src = PointSrcParams(u      = np.array(src_info[0:2]),
-                             fluxes = dict(zip(keys, src_info[2:])),
-                             header = cat_header)
+        src = SrcParams(u      = np.array(src_info[0:2]),
+                        fluxes = dict(zip(keys, src_info[2:])),
+                        header = cat_header)
         if np.any(np.array(src.fluxes.values()) < 0):
             continue
         catalog_srcs.append(src)
@@ -85,10 +85,10 @@ def init_sources_from_image_block(img_block):
     # initialize sources, all as stars for now
     srcs = []
     for peak in peaks:
-        src = PointSrcParams(u = img_block[0].pixel2equa(peak),
-                             a = 0,
-                             b = 1e-9 * np.random.rand(),
-                             t = 9000 * np.random.rand() + 1000)
+        src = SrcParams(u = img_block[0].pixel2equa(peak),
+                        a = 0,
+                        b = 1e-9 * np.random.rand(),
+                        t = 9000 * np.random.rand() + 1000)
         srcs.append(src)
     return srcs
 
@@ -99,13 +99,13 @@ def init_random_galaxy(u, fluxes=None):
         fluxes = {}
         for b in bands: 
             fluxes[b] = 1e-8 * np.random.rand()
-    return PointSrcParams(u      = u,
-                          a      = 1,
-                          theta  = np.random.rand(),
-                          phi    = np.pi * np.random.rand(),
-                          sigma  = 5*np.random.randn()**2,
-                          rho    = 5*np.random.randn()**2,
-                          fluxes = fluxes)
+    return SrcParams(u      = u,
+                     a      = 1,
+                     theta  = np.random.rand(),
+                     phi    = np.pi * np.random.rand(),
+                     sigma  = 5*np.random.randn()**2,
+                     rho    = 5*np.random.randn()**2,
+                     fluxes = fluxes)
 
 
 def sliding_window(a,ws,ss = None,flatten = True):

@@ -117,3 +117,6 @@ class FitsImage():
                                     s_iwc[1] + self.phi_n[1] ])
         return s_equa
 
+    def nmgy2counts(self, flux):
+        return (flux / self.calib) * self.kappa
+

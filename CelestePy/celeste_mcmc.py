@@ -37,7 +37,7 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
            This has to be done with a reversible jump move
 
         Input: 
-            srcs    : python list of PointSrcParams
+            srcs    : python list of SrcParams
             imgs    : python list of FitsImage objects
             debug   : turn on plotting
             verbose : turn on printing
@@ -147,7 +147,6 @@ def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
         b_n        = b_0 + psf_sums
         fluxes     = np.random.gamma(a_n, 1./b_n)
         src.fluxes = dict(zip(bands, fluxes))
-
 
     def slice_sample_skew(): 
         th_curr = np.array([src.theta, src.sigma, src.phi, src.rho])

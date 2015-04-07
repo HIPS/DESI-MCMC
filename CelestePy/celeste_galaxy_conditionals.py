@@ -133,10 +133,11 @@ def gmm_like(x, ws, mus, sigs):
     N_elem = np.atleast_1d(x).shape[0] # number of rows of data
     probs = np.zeros(N_elem)
     for k in range(len(ws)):
-        inv_detK  = 1. / np.sqrt(np.linalg.det(sigs[k]))
-        K_inv     = np.linalg.inv(sigs[k])
+        detK      = sigs[k][0,0]*sigs[k][1,1] - sigs[k][0,1]*sigs[k][1,0]
+        K_inv     = (1/detK) * np.array([[ sigs[k][1,1], -sigs[k][0,1]],
+                                         [-sigs[k][0,1],  sigs[k][0,0]]])
         quad_term = np.sum(np.dot(x-mus[k], K_inv) * (x - mus[k]), axis=1, keepdims=False)
-        probs     = probs + ws[k] * Z * inv_detK * np.exp(-.5 * quad_term)
+        probs     = probs + ws[k] * Z * np.exp(-.5 * quad_term -.5*np.log(detK))
     return probs
 
 def det2d(K):
