@@ -1,4 +1,5 @@
 import numpy as np
+import time
 import sys, re, copy
 from glob import glob
 import os.path
@@ -13,10 +14,14 @@ import CelestePy.celeste_galaxy_conditionals as gal
 SAMPLE_FIELDS = ['epsilon', 'srcs', 'll']
 def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, saveas="tmp_samples.bin"):
 
+
+    #########################################################################
+    ## Stuff for monitoring chain
     ## keep figure around for likelihood and param monitoring of source 0
     if plot:
         fig, axarr = plt.subplots(2, 3)
         plt.ion()
+    start_time = time.time()
 
     # source specific parameters
     src_samps = np.zeros((Niter, len(srcs)), dtype = SrcParams.src_dtype)
@@ -31,7 +36,8 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, save
     print prev_ll
     for n in range(Niter):
         if n%1==0:
-            print "===== iter %d of %d (curr_ll = %2.2f)==="%(n, Niter, prev_ll)
+            print "===== iter %d of %d (curr_ll = %2.2f, rate = %2.2f samps/sec, caching=%s)===" % \
+                (n, Niter, prev_ll, (time.time()-start_time)/(n+.01), saveas)
 
         if n%100==0:
             samp_dict = { 'epsilon' : e_samps,
@@ -150,6 +156,7 @@ if __name__=="__main__":
                                          monitor = True,
                                          saveas  = out_name)
 
+        #### report tiem elapsed
         time_elapsed = time.time() - start_time
         print "%2.f min elapsed (%2.2f seconds per sample)"%(time_elapsed / 60., time_elapsed / Nsamps)
         save_samples(samp_dict, out_name)
