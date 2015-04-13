@@ -95,6 +95,7 @@ def load_samples(fname):
 
 if __name__=="__main__":
 
+<<<<<<< Updated upstream
     ##########################################################################
     ## set sampling parameters
     ##########################################################################
@@ -160,5 +161,4 @@ if __name__=="__main__":
         time_elapsed = time.time() - start_time
         print "%2.f min elapsed (%2.2f seconds per sample)"%(time_elapsed / 60., time_elapsed / Nsamps)
         save_samples(samp_dict, out_name)
-
 
