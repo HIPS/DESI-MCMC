@@ -156,7 +156,7 @@ def gmm_like_2d(
     cdef FLOAT_t x_center_0, x_center_1, quad_form, invk_00, invk_01, invk_11, detk
 
     # zero out likelihood
-    for n in range(N):
+    for n in prange(N, nogil=True):
         probs[n] = 0.0
 
     # compute component-wise likelihoods

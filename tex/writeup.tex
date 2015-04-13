@@ -31,6 +31,8 @@
 %% DOC START
 \begin{document}
 \maketitle
+\tableofcontents
+\newpage
 
 \section{Introduction}
 
@@ -282,7 +284,8 @@ Denoting $\theta_{s,1} \equiv \theta_{s}$ and $\theta_{s,2} \equiv 1-\theta_{s}$
   f_{n,m,s} 
     &= \sum_{k=1}^{K_{psf}} w^{(ps)}_{n,k} 
        \sum_{i=1}^2 \theta_{s,i} 
-       \sum_{j=1}^{K_i} w_{i, j} \mathcal{N} \left( u_s + \mu^{(psf)}_{n,k} | \Sigma^{(psf)}_{n,k} + \sigma_{i,j} R_s R_s^\trans \right)
+       \sum_{j=1}^{K_i} w_{i, j} \\
+       & \mathcal{N} \left(m | u_s + \mu^{(psf)}_{n,k}, \Sigma^{(psf)}_{n,k} + \sigma_{i,j} R_s R_s^\trans \right)
 \end{align}
 
 The giant mixture of Gaussians is the result of convolving the image's PSF (mixture of 3 Gaussians) with the mixture of both profiles (essentially a mixture of $K_1 + K_2$ Gaussians), yielding a mixture of $3(K_1 + K_2)$ Gaussians.  \todo{I think it's $3 \cdot (8 + 8)$}
@@ -409,7 +412,7 @@ One saving grace is that each of these source specific maximizations can be done
 \subsection{Simulating from the posterior}
 It is of scientific interest to characterize our uncertainty about the modeled properties of stars.  Toward this end, we generate samples from the posterior distribution over each source $u_s, t_s$ and $b_s$ given the photometric observations, $\{ x \}$.  To do so, we again use the Poisson-Multinomial relationship by first attributing each photon observation to a particular source (sampling $z_{n,m,s}$) and then sampling the image specific noise terms, $\epsilon_n$, as well as source specific parameters.  
 
-\paragraph{Sampling source responsibilities, $z_{n,m,s}$}
+\subsubsection{Sampling source responsibilities, $z_{n,m,s}$}
 In the previous section we characterized the distribution over the source responsibilities, as a simple Multinomial, Equation~\ref{eq:mult}. The first step in our posterior sampling routine is to simply generate from this multinomial distribution. Conditioning on this realization will render our sources independent, giving us both analytic and computational tractability for generating posterior samples.  
 
 From here, it is useful highlighting the decomposition of the complete data likelihood to see which components need to be re-computed during sampling 
@@ -431,7 +434,7 @@ and source specific conditionals are
 \end{align}
 
 
-\paragraph{Sampling image noise parameters, $\epsilon_n$}
+\subsubsection{Sampling image noise parameters, $\epsilon_n$}
 Conditioned on $z_{n,m,s}$, each image can be viewed as a single Poisson observation
 \begin{align}
   \sum_{m \in \mathcal{P}_n} z_{n,m,s} &\sim \textrm{Poisson}(M_n \epsilon_n)
@@ -441,7 +444,7 @@ Placing a $\textrm{Gamma}(a_0, b_0)$ prior on $\epsilon_n$ yields a simple conju
   \epsilon_n | z_{n,m,s}, \dots &\sim \textrm{Gamma}\left(a_0 + \sum_{m\in \mathcal{P}_n} z_{n,m,s}, b_0 + M_n \right)
 \end{align}
  
-\paragraph{Sampling source-specific parameters}
+\subsubsection{Sampling star parameters}
 Conditioned on the assignment of photons to specific sources, sampling the location, temperature, and brightness variables for a specific source is much simpler.  For a source $s$, we can express the likelihood conditioned on $\{z_{n,m,s}\}$ as 
 \begin{align}
   z_{n,m,s} | u_s, t_s, b_s 
@@ -475,6 +478,31 @@ where $C$ is a constant with respect to the conditional likelihood.  We place a 
   \sum_{n,m} z_{n,m,s} &\sim \textrm{Poisson}(b_s C) \\
   b_s | \{z_{n,m,s}\}, t_s, u_s &\sim \textrm{Gamma}\left(\alpha_0 + \sum_{n,m}z_{n,m,s}, \beta_0 + C\right)
 \end{align}
+
+\subsubsection{Sampling Galaxy Parameters}
+Conditioned on a source-specific set of photon count images, $z_{n,m,s}$, and a source type $a_s = 1$ (Galaxy), we seek to draw samples of galaxy-specific parameters, $\Theta_s = \{ \theta_s, \sigma_s, \rho_s, \phi_s, \{b_{s,\beta}\}_{\beta \in ugriz} \}$, where we recall the interpretations
+\begin{itemize}
+\item $\theta_s$: mixing proportion between De Vaucouleurs and Exponential profiles, $\theta_s = 1$ is fully exponential, $\theta_s = 0$ is fully De Vaucouleurs.  
+\item $\sigma_s, \rho_s, \phi_s$: Spatial transformation parameters for elliptical profiles, the scaling ($\in [0, \infty]$), ratio of major/minor axis ($\in [0, 1]$), and rotation ($\in [0, \pi]$).   
+\item $b_{s,\beta}$: apparent brightness of band $\beta$, in nanomaggies.   
+\item $v_s$: center of the galaxy, in equatorial coordinates
+\end{itemize}
+
+The distribution of the data, $z_{n,m,s}$, is poisson conditioned on all the parameters 
+\begin{align}
+  Z_{n,m,s} | \Theta_s 
+    &\sim \textrm{Pois}(b_{s, \beta_n} f_{n,m,s}) 
+\end{align}
+where 
+\begin{align}
+  f_{n,m,s} &= \sum_{k=1}^{K^{(psf)}} w_{n,k}^{(psf)} \sum_{i=1}^2 \theta_{s,i} \sum_{j=1}^{K_i} w_{i,j} \mathcal{N} \left(m | u_s + \mu^{(psf)}_{n,k}, \Sigma^{(psf)}_{n,k} + \sigma_{i,j} R_s R_s^\trans \right)
+\end{align}
+
+
+\paragraph{Univariate conditionals}
+\begin{itemize}
+\item 
+\end{itemize}
 
 \subsection{Discovering and discarding sources}
 

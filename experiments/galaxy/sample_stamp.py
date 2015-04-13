@@ -37,7 +37,7 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, save
     for n in range(Niter):
         if n%1==0:
             print "===== iter %d of %d (curr_ll = %2.2f, rate = %2.2f samps/sec, caching=%s)===" % \
-                (n, Niter, prev_ll, (time.time()-start_time)/(n+.01), saveas)
+                (n, Niter, prev_ll, n/(time.time()-start_time), saveas)
 
         if n%100==0:
             samp_dict = { 'epsilon' : e_samps,

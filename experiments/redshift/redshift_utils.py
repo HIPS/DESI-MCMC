@@ -310,27 +310,3 @@ def softmax(x):
     x_tilde = np.exp(x)
     return x_tilde / x_tilde.sum()
 
-class ParamParser(object):
-    """ Helper class to handle different slicing for different parameters
-    in one long vector """
-    def __init__(self):
-        self.idxs_and_shapes = {}
-        self.N = 0
-
-    def add_weights(self, name, shape):
-        start = self.N
-        self.N += np.prod(shape)
-        self.idxs_and_shapes[name] = (slice(start, self.N), shape)
-
-    def get(self, vect, name):
-        idxs, shape = self.idxs_and_shapes[name]
-        return np.reshape(vect[idxs], shape)
-
-    def set(self, vect, name, val):
-        idxs, shape = self.idxs_and_shapes[name]
-        vect[idxs] = val.ravel()
-
-    def get_slice(name):
-        return self.idxs_and_shapes[name][0]
-
-

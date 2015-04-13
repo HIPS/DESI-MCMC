@@ -66,10 +66,15 @@ notebooks/*
 *.bin
 *.npy
 .DS_Store
+experiments/redshift/cache/redshift_samples*
+experiments/redshift/cache_remote/
 
 #tex imgs
 tex/imgs/*
 tex/quasar_z/icml2015/main.pdf
+tex/quasar_z/icml2015/*.pdf
+tex/quasar_z/icml2015/supplement/*.pdf
+tex/quasar_z/icml2015/supplement/*.zip
 
 data/*.gz
 data/*.bz2
