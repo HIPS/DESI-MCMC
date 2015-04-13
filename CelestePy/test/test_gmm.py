@@ -4,6 +4,7 @@ from CelestePy.util.like import gmm_like_2d, gmm_like, ein_gmm_like
 from scipy.stats import multivariate_normal
 from scipy.misc import logsumexp
 import numpy as np
+import timeit
 
 def test_multivariate_normal_log_pdf():
     np.random.seed(41)
