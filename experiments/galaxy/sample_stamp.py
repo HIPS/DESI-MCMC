@@ -108,10 +108,10 @@ if __name__=="__main__":
     ## create srcs images
     srcs = init_utils.init_sources_from_image_block(imgs[0:5])[0:1]
     srcs[0]        = init_utils.init_random_galaxy(srcs[0].u)
-    srcs[0].phi    = np.random.rand() * np.pi
-    srcs[0].sigma  = np.random.rand()
-    srcs[0].rho    = np.random.rand()
-    srcs[0].theta  = np.random.rand()
+    srcs[0].phi    = np.random.beta(.4, .4) * np.pi
+    srcs[0].sigma  = 20*np.random.rand()
+    srcs[0].rho    = np.random.beta(.4, .4)
+    srcs[0].theta  = np.random.beta(.4, .4)
     srcs[0].fluxes = cat_srcs[1].fluxes
     print "Initialized: "
     print "    %d images "%len(imgs)
@@ -135,8 +135,10 @@ if __name__=="__main__":
     ##
     ## Generate Point Source Param samples
     ##
-    ##%lprun -m CelestePy.celeste_galaxy_conditionals sample_source_params(srcs, imgs, Niter=5, monitor=True)
+    #%lprun -m CelestePy.celeste_galaxy_conditionals sample_source_params(srcs, imgs, Niter=5, monitor=True)
+    import time
     for chain_n in range(Nchains):
+        start_time = time.time()
         stamp_id = os.path.splitext(os.path.basename(cat_glob[0]))[0][4:]
         out_name = "gal_samps_stamp_%s_chain_%d.bin"%(stamp_id, chain_n)
         print "==========================================================="
@@ -147,6 +149,9 @@ if __name__=="__main__":
                                          Niter   = Nsamps,
                                          monitor = True,
                                          saveas  = out_name)
+
+        time_elapsed = time.time() - start_time
+        print "%2.f min elapsed (%2.2f seconds per sample)"%(time_elapsed / 60., time_elapsed / Nsamps)
         save_samples(samp_dict, out_name)
 
 
