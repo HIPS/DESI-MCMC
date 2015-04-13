@@ -1,6 +1,9 @@
 # distutils: language = c++
-# distutils: extra_compile_args = -O3 -w -DNDEBUG -std=c++11 -DEIGEN_NO_MALLOC
-# cython: boundscheck = False
+# distutils: extra_compile_args = -O3 -w -DNDEBUG -std=c++11 -DEIGEN_NO_MALLOC -fopenmp
+# distutils: extra_link_args = -fopenmp
+#cython: cdivision=True
+#cython: nonecheck=False
+#cython: profile=False
 
 ###############################################################################
 ## Cythonized functions for celeste graphical model
@@ -11,8 +14,8 @@ import numpy as np
 cimport numpy as np
 cimport cython
 from libc.math cimport log, exp, sqrt
-#from libc.stdlib cimport malloc, free
 from cython cimport view
+from cython.parallel import prange
 np.import_array()
 
 # TYPEDEFS
@@ -165,7 +168,7 @@ def gmm_like_2d(
         invk_11 = sigs[k, 0, 0] / detk
         invk_01 = -1 * sigs[k, 0, 1] / detk
 
-        for n in range(N):
+        for n in prange(N, nogil=True):
             x_center_0 = x[n, 0] - mus[k, 0]
             x_center_1 = x[n, 1] - mus[k, 1]
             quad_form  =   x_center_0 * x_center_0 * invk_00 \
