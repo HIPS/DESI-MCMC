@@ -208,7 +208,7 @@ def gen_redshift_samples_tempering(Nchains, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf
                 if ci+1 == Nchains - 1:
                     Nswaps += 1
 
-        if s % 1 == 0:
+        if s % 20 == 0:
             print "{0:10}|{1:10}|{2:10}|{3:10}|{4:15}|{5:15}".format(
                 "%d/%d"%(s, Nsamps),
                 " %2.4f"%chains_lls[-1][s],
@@ -344,10 +344,11 @@ if __name__=="__main__":
     # set TEST INDICES 
     npr.seed(13)
     test_idx       = npr.permutation(len(qso_df))
-    high_shift_idx = np.where(all_zs > 4.08557)[0]
+    high_shift_idx = np.where(all_zs > 3.8)[0]
+    test_idx       = np.unique(np.concatenate([high_shift_idx, test_idx[0:1000]]))
 
     ## grab the we're sampling
-    n             = test_idx[test_n]
+    #n             = test_idx[test_n]
     n             = high_shift_idx[test_n]
     qso_n_info    = qso_df[n]
     z_n           = qso_n_info['Z_VI']
