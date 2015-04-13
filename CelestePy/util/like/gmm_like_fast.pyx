@@ -1,6 +1,5 @@
 # distutils: language = c++
-# distutils: extra_compile_args = -O3 -w -DNDEBUG -fopenmp -std=c++11 -DEIGEN_NO_MALLOC
-# distutils: extra_link_args = -fopenmp
+# distutils: extra_compile_args = -O3 -w -DNDEBUG -std=c++11 -DEIGEN_NO_MALLOC
 # cython: boundscheck = False
 
 ###############################################################################
@@ -13,8 +12,8 @@ cimport numpy as np
 cimport cython
 from libc.math cimport log, exp, sqrt
 #from libc.stdlib cimport malloc, free
-#from cython cimport view
-#np.import_array()
+from cython cimport view
+np.import_array()
 
 # TYPEDEFS
 FLOAT = np.float
@@ -74,15 +73,63 @@ def multivariate_normal_2d_covinv_logdet_logpdf(
         lls[n] = -.5 * D * log2pi - .5 * logdet - .5 * quad_form
     return lls
 
+#@cython.boundscheck(False)
+#@cython.wraparound(False)
+#def gmm_like_2d_covinv_logdet(
+#        np.ndarray[FLOAT_t, ndim=1] probs,      # buffer to place prob values
+#        np.ndarray[FLOAT_t, ndim=2] x,          # N x 2 matrix of 2 D points
+#        np.ndarray[FLOAT_t, ndim=1] ws,         # mixing weights
+#        np.ndarray[FLOAT_t, ndim=2] mus,        # mean of normal, 
+#        np.ndarray[FLOAT_t, ndim=3] invsigs,    # inverse covariance
+#        np.ndarray[FLOAT_t, ndim=1] logdets):
+#    """ Gaussian Mixture Model likelihood
+#        Input:
+#          - x    = N x D array of data (N iid)
+#          - ws   = K length vector that sums to 1, mixing weights
+#          - mus  = K x D array of mixture component means
+#          - sigs = K x D x D array of mixture component covariances
+#
+#          - invsigs = K x D x D array of mixture component covariance inverses
+#          - logdets = K array of mixture component covariance logdets
+#
+#        Output:
+#          - N length array of log likelihood values
+#    """
+#    # sanity check
+#    if mus.shape[0] != invsigs.shape[0] or mus.shape[0] != ws.shape[0]:
+#        raise ValueError("Means, covariances and weights must have same first dimension!")
+#    if mus.shape[1] != invsigs.shape[1] or mus.shape[1] != invsigs.shape[2]: 
+#        raise ValueError("Means and inverse covariance shapes don't jive!")
+#
+#    # iterate through and populate array of values
+#    cdef INDEX_t K = mus.shape[0]
+#    cdef INDEX_t N = x.shape[0]
+#    cdef INT_t n, k
+#    cdef FLOAT_t x_center_0, x_center_1, quad_form
+#
+#    # zero out likelihood
+#    for n in range(N):
+#        probs[n] = 0.0
+#
+#    # compute component-wise likelihoods
+#    for k in range(K):
+#        for n in range(N):
+#            x_center_0 = x[n, 0] - mus[k, 0]
+#            x_center_1 = x[n, 1] - mus[k, 1]
+#            quad_form  =   x_center_0 * x_center_0 * invsigs[k, 0, 0] \
+#                         + x_center_1 * x_center_1 * invsigs[k, 1, 1] \
+#                         + 2. * x_center_0 * x_center_1 * invsigs[k, 0, 1]
+#            probs[n] += exp(-log2pi - .5 * logdets[k] - .5 * quad_form) * ws[k]
+#
+
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def gmm_like_2d_covinv_logdet(
+def gmm_like_2d(
         np.ndarray[FLOAT_t, ndim=1] probs,      # buffer to place prob values
         np.ndarray[FLOAT_t, ndim=2] x,          # N x 2 matrix of 2 D points
         np.ndarray[FLOAT_t, ndim=1] ws,         # mixing weights
         np.ndarray[FLOAT_t, ndim=2] mus,        # mean of normal, 
-        np.ndarray[FLOAT_t, ndim=3] invsigs,    # inverse covariance
-        np.ndarray[FLOAT_t, ndim=1] logdets):
+        np.ndarray[FLOAT_t, ndim=3] sigs):      # inverse covariance
     """ Gaussian Mixture Model likelihood
         Input:
           - x    = N x D array of data (N iid)
@@ -90,23 +137,20 @@ def gmm_like_2d_covinv_logdet(
           - mus  = K x D array of mixture component means
           - sigs = K x D x D array of mixture component covariances
 
-          - invsigs = K x D x D array of mixture component covariance inverses
-          - logdets = K array of mixture component covariance logdets
-
         Output:
           - N length array of log likelihood values
     """
     # sanity check
-    if mus.shape[0] != invsigs.shape[0] or mus.shape[0] != ws.shape[0]:
+    if mus.shape[0] != sigs.shape[0] or mus.shape[0] != ws.shape[0]:
         raise ValueError("Means, covariances and weights must have same first dimension!")
-    if mus.shape[1] != invsigs.shape[1] or mus.shape[1] != invsigs.shape[2]: 
+    if mus.shape[1] != sigs.shape[1] or mus.shape[1] != sigs.shape[2]: 
         raise ValueError("Means and inverse covariance shapes don't jive!")
 
     # iterate through and populate array of values
     cdef INDEX_t K = mus.shape[0]
     cdef INDEX_t N = x.shape[0]
-    cdef INT_t n, k
-    cdef FLOAT_t x_center_0, x_center_1, quad_form
+    cdef INDEX_t n, k
+    cdef FLOAT_t x_center_0, x_center_1, quad_form, invk_00, invk_01, invk_11, detk
 
     # zero out likelihood
     for n in range(N):
@@ -114,12 +158,19 @@ def gmm_like_2d_covinv_logdet(
 
     # compute component-wise likelihoods
     for k in range(K):
+
+        # compute determinant of component K's covariance matrix
+        detk = sigs[k, 0, 0] * sigs[k, 1, 1] - sigs[k, 0, 1] * sigs[k, 1, 0]
+        invk_00 = sigs[k, 1, 1] / detk
+        invk_11 = sigs[k, 0, 0] / detk
+        invk_01 = -1 * sigs[k, 0, 1] / detk
+
         for n in range(N):
             x_center_0 = x[n, 0] - mus[k, 0]
             x_center_1 = x[n, 1] - mus[k, 1]
-            quad_form  =   x_center_0 * x_center_0 * invsigs[k, 0, 0] \
-                         + x_center_1 * x_center_1 * invsigs[k, 1, 1] \
-                         + 2. * x_center_0 * x_center_1 * invsigs[k, 0, 1]
-            probs[n] += exp(-log2pi - .5 * logdets[k] - .5 * quad_form) * ws[k]
+            quad_form  =   x_center_0 * x_center_0 * invk_00 \
+                         + x_center_1 * x_center_1 * invk_11 \
+                         + 2. * x_center_0 * x_center_1 * invk_01
+            probs[n] += exp(-log2pi - .5 * log(detk) - .5 * quad_form) * ws[k]
 
 

@@ -71,6 +71,27 @@ def gmm_log_like(x, ws, mus, sigs, invsigs=None, logdets=None):
     return np.log(gmm_like(x, ws, mus, sigs, invsigs, logdets))
     #return logsumexp(ll, axis=1)
 
+def ein_gmm_like(x, ws, mus, sigs):
+    """
+          - x    = N x D array of data (N iid)
+          - ws   = K length vector that sums to 1, mixing weights
+          - mus  = K x D array of mixture component means
+          - sigs = K x D x D array of mixture component covariances
+    """
+    # center each datum for each component, broadcast into NxDxK
+    Xcentered = x[:,:,np.newaxis] - mus.T
+
+    # rescale with inverse cholesky
+    ichols = np.array([np.linalg.inv(np.linalg.cholesky(sig)) for sig in sigs])
+    dets   = np.array([1./np.sqrt(np.linalg.det(sig)) for sig in sigs])
+
+    # compute the N x D x K matrix of Z-statistic values
+    Z     = np.einsum("ij...,...lj->il...", Xcentered, ichols)
+    eterm = np.exp(-.5 * np.sum(Z*Z, axis=1))
+    norm  = np.power(2.*np.pi, -x.shape[1]/2.)
+    probs = np.sum( (ws*dets*norm) * eterm,  axis=1)
+    return probs
+
 if __name__ == "__main__":
   # Vis test to make sure GMM is sensible
   import matplotlib.pyplot as plt
@@ -92,8 +113,8 @@ if __name__ == "__main__":
   #########################################################
   # Generate grid of points for testing
   #########################################################
-  xgrid  = np.linspace(-3, 3, 100)
-  ygrid  = np.linspace(-5, 5, 100)
+  xgrid  = np.linspace(-8, 8, 100)
+  ygrid  = np.linspace(-7, 7, 100)
   xx, yy = np.meshgrid(xgrid, ygrid)
   X      = np.column_stack((xx.ravel(), yy.ravel()))
 
@@ -106,6 +127,10 @@ if __name__ == "__main__":
   ll_fast = multivariate_normal_logpdf(X,
                                        mean = means[2,:],
                                        cov  = covs[2,:,:])
+
+  ll_rpa = np.log(rpa_gmm_like(X, ws  = np.array([1]), 
+                                  mus = means[2,np.newaxis], 
+                                  sigs= covs[2, np.newaxis]))
 
   # check inverse cov version
   sign, logdet = np.linalg.slogdet(covs[2,:,:])
@@ -131,6 +156,13 @@ if __name__ == "__main__":
   ll_faster = gmm_log_like(X, ws, means, covs,
                            invsigs = invcovs,
                            logdets = logdets)
+  ll_rpa = np.log(rpa_gmm_like(X, ws, means, covs))
+  probs_fast = gmm_like(X, ws, means, covs)
+  probs_rpa = rpa_gmm_like(X, ws, means, covs)
+
+  print np.sum(probs_fast * (xgrid[1]-xgrid[0])*(ygrid[1]-ygrid[0]))
+  print np.sum(probs_rpa * (xgrid[1]-xgrid[0])*(ygrid[1]-ygrid[0]))
+
 
   # slow and steady
   N_elem = np.atleast_1d(X).shape[0]
@@ -150,6 +182,10 @@ if __name__ == "__main__":
   else:
     print "GMM slow vs. faster test FAILS !!!!!"
 
+  if np.allclose(ll_rpa, ll_slow, atol=1e-6):
+    print "GMM einsum vs. slow passes"
+  else:
+    print "GMM einsum FAILS!"
 
   #### profile a little
   #%lprun -m gmm_like \
@@ -167,3 +203,22 @@ if __name__ == "__main__":
   #zz = ll_fast.reshape(xx.shape)
   #axarr[0].contour(xx, yy, np.exp(zz))
   #plt.show()
+
+
+  # simple einsum test
+  K = 3
+  A = np.random.rand(10, 2, K)  # N x D x K
+  B = np.random.rand(K, 2, 2)      # K x D x D
+
+  ## want output N x D x K such that K = 0 is
+  BA = np.einsum("ij...,...lj->il...", A, B)
+
+  #BA2 = np.tensordot(B[:,:,:,None], A[:,:,:,None], axes=[1, B[:,:,None]*A[:,:,None].T
+
+  Qform = np.sum(BA * BA, axis=1)
+  for k in range(K):
+    BAk = B[k,:,:].dot(A[:,:,k].T).T
+    print np.allclose(BAk, BA[:,:,k])
+    print np.allclose(Qform[:,k], np.sum(BAk * BAk, axis=1))
+
+
