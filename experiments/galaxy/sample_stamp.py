@@ -35,7 +35,7 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, save
     prev_ll = celeste_likelihood_multi_image(srcs, imgs)
     print prev_ll
     for n in range(Niter):
-        if n%1==0:
+        if monitor and n%100==0:
             print "===== iter %d of %d (curr_ll = %2.2f, rate = %2.2f samps/sec, caching=%s)===" % \
                 (n, Niter, prev_ll, n/(time.time()-start_time), saveas)
 
@@ -58,7 +58,7 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, save
             src_samps[n, s] = srcs[s].to_array()
 
         # plot model image, true image comparison
-        if monitor:
+        if monitor and n%100==0:
             print_samp(src_samps[n,0])
         if plot:
             model_image = gen_model_image(srcs[0:1], imgs[2])
@@ -95,7 +95,6 @@ def load_samples(fname):
 
 if __name__=="__main__":
 
-<<<<<<< Updated upstream
     ##########################################################################
     ## set sampling parameters
     ##########################################################################
@@ -103,11 +102,12 @@ if __name__=="__main__":
     stamp_n = int(sys.argv[1]) if narg > 1 else 0
     Nsamps  = int(sys.argv[2]) if narg > 2 else 20
     Nchains = int(sys.argv[3]) if narg > 3 else 2
+    data_dir = str(sys.argv[4]) if narg > 4 else 'data/experiment_stamps'
 
     ##########################################################################
     ## Grab images, catalog data and initialize galaxy source
     ##########################################################################
-    cat_glob = glob('data/experiment_stamps/cat*.fits')
+    cat_glob = glob(data_dir + '/cat*.fits')
     cat_glob.sort()
     cat_glob = cat_glob[stamp_n:(stamp_n+1)]
     cat_srcs, imgs, teff_catalog, us = init_utils.load_imgs_and_catalog(cat_glob)
@@ -159,6 +159,6 @@ if __name__=="__main__":
 
         #### report tiem elapsed
         time_elapsed = time.time() - start_time
-        print "%2.f min elapsed (%2.2f seconds per sample)"%(time_elapsed / 60., time_elapsed / Nsamps)
+        print "%2.2f min elapsed (%2.2f seconds per sample)"%(time_elapsed / 60., time_elapsed / Nsamps)
         save_samples(samp_dict, out_name)
 
