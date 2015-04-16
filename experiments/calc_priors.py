@@ -16,9 +16,13 @@ for bandn,band in enumerate(bands):
     galaxy_name = 'cmodelmag_' + band
     star_name = 'psfmag_' + band
     for index, r in enumerate(data_gals[galaxy_name]):
-        bands_gals[index][bandn] = r
+        if r <= 0:
+            r = 0.01
+        bands_gals[index][bandn] = np.log(r)
     for index, r in enumerate(data_stars[star_name]):
-        bands_stars[index][bandn] = r
+        if r <= 0:
+            r = 0.01
+        bands_stars[index][bandn] = np.log(r)
 
 print "creating relative data"
 relative_bands_gals = np.zeros((len(data_gals['cmodelmag_u']), 4))
@@ -27,16 +31,16 @@ relative_bands_stars = np.zeros((len(data_stars['psfmag_u']), 4))
 for i in range(len(relative_bands_gals)):
     for bandn,band in enumerate(['u', 'g', 'i', 'z']):
         if band == 'i' or band == 'z':
-            relative_bands_gals[i][bandn] = bands_gals[i][bandn+1] / bands_gals[i][2]
+            relative_bands_gals[i][bandn] = bands_gals[i][bandn+1] - bands_gals[i][2]
         else:
-            relative_bands_gals[i][bandn] = bands_gals[i][bandn] / bands_gals[i][2]
+            relative_bands_gals[i][bandn] = bands_gals[i][bandn] - bands_gals[i][2]
 
 for i in range(len(relative_bands_stars)):
     for bandn,band in enumerate(['u', 'g', 'i', 'z']):
         if band == 'i' or band == 'z':
-            relative_bands_stars[i][bandn] = bands_stars[i][bandn+1] / bands_stars[i][2]
+            relative_bands_stars[i][bandn] = bands_stars[i][bandn+1] - bands_stars[i][2]
         else:
-            relative_bands_stars[i][bandn] = bands_stars[i][bandn] / bands_stars[i][2]
+            relative_bands_stars[i][bandn] = bands_stars[i][bandn] - bands_stars[i][2]
 
 ### FIRST TYPE OF FIT
 # fit an independent gamma to each band
