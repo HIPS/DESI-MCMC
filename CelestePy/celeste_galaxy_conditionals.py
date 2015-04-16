@@ -1,10 +1,13 @@
 """
-Galaxy (single source) conditional distributions and gradients 
+  Galaxy (single source) conditional distributions and gradients 
 """
 import numpy as np
 import CelestePy.mixture_profiles as mp
 from autograd import grad
 from CelestePy.util.like import fast_inv_gamma_lnpdf
+from CelestePy.util.like.gmm_like_fast import gmm_like_2d
+import CelestePy.celeste_fast as celeste_fast
+#from CelestePy.util.like import ein_gmm_like as gmm_like
 
 def galaxy_source_like(th, Z_s, images, check_overlap=True, pixel_grid=None, unconstrained=True):
     """ log probability of Galaxy-specific pixels (z), conditioned on 
@@ -51,7 +54,6 @@ def galaxy_skew_like(th, u, fluxes, Z_s, images,
     return ll
 galaxy_skew_like_grad = grad(galaxy_skew_like)
 
-
 def gen_galaxy_transformation(sig_s, rho_s, phi_s):
     """ from dustin email, Jan 27
         sig_s (re)  : arcsec (greater than 0)
@@ -80,7 +82,43 @@ def gen_galaxy_transformation(sig_s, rho_s, phi_s):
     Tinv = np.linalg.inv(T)
     return Tinv
 
+
+
 galaxy_profs = [mp.get_exp_mixture(), mp.get_dev_mixture()]
+def gen_galaxy_psf_mixture_components(v_s, W, thetas, image_ws, image_means, image_covars):
+    """ computes mixture components of a PSF convolved with a mixture of 
+        galaxy types
+    """
+    num_components = len(image_ws) * sum([len(gp.amp) for gp in galaxy_profs])
+    weights = np.zeros(num_components) 
+    means   = np.zeros((num_components, 2)) 
+    covars  = np.zeros((num_components, 2, 2))
+    cnt     = 0
+    for k in range(len(image_ws)):                 # num PSF Componenets
+        for i in range(2):                              # two galaxy types
+            for j in range(len(galaxy_profs[i].amp)):   # galaxy type components
+                weights[cnt] = image_ws[k] * thetas[i] * galaxy_profs[i].amp[j]
+                means[cnt,:] = v_s + image_means[k,:]
+                covars[cnt, :, :] = image_covars[k,:,:] + \
+                                    np.dot(galaxy_profs[i].var[j,:,:], W)
+                cnt += 1
+    return weights, means, covars
+
+
+def gen_galaxy_psf_mixture_components_fast(v_s, W, thetas, image_ws, image_means, image_covars):
+    """ wrapper for the Cython version of the above function """
+    return celeste_fast.gen_galaxy_psf_mixture_params(
+        thetas = thetas,                     #np.ndarray[FLOAT_t, ndim=1] thetas,
+        W      = W,                          #np.ndarray[FLOAT_t, ndim=2] W,
+        v_s    = v_s,                        #np.ndarray[FLOAT_t, ndim=1] v_s,
+        image_ws = image_ws,                 #np.ndarray[FLOAT_t, ndim=1] image_ws,
+        image_means = image_means,           #np.ndarray[FLOAT_t, ndim=2] image_means,
+        image_covars = image_covars,          #np.ndarray[FLOAT_t, ndim=3] image_covars,
+        gal_exp_amp = galaxy_profs[0].amp,   #np.ndarray[FLOAT_t, ndim=1] gal_exp_amp,
+        gal_exp_sigs = galaxy_profs[0].var[:,0,0],  #np.ndarray[FLOAT_t, ndim=1] gal_exp_sigs,
+        gal_dev_amp  = galaxy_profs[1].amp,  #np.ndarray[FLOAT_t, ndim=1] gal_dev_amp,
+        gal_dev_sigs = galaxy_profs[1].var[:,0,0])  #np.ndarray[FLOAT_t, ndim=1] gal_dev_sigs
+
 def gen_galaxy_psf_image(th, u_s, image,
                          check_overlap = True,
                          pixel_grid    = None,
@@ -100,19 +138,20 @@ def gen_galaxy_psf_image(th, u_s, image,
     W = np.dot(R, R.T)
 
     # compute MOG components
-    thetas = [theta_s, 1. - theta_s]
-    num_components = len(image.weights) * sum([len(gp.amp) for gp in galaxy_profs])
-    weights = []
-    means   = []
-    covars  = []
-    for k in range(len(image.weights)):                 # num PSF Componenets
-        for i in range(2):                              # two galaxy types
-            for j in range(len(galaxy_profs[i].amp)):   # galaxy type components
-                imgw = image.weights[k] * thetas[i] * galaxy_profs[i].amp[j]
-                weights.append(imgw)
-                means.append(v_s + image.means[k,:])
-                covars.append(image.covars[k,:,:] + \
-                              np.dot(galaxy_profs[i].var[j,:,:], W))
+    thetas = np.array([theta_s, 1. - theta_s])
+    weights, means, covars = \
+        gen_galaxy_psf_mixture_components_fast(
+            v_s, W,
+            thetas       = np.array([theta_s, 1. - theta_s]),
+            image_ws     = image.weights,
+            image_means  = image.means,
+            image_covars = image.covars)
+
+    # weights0, means0, covars0 = \
+    #     gen_galaxy_psf_mixture_components(v_s, W, thetas, 
+    #                                       image_ws    =image.weights, 
+    #                                       image_means = image.means, 
+    #                                       image_covars = image.covars)
 
     # instantiate a pixel grid if necessary
     if pixel_grid is None: 
@@ -122,22 +161,16 @@ def gen_galaxy_psf_image(th, u_s, image,
         pixel_grid = np.column_stack((xx.ravel(), yy.ravel()))
 
     ## evaluate equation 11-13 in jeff's november writeup
-    psf_grid = gmm_like(x = pixel_grid, 
-                        ws = weights,
-                        mus = means,
-                        sigs = covars)
+    psf_grid = fast_gmm_like(x = pixel_grid, 
+                             ws = weights,
+                             mus = means,
+                             sigs = covars)
     return psf_grid.reshape(image.nelec.shape).T
 
-
-Z = 0.15915494309189535
-def gmm_like(x, ws, mus, sigs):
-    N_elem = np.atleast_1d(x).shape[0] # number of rows of data
+def fast_gmm_like(x, ws, mus, sigs): 
+    N_elem = np.atleast_1d(x).shape[0]
     probs = np.zeros(N_elem)
-    for k in range(len(ws)):
-        inv_detK  = 1. / np.linalg.det(sigs[k])
-        K_inv     = np.linalg.inv(sigs[k])
-        quad_term = np.sum(np.dot(x-mus[k], K_inv) * (x - mus[k]), axis=1, keepdims=False)
-        probs     = probs + ws[k] * Z * inv_detK * np.exp(-.5 * quad_term)
+    gmm_like_2d(probs, x, np.array(ws), np.array(mus), np.array(sigs))
     return probs
 
 def det2d(K):

@@ -1,0 +1,35 @@
+#PBS -q regular
+#PBS -l mppwidth=4032          # number of nodes * cores per node, edison nodes have 24 cores
+#PBS -l walltime=02:00:00          # hr:min:sec or hr:min or just min
+#PBS -N galaxy_stamp_samples
+#PBS -e gal_samps_job.$PBS_JOBID.err
+#PBS -o gal_samps_job.$PBS_JOBID.out
+#PBS -j oe
+
+# sends you to where the location where you submitted the job?
+cd $PBS_O_WORKDIR
+#echo $PYTHONPATH
+
+for i in `seq 0 167`; do 
+
+  echo job: $i
+  # for open mp (cython prange calls)
+  export OMP_NUM_THREADS=24
+
+  # for Intel compiled programs
+  # the "-cc none" option should be used if the number of threads is larger than 12
+  # aprun arguments:
+  #  -n  Number of MPI tasks.
+  #  -N  (Optional) Number of tasks per Hopper Node. Default is 24.
+  #  -d  (Optional) Depth, or number of threads, per MPI task. Use this 
+  #        very important option in addition to OMP_NUM_THREADS for OpenMP. 
+  #        Values can be 1-24. The default is 1. For OpenMP values of 2-6 are
+  #        recommended.
+  # sample stamp takes in: <stamp index> <num_samps> <num_chains> <stamp dir>
+  aprun -n 1 -N 1 -d 24 -cc none python ~/Proj/DESIMCMC/experiments/galaxy/sample_stamp.py $i 5000 4 ~/Proj/DESIMCMC/data/experiment_stamps &
+
+done
+
+# makes sure the batch job won't exit before all runs are complete
+wait
+

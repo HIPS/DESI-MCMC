@@ -1,8 +1,10 @@
 import numpy as np
+import time
 import sys, re, copy
 from glob import glob
 import os.path
-from CelestePy import FitsImage, celeste_likelihood_multi_image, gen_model_image, PointSrcParams
+from CelestePy import FitsImage, SrcParams, \
+                      celeste_likelihood_multi_image, gen_model_image
 from CelestePy.celeste_em import celeste_em
 from CelestePy.celeste_mcmc import celeste_gibbs_sample
 import CelestePy.planck as planck
@@ -10,15 +12,19 @@ from CelestePy.util.misc import init_utils, plot_util, check_grad
 import CelestePy.celeste_galaxy_conditionals as gal
 
 SAMPLE_FIELDS = ['epsilon', 'srcs', 'll']
-def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False):
+def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, saveas="tmp_samples.bin"):
 
+
+    #########################################################################
+    ## Stuff for monitoring chain
     ## keep figure around for likelihood and param monitoring of source 0
     if plot:
         fig, axarr = plt.subplots(2, 3)
         plt.ion()
+    start_time = time.time()
 
     # source specific parameters
-    src_samps = np.zeros((Niter, len(srcs)), dtype = PointSrcParams.src_dtype)
+    src_samps = np.zeros((Niter, len(srcs)), dtype = SrcParams.src_dtype)
     e_samps   = np.zeros((Niter, len(imgs)))
     ll_samps  = np.zeros(Niter)
 
@@ -29,15 +35,16 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False):
     prev_ll = celeste_likelihood_multi_image(srcs, imgs)
     print prev_ll
     for n in range(Niter):
-        if n%1==0:
-            print "===== iter %d of %d (curr_ll = %2.2f)==="%(n, Niter, prev_ll)
+        if monitor and n%100==0:
+            print "===== iter %d of %d (curr_ll = %2.2f, rate = %2.2f samps/sec, caching=%s)===" % \
+                (n, Niter, prev_ll, n/(time.time()-start_time), saveas)
 
         if n%100==0:
             samp_dict = { 'epsilon' : e_samps,
                           'srcs'    : src_samps,
                           'll'      : ll_samps }
-            save_samples(samp_dict, fname='tmp_samples.bin')
- 
+            save_samples(samp_dict, fname=saveas)
+
         # run a gibbs step
         if n > 0:
             celeste_gibbs_sample(srcs, imgs, subiter=1, verbose=False, debug=False)
@@ -48,10 +55,10 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False):
         for n_img in range(len(imgs)):
             e_samps[n, n_img] = imgs[n_img].epsilon
         for s in range(len(srcs)):
-            src_samps[n, s] = src_obj_to_array(srcs[s])
+            src_samps[n, s] = srcs[s].to_array()
 
         # plot model image, true image comparison
-        if monitor:
+        if monitor and n%100==0:
             print_samp(src_samps[n,0])
         if plot:
             model_image = gen_model_image(srcs[0:1], imgs[2])
@@ -62,38 +69,6 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False):
                   'srcs'    : src_samps,
                   'll'      : ll_samps }
     return samp_dict
-
-def src_obj_to_array(src):
-    """ returns a structured array """
-    src_array = np.zeros(1, dtype = PointSrcParams.src_dtype)
-    src_array['a'][0] = src.a
-    if src.a == 0:
-        src_array['t'][0] = src.t
-        src_array['b'][0] = src.b
-        src_array['u'][0] = src.u
-    elif src.a == 1:
-        src_array['u'][0]      = src.u
-        src_array['v'][0]      = src.v
-        src_array['theta'][0]  = src.theta
-        src_array['phi'][0]    = src.phi
-        src_array['sigma'][0]  = src.sigma
-        src_array['rho'][0]    = src.rho
-        src_array['fluxes'][0] = np.array([src.fluxes[b] for b in ['u', 'g', 'r', 'i', 'z']])
-    return src_array
-
-def array_to_src_obj(src_array):
-    return PointSrcParams( 
-        u = src_array['u'],
-        a = src_array['a'],
-        b = src_array['b'],
-        t = src_array['t'],
-        v = src_array['v'],
-        theta  = src_array['theta'],
-        phi    = src_array['phi'],
-        sigma  = src_array['sigma'],
-        rho    = src_array['rho'],
-        fluxes = dict(zip(['u', 'g', 'r', 'i', 'z'], src_array['fluxes']))
-        )
 
 def print_samp(th):
     print "    loc                : %2.2f, %2.2f"%(th['u'][0], th['u'][1])
@@ -117,23 +92,33 @@ def load_samples(fname):
         samp_dict[s] = np.load(f)
     return samp_dict
 
+
 if __name__=="__main__":
 
-    ##
-    ## Grab images and catalog data
-    ##
-    ## CAT 11 has one star, one gal (it looks like)
-    cat_glob = glob('data/experiment_stamps/cat*.fits')[3:4]
-    #cat_glob = glob('data/galaxy_stamps/cat*.fits')[3:4]
+    ##########################################################################
+    ## set sampling parameters
+    ##########################################################################
+    narg    = len(sys.argv)
+    stamp_n = int(sys.argv[1]) if narg > 1 else 0
+    Nsamps  = int(sys.argv[2]) if narg > 2 else 20
+    Nchains = int(sys.argv[3]) if narg > 3 else 2
+    data_dir = str(sys.argv[4]) if narg > 4 else 'data/experiment_stamps'
+
+    ##########################################################################
+    ## Grab images, catalog data and initialize galaxy source
+    ##########################################################################
+    cat_glob = glob(data_dir + '/cat*.fits')
+    cat_glob.sort()
+    cat_glob = cat_glob[stamp_n:(stamp_n+1)]
     cat_srcs, imgs, teff_catalog, us = init_utils.load_imgs_and_catalog(cat_glob)
 
     ## create srcs images
     srcs = init_utils.init_sources_from_image_block(imgs[0:5])[0:1]
-    srcs[0] = init_utils.init_random_galaxy(srcs[0].u)
-    srcs[0].phi   = .5 #0001
-    srcs[0].sigma = 1. #0001
-    srcs[0].rho   = .7 #.0001
-    srcs[0].theta = .5 #.0001
+    srcs[0]        = init_utils.init_random_galaxy(srcs[0].u)
+    srcs[0].phi    = np.random.beta(.4, .4) * np.pi
+    srcs[0].sigma  = 20*np.random.rand()
+    srcs[0].rho    = np.random.beta(.4, .4)
+    srcs[0].theta  = np.random.beta(.4, .4)
     srcs[0].fluxes = cat_srcs[1].fluxes
     print "Initialized: "
     print "    %d images "%len(imgs)
@@ -157,84 +142,23 @@ if __name__=="__main__":
     ##
     ## Generate Point Source Param samples
     ##
+    #%lprun -m CelestePy.celeste_galaxy_conditionals sample_source_params(srcs, imgs, Niter=5, monitor=True)
+    import time
+    for chain_n in range(Nchains):
+        start_time = time.time()
+        stamp_id = os.path.splitext(os.path.basename(cat_glob[0]))[0][4:]
+        out_name = "gal_samps_stamp_%s_chain_%d.bin"%(stamp_id, chain_n)
+        print "==========================================================="
+        print "====== RUNNING CHAIN %d ==================================="%chain_n
+        print "=== saving samples as ", out_name
+        print "==========================================================="
+        samp_dict = sample_source_params(srcs, imgs,
+                                         Niter   = Nsamps,
+                                         monitor = True,
+                                         saveas  = out_name)
 
-    #print "========= EM for %d sources, %d images ================"%(len(srcs), len(imgs))
-    #%prun -s tottime ll_trace, conv = celeste_em(srcs, imgs, 2, debug=False, verbose=1)
-    #ll_trace, conv = celeste_em(srcs, imgs, maxiter=40, debug=False, verbose=1)
-    #plot_util.compare_pair(imgs[2].nelec, gen_model_image(srcs[1:], imgs[2]))
-
-    ##prun -s tottime samp_dict = sample_source_params(srcs, imgs, 2)
-    samp_dict = sample_source_params(srcs, imgs, 
-                                     Niter=100,
-                                     monitor=True)
-    save_samples(samp_dict, "celeste_gal_samps.bin")
-
-
-
-#### initialize single source sample and image noises
-#fake_zs = []
-#fake_fluxes = {}
-#for img in imgs: 
-#    denoised = img.nelec - img.epsilon
-#    denoised[denoised <= 0] = 0
-#    fake_zs.append(denoised)
-#    fake_fluxes[img.band] = denoised.sum() / img.kappa * img.calib #10. #denoised.sum()
-#th = np.array([srcs[0].theta, srcs[0].sigma, srcs[0].phi, srcs[0].rho])
-#th = np.array([0., -1., 0., 0.])
-#th = np.concatenate((th, srcs[0].u))
-#th = np.concatenate((th, [fake_fluxes[b] for b in ['u', 'g', 'r', 'i', 'z']]))
-#print gal.galaxy_source_like(th, fake_zs, imgs)
-#print gal.galaxy_source_like_grad(th, fake_zs, imgs)
-#check_grad(lambda th: gal.galaxy_source_like(th, fake_zs, imgs),
-#           lambda th: gal.galaxy_source_like_grad(th, fake_zs, imgs),
-#           th)
-
-#plt.ion()
-#cur_dir = np.zeros(th.shape)
-#momentum = .98
-#learning_rate = 1e-5
-#lls = []
-#th_max = np.zeros(th.shape)
-#for i in range(20):
-#    th_grad = gal.galaxy_source_like_grad(th, fake_zs, imgs)
-#    cur_dir = momentum * cur_dir + (1.0 - momentum) * th_grad
-#    th      += learning_rate * cur_dir
-#    th[4:6] = srcs[0].u
-#    lls.append(gal.galaxy_source_like(th, fake_zs, imgs))
-#    print "ll = ", lls[-1]
-#    print th_grad
-
-#    # cache the ma
-#    if lls[-1] >= max(lls): 
-#        th_max = th.copy()
-#    print_prog(th, i)
-#    plt.plot(lls)
-#    plt.draw()
-
-#srcs[0].theta, srcs[0].sigma, srcs[0].phi, srcs[0].rho = \
-#    gal.constrain_params(th_max[0:4])
-#srcs[0].fluxes = dict(zip(['u', 'g', 'r', 'i', 'z'], th_max[-5:]))
-#srcs[0].u      = th_max[4:6]
-
-# run simple optmizer for galaxy params
-#import scipy.optimize as opt
-#res = opt.minimize(
-#    fun = lambda th: -1*galaxy_source_like(th, fake_zs, imgs),
-#    jac = lambda th: -1*galaxy_source_like_grad(th, fake_zs, imgs),
-#    x0  = th_max, 
-#    method = 'L-BFGS-B',
-#    options = {'disp': True}
-#    )
-#srcs[0].theta, srcs[0].sigma, srcs[0].phi, srcs[0].rho = transform_params(res.x[0:4])
-#srcs[0].fluxes = dict(zip(['u', 'g', 'r', 'i', 'z'], res.x[-5:]))
-#srcs[0].u      = th_max[4:6]
-
-
-# compare likelihoods
-#ml = celeste_likelihood_multi_image(srcs, imgs)
-#srcs[0].fluxes['r'] = 75.
-#ml_fix = celeste_likelihood_multi_image(srcs, imgs)
-#print "ML vs ML_fix: %2.3f vs. %2.3f"%(ml, ml_fix)
-#print "  mlfix better? ", ml_fix > ml
-
+        #### report tiem elapsed
+        time_elapsed = time.time() - start_time
+        print "%2.2f min elapsed (%2.2f seconds per sample)"%(time_elapsed / 60., time_elapsed / Nsamps)
+        save_samples(samp_dict, out_name)
 

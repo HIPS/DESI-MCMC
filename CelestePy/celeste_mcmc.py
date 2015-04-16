@@ -37,7 +37,7 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
            This has to be done with a reversible jump move
 
         Input: 
-            srcs    : python list of PointSrcParams
+            srcs    : python list of SrcParams
             imgs    : python list of FitsImage objects
             debug   : turn on plotting
             verbose : turn on printing
@@ -148,10 +148,9 @@ def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
         fluxes     = np.random.gamma(a_n, 1./b_n)
         src.fluxes = dict(zip(bands, fluxes))
 
-
     def slice_sample_skew(): 
         th_curr = np.array([src.theta, src.sigma, src.phi, src.rho])
-        for i in range(2):
+        for i in range(1):
             th_curr, llh = slicesample(
                 xx       = th_curr,
                 llh_func = lambda(th): gal.galaxy_skew_like(th,
@@ -161,9 +160,13 @@ def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
                                                             images = imgs,
                                                             unconstrained = False) + \
                                        gal.galaxy_shape_prior_constrained(th[0], th[1], th[2], th[3]),
-                lb = np.array([0., 0., 0., .01]),
-                ub = np.array([1., 200., np.pi, 1.]),
+                lb = np.array([0., 0., -np.pi, .01]),
+                ub = np.array([1., 200., 2*np.pi, 1.]),
                 step = 1.)
+
+            # clamp th_curr to 0, np.pi
+            th_curr[2] = (th_curr[2] + np.pi)%np.pi
+
         src.theta, src.sigma, src.phi, src.rho = th_curr
 
     def sample_skew():

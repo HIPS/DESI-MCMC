@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import gamma
 from scipy.optimize import fmin 
-from CelestePy import PointSrcParams
+from CelestePy import SrcParams
 from CelestePy import celeste_likelihood_multi_image, \
                       gen_src_prob_layers, \
                       gen_point_source_psf_image, \
@@ -17,7 +17,7 @@ import CelestePy.mixture_profiles as mp
 def celeste_em(srcs, imgs, maxiter=20, debug=False, verbose=True): 
     """ maximizes log likelihood over fixed-num-source parameters 
         Input: 
-            srcs: python list of PointSrcParams
+            srcs: python list of SrcParams
             imgs: python list of FitsImage objects
             maxiter : max number of EM iterations
             debug : turn on plotting

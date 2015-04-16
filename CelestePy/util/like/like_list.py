@@ -29,8 +29,6 @@ def fast_inv_gamma_lnpdf(x, a0, b0):
 def fast_normal_lnpdf(x, mu, sig2):
     return .5 * (1./sig2) * (x - mu)*(x - mu)
 
-
-
 if __name__=="__main__":
     xgrid = np.linspace(0, 10, 100)
     ggrid = fast_gamma_lnpdf(xgrid, 1., 1.)
