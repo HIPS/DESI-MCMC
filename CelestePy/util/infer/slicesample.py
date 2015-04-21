@@ -18,8 +18,8 @@ def slicesample(xx, llh_func, last_llh=None, step=1, step_out=True, x_l=None, x_
     perm = range(dims)
     np.random.shuffle(perm)
 
-    assert np.all(xx < ub)
-    assert np.all(xx > lb)
+    assert np.all(xx < ub), "xx (%s) >= ub (%s)"%(np.array_str(xx), np.array_str(ub))
+    assert np.all(xx > lb), "xx (%s) <= lb (%s)"%(np.array_str(xx), np.array_str(lb))
 
     if isinstance(step, int) or isinstance(step, float) or \
         isinstance(step, np.int) or isinstance(step, np.float):
