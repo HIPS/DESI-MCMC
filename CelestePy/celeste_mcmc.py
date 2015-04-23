@@ -151,18 +151,37 @@ def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
     def slice_sample_skew(): 
         th_curr = np.array([src.theta, src.sigma, src.phi, src.rho])
         for i in range(1):
+            #th_curr, llh = slicesample(
+                #xx       = th_curr,
+                #llh_func = lambda(th): gal.galaxy_skew_like(th,
+                #                                            src.u,
+                #                                            src.fluxes,
+                #                                            Z_s    = src_imgs,
+                #                                            images = imgs,
+                #                                            unconstrained = False) + \
+                #                       gal.galaxy_shape_prior_constrained(th[0], th[1], th[2], th[3]),
+                #lb = np.array([0., 0., -np.pi, .01]),
+                #ub = np.array([1., 200., 2*np.pi, 1.]),
+                #step = 1.)
+
+            def llh(th): 
+                llprior = gal.galaxy_shape_prior_constrained(th[0], th[1], th[2], th[3])
+                if not np.isfinite(llprior):
+                    return -np.inf
+                return gal.galaxy_skew_like(th,
+                              src.u,
+                              src.fluxes,
+                              Z_s    = src_imgs,
+                              images = imgs,
+                              unconstrained = False) + llprior
+
             th_curr, llh = slicesample(
-                xx       = th_curr,
-                llh_func = lambda(th): gal.galaxy_skew_like(th,
-                                                            src.u,
-                                                            src.fluxes,
-                                                            Z_s    = src_imgs,
-                                                            images = imgs,
-                                                            unconstrained = False) + \
-                                       gal.galaxy_shape_prior_constrained(th[0], th[1], th[2], th[3]),
-                lb = np.array([0., 0., -np.pi, .01]),
-                ub = np.array([1., 200., 2*np.pi, 1.]),
-                step = 1.)
+                init_x = th_curr,
+                logprob = llh,
+                step_out = True,
+                doubling_step = True,
+                numdir = len(th_curr),
+                compwise = False)
 
             # clamp th_curr to 0, np.pi
             th_curr[2] = (th_curr[2] + np.pi)%np.pi
