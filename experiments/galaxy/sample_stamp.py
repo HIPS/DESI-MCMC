@@ -12,8 +12,7 @@ from CelestePy.util.misc import init_utils, plot_util, check_grad
 import CelestePy.celeste_galaxy_conditionals as gal
 
 SAMPLE_FIELDS = ['epsilon', 'srcs', 'll']
-def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, saveas="tmp_samples.bin"):
-
+def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, saveas="tmp_samples.bin", print_freq=2):
 
     #########################################################################
     ## Stuff for monitoring chain
@@ -35,7 +34,7 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, save
     prev_ll = celeste_likelihood_multi_image(srcs, imgs)
     print prev_ll
     for n in range(Niter):
-        if monitor and n%100==0:
+        if monitor and n%print_freq==0:
             print "===== iter %d of %d (curr_ll = %2.2f, rate = %2.2f samps/sec, caching=%s)===" % \
                 (n, Niter, prev_ll, n/(time.time()-start_time), saveas)
 
@@ -58,7 +57,7 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, save
             src_samps[n, s] = srcs[s].to_array()
 
         # plot model image, true image comparison
-        if monitor and n%100==0:
+        if monitor and n%print_freq==0:
             print_samp(src_samps[n,0])
         if plot:
             model_image = gen_model_image(srcs[0:1], imgs[2])
@@ -100,9 +99,10 @@ if __name__=="__main__":
     ##########################################################################
     narg    = len(sys.argv)
     stamp_n = int(sys.argv[1]) if narg > 1 else 0
-    Nsamps  = int(sys.argv[2]) if narg > 2 else 20
+    Nsamps  = int(sys.argv[2]) if narg > 2 else 100
     Nchains = int(sys.argv[3]) if narg > 3 else 2
     data_dir = str(sys.argv[4]) if narg > 4 else 'data/experiment_stamps'
+    print_freq = int(sys.argv[5]) if narg > 5 else 2
 
     ##########################################################################
     ## Grab images, catalog data and initialize galaxy source
@@ -158,7 +158,8 @@ if __name__=="__main__":
     samp_dict = sample_source_params(srcs, imgs,
                                      Niter   = Nsamps,
                                      monitor = True,
-                                     saveas  = out_name)
+                                     saveas  = out_name, 
+                                     print_freq = print_freq)
 
     #### report tiem elapsed
     time_elapsed = time.time() - start_time
