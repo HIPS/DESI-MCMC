@@ -12,8 +12,7 @@ from CelestePy.util.misc import init_utils, plot_util, check_grad
 import CelestePy.celeste_galaxy_conditionals as gal
 
 SAMPLE_FIELDS = ['epsilon', 'srcs', 'll']
-def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, saveas="tmp_samples.bin"):
-
+def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, saveas="tmp_samples.bin", print_freq=2):
 
     #########################################################################
     ## Stuff for monitoring chain
@@ -35,7 +34,7 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, save
     prev_ll = celeste_likelihood_multi_image(srcs, imgs)
     print prev_ll
     for n in range(Niter):
-        if monitor and n%100==0:
+        if monitor and n%print_freq==0:
             print "===== iter %d of %d (curr_ll = %2.2f, rate = %2.2f samps/sec, caching=%s)===" % \
                 (n, Niter, prev_ll, n/(time.time()-start_time), saveas)
 
@@ -58,7 +57,7 @@ def sample_source_params(srcs, imgs, Niter = 10, monitor=False, plot=False, save
             src_samps[n, s] = srcs[s].to_array()
 
         # plot model image, true image comparison
-        if monitor and n%100==0:
+        if monitor and n%print_freq==0:
             print_samp(src_samps[n,0])
         if plot:
             model_image = gen_model_image(srcs[0:1], imgs[2])
@@ -100,9 +99,10 @@ if __name__=="__main__":
     ##########################################################################
     narg    = len(sys.argv)
     stamp_n = int(sys.argv[1]) if narg > 1 else 0
-    Nsamps  = int(sys.argv[2]) if narg > 2 else 20
+    Nsamps  = int(sys.argv[2]) if narg > 2 else 100
     Nchains = int(sys.argv[3]) if narg > 3 else 2
     data_dir = str(sys.argv[4]) if narg > 4 else 'data/experiment_stamps'
+    print_freq = int(sys.argv[5]) if narg > 5 else 2
 
     ##########################################################################
     ## Grab images, catalog data and initialize galaxy source
@@ -113,9 +113,10 @@ if __name__=="__main__":
     cat_srcs, imgs, teff_catalog, us = init_utils.load_imgs_and_catalog(cat_glob)
 
     ## create srcs images
+    init_draw = lambda: (np.random.beta(.4, .4) + .01) / 1.02
     srcs = init_utils.init_sources_from_image_block(imgs[0:5])[0:1]
     srcs[0]        = init_utils.init_random_galaxy(srcs[0].u)
-    srcs[0].phi    = np.random.beta(.4, .4) * np.pi
+    srcs[0].phi    = init_draw() * np.pi
     srcs[0].sigma  = 20*np.random.rand()
     srcs[0].rho    = np.random.beta(.4, .4)
     srcs[0].theta  = np.random.beta(.4, .4)
@@ -144,21 +145,24 @@ if __name__=="__main__":
     ##
     #%lprun -m CelestePy.celeste_galaxy_conditionals sample_source_params(srcs, imgs, Niter=5, monitor=True)
     import time
-    for chain_n in range(Nchains):
-        start_time = time.time()
-        stamp_id = os.path.splitext(os.path.basename(cat_glob[0]))[0][4:]
-        out_name = "gal_samps_stamp_%s_chain_%d.bin"%(stamp_id, chain_n)
-        print "==========================================================="
-        print "====== RUNNING CHAIN %d ==================================="%chain_n
-        print "=== saving samples as ", out_name
-        print "==========================================================="
-        samp_dict = sample_source_params(srcs, imgs,
-                                         Niter   = Nsamps,
-                                         monitor = True,
-                                         saveas  = out_name)
+    #for chain_n in range(Nchains):
+    chain_n = Nchains-1
+    np.random.seed(chain_n)
+    start_time = time.time()
+    stamp_id = os.path.splitext(os.path.basename(cat_glob[0]))[0][4:]
+    out_name = "gal_samps_stamp_%s_chain_%d.bin"%(stamp_id, chain_n)
+    print "==========================================================="
+    print "====== RUNNING CHAIN %d ==================================="%chain_n
+    print "=== saving samples as ", out_name
+    print "==========================================================="
+    samp_dict = sample_source_params(srcs, imgs,
+                                     Niter   = Nsamps,
+                                     monitor = True,
+                                     saveas  = out_name, 
+                                     print_freq = print_freq)
 
-        #### report tiem elapsed
-        time_elapsed = time.time() - start_time
-        print "%2.2f min elapsed (%2.2f seconds per sample)"%(time_elapsed / 60., time_elapsed / Nsamps)
-        save_samples(samp_dict, out_name)
+    #### report tiem elapsed
+    time_elapsed = time.time() - start_time
+    print "%2.2f min elapsed (%2.2f seconds per sample)"%(time_elapsed / 60., time_elapsed / Nsamps)
+    save_samples(samp_dict, out_name)
 
