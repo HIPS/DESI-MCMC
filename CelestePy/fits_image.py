@@ -54,6 +54,7 @@ class FitsImage():
         self.dn    = self.img / header["CALIB"] + header["SKY"]
         self.nelec = np.round(self.dn * header["GAIN"])
         self.shape = self.nelec.shape
+        self.pixel_grid = self.make_pixel_grid()  # keep pixel grid around
 
         # reference points
         # TODO: Does CRPIX1 refer to the first axis of self.img ?? 
@@ -119,4 +120,14 @@ class FitsImage():
 
     def nmgy2counts(self, flux):
         return (flux / self.calib) * self.kappa
+
+    def make_pixel_grid(self):
+        """ makes a stack of points corresponding to each point in a pixel grid
+            with input shape 
+        """
+        y_grid = np.arange(self.nelec.shape[0], dtype=np.float) + 1
+        x_grid = np.arange(self.nelec.shape[1], dtype=np.float) + 1
+        yy, xx = np.meshgrid(x_grid, y_grid, indexing='xy')
+        return np.column_stack((xx.ravel(), yy.ravel()))
+
 
