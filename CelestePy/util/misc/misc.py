@@ -7,15 +7,27 @@ Grab bag of misc functions
  - ParamParser object, for parsing vectors with names (replace with numpy structured array)
 """
 
-def check_grad(fun, jac, th):
+def check_grad(fun, jac, th, compwise=False):
     """ check the gradient along a random direction """
-    param_scale = .1
-    rand_dir    = np.random.randn(th.size) * param_scale
-    rand_dir    = rand_dir / np.sqrt(np.dot(rand_dir, rand_dir))
-    test_fun    = lambda x : fun(th + x * rand_dir.reshape(th.shape))
-    nd          = (test_fun(1e-4) - test_fun(-1e-4)) / 2e-4
-    ad          = np.dot(jac(th).ravel(), rand_dir)
-    print "Checking grads. Relative diff is: {0}".format((nd - ad)/np.abs(nd))
+    if compwise:
+        grad_th = np.zeros(th.shape)
+        for e in xrange(len(th)):
+            de = np.zeros(th.shape)
+            de[e] = 1e-5
+            grad_th[e] = (fun(th+de) - fun(th-de))/2e-5
+
+        grad_jac = jac(th)
+        print "component-wise diffs = %s"%np.str(grad_jac - grad_th)
+        print "comp-wise relative diffs = %s"%np.str((grad_jac - grad_th) / np.abs(grad_th))
+
+    else: #check along random direction
+        param_scale = .1
+        rand_dir    = np.random.randn(th.size) * param_scale
+        rand_dir    = rand_dir / np.sqrt(np.dot(rand_dir, rand_dir))
+        test_fun    = lambda x : fun(th + x * rand_dir.reshape(th.shape))
+        nd          = (test_fun(1e-4) - test_fun(-1e-4)) / 2e-4
+        ad          = np.dot(jac(th).ravel(), rand_dir)
+        print "Random dir check: Relative diff is: {0}".format((nd - ad)/np.abs(nd))
 
 
 class ParamParser(object):
