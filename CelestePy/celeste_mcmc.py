@@ -105,7 +105,7 @@ def sample_source_params(src, src_imgs, imgs, verbose):
     else:
         raise Exception("Must be star or galaxy to sample")
 
-
+p_cached = None
 def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
     """ Samples theta_gal conditioned on a_s = 1, and Z_s (source-specific
         photons 
@@ -228,23 +228,32 @@ def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
         # hmc sample rho
         step_sz          = 1e-5
         avg_accept_rate  = .8
-        STEPS_PER_SAMPLE = 15
+        STEPS_PER_SAMPLE = 50
         th_curr = np.array([src.theta, src.sigma, src.phi, src.rho])
         th = np.concatenate((
                 [src.theta, src.sigma, src.phi, src.rho],
                 src.u,
                 [src.fluxes[b] for b in BANDS]))
-        th_samp, step_sz, avg_accept_rate = hmc(
-            U        = ll_fun,
-            grad_U   = ll_jac,
-            step_sz  = step_sz,
-            n_steps  = STEPS_PER_SAMPLE,
-            q_curr   = th,
-            negative_log_prob = False,
-            adaptive_step_sz  = False,
-            min_step_sz       = 1e-5,
-            avg_accept_rate   = avg_accept_rate,
-            tgt_accept_rate   = .65)
+        mass = np.array([ .1, .1, 1., .1,    #skews
+                          .001, .001,        #locs 
+                          1., 1., 1., 1., 1. #fluxes
+                        ]) 
+
+        global p_cached
+        if p_cached is None:
+            p_cached = np.sqrt(mass) * np.random.randn(th.shape[0])
+
+        print p_cached
+        th_samp, p_samp, step_sz, avg_accept_rate = hmc(
+            x_curr           = th,
+            llhfunc          = ll_fun,
+            grad_llhfunc     = ll_jac,
+            eps              = step_sz,
+            num_steps        = STEPS_PER_SAMPLE,
+            mass             = mass,
+            p_curr           = p_cached,
+            refresh_alpha    = .9,
+            adaptive_step_sz = False)
 
         if np.all(th_samp==th):
             print "HMC (flux, skew) proposal rejected!!"
@@ -253,6 +262,7 @@ def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
         src.theta, src.sigma, src.phi, src.rho = th_samp[0:4]
         src.u = th_samp[4:6]
         src.fluxes = dict(zip(BANDS, th_samp[6:]))
+        p_cached = p_samp
 
     ## iterate a bunch - sample fluxes, scaling/rotation, and then location
     for gibbs_iter in range(subiter):
