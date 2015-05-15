@@ -6,6 +6,7 @@ from CelestePy import gen_src_prob_layers, \
                       gen_src_image, \
                       gen_galaxy_psf_image
 import CelestePy.celeste_galaxy_conditionals as gal
+from CelestePy import BANDS
 from util.misc.plot_util import compare_to_model, subplot_imshow_colorbar
 from util.infer.slicesample import slicesample
 from util.infer.hmc import hmc
@@ -148,78 +149,66 @@ def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
         fluxes     = np.random.gamma(a_n, 1./b_n)
         src.fluxes = dict(zip(bands, fluxes))
 
+    def skew_likelihood(th): 
+        """ conditional log likelihood of skew parameters given everything
+            else 
+        """
+        llprior = gal.galaxy_shape_prior_constrained(th[0], th[1], th[2], th[3])
+        if not np.isfinite(llprior):
+            return -np.inf
+        return gal.galaxy_skew_like(th,
+                                    src.u,
+                                    src.fluxes,
+                                    Z_s    = src_imgs,
+                                    images = imgs,
+                                    unconstrained = False) + llprior
+
     def slice_sample_skew(): 
         th_curr = np.array([src.theta, src.sigma, src.phi, src.rho])
         for i in range(1):
             #th_curr, llh = slicesample(
                 #xx       = th_curr,
-                #llh_func = lambda(th): gal.galaxy_skew_like(th,
-                #                                            src.u,
-                #                                            src.fluxes,
-                #                                            Z_s    = src_imgs,
-                #                                            images = imgs,
-                #                                            unconstrained = False) + \
-                #                       gal.galaxy_shape_prior_constrained(th[0], th[1], th[2], th[3]),
+                #llh_func = lambda(th): skew_likelihood,
                 #lb = np.array([0., 0., -np.pi, .01]),
                 #ub = np.array([1., 200., 2*np.pi, 1.]),
                 #step = 1.)
-
-            def llh(th): 
-                llprior = gal.galaxy_shape_prior_constrained(th[0], th[1], th[2], th[3])
-                if not np.isfinite(llprior):
-                    return -np.inf
-                return gal.galaxy_skew_like(th,
-                              src.u,
-                              src.fluxes,
-                              Z_s    = src_imgs,
-                              images = imgs,
-                              unconstrained = False) + llprior
-
-            th_curr, llh = slicesample(
-                init_x = th_curr,
-                logprob = llh,
-                step_out = True,
-                doubling_step = True,
-                numdir = len(th_curr),
-                compwise = False)
+            th_curr, llh = slicesample(init_x = th_curr,
+                                       logprob = skew_likelihood,
+                                       step_out = True,
+                                       doubling_step = True,
+                                       numdir = len(th_curr),
+                                       compwise = False)
 
             # clamp th_curr to 0, np.pi
             th_curr[2] = (th_curr[2] + np.pi)%np.pi
-
         src.theta, src.sigma, src.phi, src.rho = th_curr
 
-    def sample_skew():
+    def hmc_sample_skew():
         """ samples sig, rho, phi and theta conditioned on src images and
             band fluxes
         """
-        def log_like(th):
-            return gal.galaxy_skew_like(th, src_imgs, imgs)
-
-        def log_like_grad(th):
-            return gal.galaxy_skew_like_grad(th, src.u, src.fluxes, src_imgs, imgs)
+        def skew_likelihood_grad(th):
+            grad = np.zeros(len(th))
+            for i in range(len(grad)):
+                de = np.zeros(len(th))
+                de[i] = 1e-5
+                grad[i] = (skew_likelihood(th + de) - skew_likelihood(th - de)) / 2e-5
+            return grad
 
         # hmc sample rho
-        step_sz          = 1e-4
+        step_sz          = 5e-4
         adapt_step       = False
         avg_accept_rate  = .8
-        STEPS_PER_SAMPLE = 20
-        th_curr = np.array( gal.unconstrain_params([ src.theta,
-                                                     src.sigma,
-                                                     src.phi,
-                                                     src.rho ]) )
+        STEPS_PER_SAMPLE = 50
+        #th_curr = np.array( gal.unconstrain_params([ src.theta,
+        #                                             src.sigma,
+        #                                             src.phi,
+        #                                             src.rho ]) )
+
+        th_curr = np.array([src.theta, src.sigma, src.phi, src.rho])
         th_samp, step_sz, avg_accept_rate = hmc(
-            U        = lambda(th): gal.galaxy_skew_like(th,
-                                                        src.u,
-                                                        src.fluxes,
-                                                        Z_s  = src_imgs,
-                                                        images = imgs,
-                                                        unconstrained = True),
-            grad_U   = lambda(th): gal.galaxy_skew_like_grad(th,
-                                                             src.u,
-                                                             src.fluxes,
-                                                             src_imgs,
-                                                             imgs,
-                                                             unconstrained=True),
+            U        = skew_likelihood,
+            grad_U   = skew_likelihood_grad,
             step_sz  = step_sz,
             n_steps  = STEPS_PER_SAMPLE,
             q_curr   = th_curr,
@@ -228,13 +217,50 @@ def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
             min_step_sz       = 0.00005,
             avg_accept_rate   = avg_accept_rate,
             tgt_accept_rate   = .65)
-        print th_samp, th_curr
-        src.theta, src.sigma, src.phi, src.rho = gal.constrain_params(th_samp)
+        #src.theta, src.sigma, src.phi, src.rho = gal.constrain_params(th_samp)
+        src.theta, src.sigma, src.phi, src.rho = th_samp
+
+    def hmc_sample_galaxy_params():
+        # make sure likelihood evaluates
+        ll_fun = lambda(th): gal.galaxy_source_like(th, src_imgs, imgs, check_overlap=True, unconstrained=True)
+        ll_jac = lambda(th): gal.galaxy_source_like_grad(th, src_imgs, imgs)
+
+        # hmc sample rho
+        step_sz          = 1e-5
+        avg_accept_rate  = .8
+        STEPS_PER_SAMPLE = 15
+        th_curr = np.array([src.theta, src.sigma, src.phi, src.rho])
+        th = np.concatenate((
+                [src.theta, src.sigma, src.phi, src.rho],
+                src.u,
+                [src.fluxes[b] for b in BANDS]))
+        th_samp, step_sz, avg_accept_rate = hmc(
+            U        = ll_fun,
+            grad_U   = ll_jac,
+            step_sz  = step_sz,
+            n_steps  = STEPS_PER_SAMPLE,
+            q_curr   = th,
+            negative_log_prob = False,
+            adaptive_step_sz  = False,
+            min_step_sz       = 1e-5,
+            avg_accept_rate   = avg_accept_rate,
+            tgt_accept_rate   = .65)
+
+        if np.all(th_samp==th):
+            print "HMC (flux, skew) proposal rejected!!"
+
+        #src.theta, src.sigma3, src.phi, src.rho = gal.constrain_params(th_samp)
+        src.theta, src.sigma, src.phi, src.rho = th_samp[0:4]
+        src.u = th_samp[4:6]
+        src.fluxes = dict(zip(BANDS, th_samp[6:]))
 
     ## iterate a bunch - sample fluxes, scaling/rotation, and then location
     for gibbs_iter in range(subiter):
         sample_galaxy_fluxes()
-        slice_sample_skew()
+        #hmc_sample_skew()
+
+        # work a hmc sample in
+        hmc_sample_galaxy_params()
 
 
 def sample_star_params(src, src_images, imgs, subiter=2, verbose=False):
