@@ -113,7 +113,7 @@ class SrcParams():
     @staticmethod
     def init_obj(src_array):
         return SrcParams( 
-            u = src_array['u'],
+            u = np.array(src_array['u'], dtype=np.float),
             a = src_array['a'],
             b = src_array['b'],
             t = src_array['t'],
