@@ -3,6 +3,7 @@ from pybrain.datasets import SupervisedDataSet
 from pybrain.structure import FeedForwardNetwork, LinearLayer, SigmoidLayer,FullConnection
 import fitsio
 import numpy as np
+import time
 
 # constants to change
 MAX_EPOCHS = 100
@@ -14,7 +15,8 @@ data_file = fitsio.FITS('dr7qso.fit')[1].read()
 alldata = SupervisedDataSet(5, 1)
 length = len(data_file['UMAG'])
 
-for i in range(NUM_DATA):
+#for i in range(NUM_DATA):
+for i in range(length):
     umag = data_file['UMAG'][i]
     gmag = data_file['GMAG'][i]
     rmag = data_file['RMAG'][i]
@@ -35,6 +37,7 @@ min_h = -1
 # use validation to form 4-layer network with two hidden layers,
 # with (2n + 1) nodes in the first
 for h2 in range(1, 5):
+    start = time.time()
     print "h2 nodes:", h2
 
     # create the network
@@ -64,7 +67,8 @@ for h2 in range(1, 5):
     # training
     print "beginning training"
     trainer = BackpropTrainer(n, train_ds)
-    trainer.trainUntilConvergence(maxEpochs=MAX_EPOCHS)
+    #trainer.trainUntilConvergence(maxEpochs=MAX_EPOCHS)
+    trainer.trainUntilConvergence()
 
     # validation
     print "beginning validation"
@@ -76,6 +80,9 @@ for h2 in range(1, 5):
     if min_error == -1 or error < min_error:
         min_error = error
         min_h = h2
+
+    stop = time.time()
+    print "Time:", stop - start
 
 # iterate through
 print "best number of h2 nodes:", min_h
