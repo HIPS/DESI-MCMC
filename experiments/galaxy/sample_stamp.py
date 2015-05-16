@@ -98,10 +98,10 @@ if __name__=="__main__":
     ## set sampling parameters
     ##########################################################################
     narg    = len(sys.argv)
-    stamp_n = int(sys.argv[1]) if narg > 1 else 0
+    stamp_n = int(sys.argv[1]) if narg > 1 else 1
     Nsamps  = int(sys.argv[2]) if narg > 2 else 100
     Nchains = int(sys.argv[3]) if narg > 3 else 2
-    data_dir = str(sys.argv[4]) if narg > 4 else 'data/experiment_stamps'
+    data_dir = str(sys.argv[4]) if narg > 4 else '../../data/experiment_stamps'
     print_freq = int(sys.argv[5]) if narg > 5 else 2
 
     ##########################################################################
@@ -111,6 +111,9 @@ if __name__=="__main__":
     cat_glob.sort()
     cat_glob = cat_glob[stamp_n:(stamp_n+1)]
     cat_srcs, imgs, teff_catalog, us = init_utils.load_imgs_and_catalog(cat_glob)
+    if len(imgs) == 0:
+        print "did not find any image files in ", cat_glob
+        sys.exit()
 
     ## create srcs images
     init_draw = lambda: (np.random.beta(.4, .4) + .01) / 1.02

@@ -131,7 +131,7 @@ def gen_galaxy_prof_psf_image(prof_type, R, u, img):
     weights, means, covars = \
         celeste_fast.gen_galaxy_prof_psf_mixture_params(
            W             = np.dot(R, R.T),        #np.ndarray[FLOAT_t, ndim=2] W,
-           v_s           = u,                     #np.ndarray[FLOAT_t, ndim=1] v_s,
+           v_s           = img.equa2pixel(u),     #np.ndarray[FLOAT_t, ndim=1] v_s,
            image_ws      = img.weights,         #np.ndarray[FLOAT_t, ndim=1] image_ws,
            image_means   = img.means,           #np.ndarray[FLOAT_t, ndim=2] image_means,
            image_covars  = img.covars,          #np.ndarray[FLOAT_t, ndim=3] image_covars,
@@ -153,8 +153,8 @@ def gen_galaxy_psf_image(th, u_s, img, check_overlap = True, unconstrained = Tru
     """
     #unpack skew/location
     theta_s, sig_s, phi_s, rho_s = th[0:4]
-    R_s = gen_galaxy_transformation(sig_s, rho_s, phi_s)
-    u_s = th[4:6]
+    u_s = np.array(u_s, dtype=np.float)
+    R_s       = gen_galaxy_transformation(sig_s, rho_s, phi_s)
     f_nms_exp = gen_galaxy_prof_psf_image('exp', R_s, u_s, img)
     f_nms_dev = gen_galaxy_prof_psf_image('dev', R_s, u_s, img)
     f_nms     = theta_s * f_nms_exp + (1. - theta_s) * f_nms_dev

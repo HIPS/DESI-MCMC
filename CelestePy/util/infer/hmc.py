@@ -1,80 +1,88 @@
 """
+
 Implementation of Hybrid Monte Carlo (HMC) sampling algorithm following Neal (2010).
 Use the log probability and the gradient of the log prob to navigate the distribution.
 
-Scott Linderman
-slinderman@seas.harvard.edu
+Scott Linderman <slinderman@seas.harvard.edu>
 2012-2014
+
+(Update 5/14/2015)
+Andrew Miller <acm@seas.harvard.edu>
+
 """
 import numpy as np
+import numpy.random as npr
 
-def hmc(U, 
-        grad_U, 
-        step_sz, 
-        n_steps, 
-        q_curr, 
-        adaptive_step_sz=False,
-        tgt_accept_rate=0.9,
-        avg_accept_time_const=0.95,
-        avg_accept_rate=0.9,
-        min_step_sz=0.00005,
-        max_step_sz=1.0,
-        negative_log_prob=True):
+def hmc(x_curr,
+        llhfunc,
+        grad_llhfunc,
+        eps,
+        num_steps,
+        mass                  = None,
+        num_iter              = 1,
+        p_curr                = None,
+        refresh_alpha         = 0.0,
+        adaptive_step_sz      = False,
+        tgt_accept_rate       = 0.9,
+        avg_accept_time_const = 0.95,
+        avg_accept_rate       = 0.9,
+        min_step_sz           = 0.00005,
+        max_step_sz           = 1.0,
+        negative_log_prob     = True):
     """
     U       - function handle to compute log probability we are sampling
     grad_U  - function handle to compute the gradient of the density with respect 
               to relevant params
     step_sz - step size
-    n_steps       - number of steps to take
+    n_steps - number of steps to take
     q_curr  - current state
 
     negative_log_prob   - If True, assume U is the negative log prob
-    
+
     """
-    # Start at current state
-    q = np.copy(q_curr)
-    # Momentum is simplest for a normal rv
-    p = np.random.randn(*np.shape(q))
-    p_curr = np.copy(p)
+    imass = 1./mass
+    def energy(X): 
+        return -llhfunc(X)
 
-    # Set a prefactor of -1 if given log prob instead of negative log prob
-    pre = 1.0 if negative_log_prob else -1.0
+    def grad_energy(X):
+        return -grad_llhfunc(X)
 
-    # Evaluate potential and kinetic energies at start of trajectory
-    U_curr = pre * U(q_curr)
-    K_curr = np.sum(p_curr**2)/2.0
+    def hamiltonian(X, P):
+        return energy(X) + .5*np.sum(imass*P*P) 
 
-    # Make a half step in the momentum variable
-    p -= step_sz * pre * grad_U(q)/2.0
-    
-    # Alternate L full steps for position and momentum
-    for i in np.arange(n_steps):
-        q += step_sz*p
-        
-        # Full step for momentum except for last iteration
-        if i < n_steps-1:
-            p -= step_sz * pre * grad_U(q)
-        else:
-            p -= step_sz * pre * grad_U(q)/2.0
-    
-    # Negate the momentum at the end of the trajectory to make proposal symmetric?
-    p = -p
-    
-    # Evaluate potential and kinetic energies at end of trajectory
-    U_prop = pre * U(q)
-    K_prop = np.sum(p**2)/2.0
-    
-    # Accept or reject new state with probability proportional to change in energy.
-    # Ideally this will be nearly 0, but forward Euler integration introduced errors.
-    # Exponentiate a value near zero and get nearly 100% chance of acceptance.
-    accept = np.log(np.random.rand()) < U_curr-U_prop + K_curr-K_prop
-    if accept:
-        q_next = q
+    # define leapfrog step (or multiple steps)
+    def leapstep(xx0, pp0):
+        xx, pp = xx0.copy(), pp0.copy()
+        pph    = pp - .5 * eps * grad_energy(xx)  # half step first step
+        for l in xrange(num_steps):
+            xx      = xx + eps * imass * pph
+            eps_mom = .5*eps if l==num_steps-1 else eps    # half step on last jump
+            pph     = pph - eps_mom*grad_energy(xx)
+        return xx, pph
+
+    # sample initial momentum
+    X = x_curr.copy()
+    if p_curr is None:
+        P = np.sqrt(mass)*npr.randn(X.shape)
     else:
-        q_next = q_curr
+        P = p_curr.copy()
+    ll_curr = -hamiltonian(X, P)
+    for i in xrange(num_iter):
+        # (partial) refresh momentum
+        P = refresh_alpha*P + np.sqrt(1.0 - refresh_alpha**2)*np.sqrt(mass)*npr.randn(X.shape[0])
+        Xp, Pp = leapstep(X, P)
+        Pp     = -Pp
 
-    q_next = q_next.reshape(q.shape)
-        
+        ll_prop = -hamiltonian(Xp, Pp)
+        if np.log(npr.rand()) < ll_prop - ll_curr:
+            print "ACCEPTED!"
+            X       = Xp
+            P       = Pp
+            ll_curr = ll_prop
+
+        # re-negate the momentum regardless of accept/reject
+        P = -P
+
     # Do adaptive step size updates if requested
     if adaptive_step_sz:
         new_accept_rate = avg_accept_time_const * avg_accept_rate + \
@@ -83,12 +91,12 @@ def hmc(U,
             new_step_sz = step_sz * 1.02
         else:
             new_step_sz = step_sz * 0.98
-
         new_step_sz = np.clip(new_step_sz, min_step_sz, max_step_sz)
-
         return (q_next, new_step_sz, new_accept_rate)
-    else:
-        return q_next, step_sz, 0.0
+
+    # return X, P, some other info if not adaptive
+    return X, P, eps, 0.0
+
 
 def test_hmc():
     """
