@@ -1,0 +1,43 @@
+
+\tikzset{
+  latentnode/.style={draw, minimum width=5mm, shape=circle, ultra thick, black},
+  dagconn/.style={arrows=->, black, thick},
+  plate/.style={draw, shape=rectangle, rounded corners=0.5ex, thick,
+    minimum width=3.1cm, text width=3.1cm, align=right, inner sep=10pt, inner ysep=10pt,label={[xshift=-44pt,yshift=14pt]south east:#1}}
+}
+
+%\begin{figure}
+\centering
+\begin{tikzpicture}
+\tikzstyle{main}=[circle, minimum size = 10mm, thick, draw =black!80, node distance = 12mm]
+\tikzstyle{connect}=[-latex, thick]
+\tikzstyle{box}=[rectangle, draw=black!100,label={[xshift=-14pt,yshift=14pt]south east:#1}]
+  \node[main, fill = gray] (x) {$x_{n,\lambda}$};
+  \node[main, fill=gray] (sigma) [below=of x] { $\sigma^2_{n,\lambda}$};
+  \node[main, distance = 18mm] (w) [right=of x] {$\mathbf{w}_n$};
+  \node[main, node distance = 5mm] (m) [below=of w] {$m_n$};
+  \node[main, node distance = 5mm] (z) [below=of m] {$z_n$};
+  \node[main, node distance = 18mm] (B) [above=of w] {$B_k$};
+  \node[main] (ell) [left=of B] {$\ell, \nu$};
+  \node[main, distance = 18mm, fill=gray] (y) [right=of w] {$y_{n,b}$};
+  \node[main, fill=gray] (tau) [below=of y] {$\tau^2_{n,b}$};
+  \path (B) edge [connect] (x)
+           (B) edge [connect] (y)
+           (w) edge [connect] (x)
+           (w) edge [connect] (y)
+           (m) edge [connect] (x)
+           (m) edge [connect] (y)
+           (z) edge [connect] (x)
+           (z) edge [connect] (y)
+           (sigma) edge [connect] (x)
+           (tau) edge [connect] (y)
+           (ell) edge [connect] (B) ;
+    
+  % draw plates
+  \node[plate=, minimum width=26mm, inner sep=12pt, fit=(x) (sigma), label={[xshift=-34pt,yshift=14pt]south east:$\lambda \in \Lambda$}] (plate1) {};
+  \node[plate=, minimum width=26mm, inner sep=12pt, fit=(y) (tau), label={[xshift=-73pt,yshift=16pt]south east:$b \in \{u,g,r,i,z\}$}] (plate1) {};
+  \node[plate=, inner sep=15pt, fit=(B), label={[xshift=-15pt,yshift=14pt]south east:$K$}] (plate1) {};
+  \node[plate, minimum width=31mm, minimum height=55mm, inner sep=4.4mm,draw=black!100, fit= (x) (sigma), label={[xshift=-29pt,yshift=14pt]south east:$N_{\text{spec}}$}] {};
+  \node[plate, minimum width=31mm, minimum height=55mm, inner sep=4.4mm,draw=black!100, fit= (y) (tau), label={[xshift=-29pt,yshift=14pt]south east:$N_{\text{photo}}$}] {};
+\end{tikzpicture}
+%\end{figure}

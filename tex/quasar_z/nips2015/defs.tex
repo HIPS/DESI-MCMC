@@ -1,0 +1,53 @@
+\usepackage{graphicx} % more modern
+%\usepackage{epsfig} % less modern
+\usepackage{subfigure} 
+\usepackage{amsmath,amsfonts,amssymb,bbm}
+\usepackage{tikz}
+\usetikzlibrary{fit,positioning}
+\usepackage[disable]{todonotes}
+
+% For citations
+\usepackage{natbib}
+
+% For algorithms
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% As of 2011, we use the hyperref package to produce hyperlinks in the
+% resulting PDF.  If this breaks your system, please commend out the
+% following usepackage line and replace \usepackage{icml2015} with
+% \usepackage[nohyperref]{icml2015} above.
+\usepackage{hyperref}
+\usepackage{tabularx}
+
+% Packages hyperref and algorithmic misbehave sometimes.  We can fix
+% this with the following command.
+%\newcommand{\theHalgorithm}{\arabic{algorithm}}
+\DeclareMathOperator{\Tr}{Tr}
+\newcommand{\R}{\mathbbm{R}}
+\newcommand{\mba}{\mathbf{a}}
+\newcommand{\mbb}{\mathbf{b}}
+\newcommand{\mbx}{\mathbf{x}}
+\newcommand{\mbxt}{\tilde{\mathbf{x}}}
+\newcommand{\Sigmat}{\tilde{\Sigma}}
+\newcommand{\mbz}{\mathbf{z}}
+\newcommand{\mbw}{\mathbf{w}}
+\newcommand{\mcN}{\mathcal{N}}
+\newcommand{\mcP}{\mathcal{P}}
+\newcommand{\mcX}{\mathcal{X}}
+\newcommand{\eps}{\epsilon}
+\newcommand{\trans}{\intercal}
+\newcommand{\Ut}{\tilde{U}}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\newcommand{\angstrom}{\textup{\AA}}
+\newcommand{\red}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\Nspec}{{N_{\text{spec}}}}
+\newcommand{\Nphoto}{{N_{\text{photo}}}}
+
+%%
+%% figwidth, half figwidth
+%%
+\newlength{\figwidth}
+\setlength{\figwidth}{6.75in}
+\newlength{\halfwidth}
+\setlength{\halfwidth}{3.37in}
