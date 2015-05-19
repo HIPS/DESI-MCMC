@@ -4,7 +4,7 @@ from sklearn import mixture
 import time
 import pickle
 
-CACHED = True
+CACHED = False
 
 # import FITS file
 data_file = fitsio.FITS('dr7qso.fit')[1].read()

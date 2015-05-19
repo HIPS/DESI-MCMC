@@ -6,7 +6,7 @@ import numpy as np
 import time
 import pickle
 
-CACHED = True
+CACHED = False
 
 # constants to change
 MAX_EPOCHS = 100
