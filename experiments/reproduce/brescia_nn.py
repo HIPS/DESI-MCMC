@@ -4,6 +4,9 @@ from pybrain.structure import FeedForwardNetwork, LinearLayer, SigmoidLayer,Full
 import fitsio
 import numpy as np
 import time
+import pickle
+
+CACHED = True
 
 # constants to change
 MAX_EPOCHS = 100
@@ -30,63 +33,76 @@ train_ds, val_ds = trainval_ds.splitWithProportion(0.75)
 
 print "Train, validation, test:", len(train_ds), len(val_ds), len(test_ds)
 
-ns = []
+ns = {}
 min_error = -1
 min_h = -1
 
 # use validation to form 4-layer network with two hidden layers,
 # with (2n + 1) nodes in the first
-for h2 in range(1, 5):
-    start = time.time()
-    print "h2 nodes:", h2
+if not CACHED:
+    for h2 in range(1, 5):
+        start = time.time()
+        print "h2 nodes:", h2
+    
+        # create the network
+        print "building network"
+    
+        n = FeedForwardNetwork()
+        inLayer = LinearLayer(5)
+        hiddenLayer1 = SigmoidLayer(11)
+        hiddenLayer2 = SigmoidLayer(h2)
+        outLayer = LinearLayer(1)
+    
+        n.addInputModule(inLayer)
+        n.addModule(hiddenLayer1)
+        n.addModule(hiddenLayer2)
+        n.addOutputModule(outLayer)
+    
+        in_to_hidden = FullConnection(inLayer, hiddenLayer1)
+        hidden_to_hidden = FullConnection(hiddenLayer1, hiddenLayer2)
+        hidden_to_out = FullConnection(hiddenLayer2, outLayer)
+    
+        n.addConnection(in_to_hidden)
+        n.addConnection(hidden_to_hidden)
+        n.addConnection(hidden_to_out)
+    
+        n.sortModules()
+    
+        # training
+        print "beginning training"
+        trainer = BackpropTrainer(n, train_ds, verbose=True)
+        #trainer.trainUntilConvergence(maxEpochs=MAX_EPOCHS)
+        trainer.trainUntilConvergence()
+    
+        output = open('nn' + h2 + '.pkl', 'wb')
+        pickle.dump(n, output)
+        output.close()
+    
+        ns[h2] = n
 
-    # create the network
-    print "building network"
-    ns.append(FeedForwardNetwork())
-    inLayer = LinearLayer(5)
-    hiddenLayer1 = SigmoidLayer(11)
-    hiddenLayer2 = SigmoidLayer(h2)
-    outLayer = LinearLayer(1)
+        # validation
+        print "beginning validation"
+        out = n.activateOnDataset(val_ds)
+        actual = val_ds['target']
+        error = np.sqrt(np.sum((out - actual)**2) / len(val_ds))
+        print "RMSE:", error
+    
+        if min_error == -1 or error < min_error:
+            min_error = error
+            min_h = h2
+    
+        stop = time.time()
+        print "Time:", stop - start
 
-    n = ns[h2 - 1]
-    n.addInputModule(inLayer)
-    n.addModule(hiddenLayer1)
-    n.addModule(hiddenLayer2)
-    n.addOutputModule(outLayer)
+    print "best number of h2 nodes:", min_h
+    nbest = ns[min_h]
 
-    in_to_hidden = FullConnection(inLayer, hiddenLayer1)
-    hidden_to_hidden = FullConnection(hiddenLayer1, hiddenLayer2)
-    hidden_to_out = FullConnection(hiddenLayer2, outLayer)
-
-    n.addConnection(in_to_hidden)
-    n.addConnection(hidden_to_hidden)
-    n.addConnection(hidden_to_out)
-
-    n.sortModules()
-
-    # training
-    print "beginning training"
-    trainer = BackpropTrainer(n, train_ds)
-    #trainer.trainUntilConvergence(maxEpochs=MAX_EPOCHS)
-    trainer.trainUntilConvergence()
-
-    # validation
-    print "beginning validation"
-    out = n.activateOnDataset(val_ds)
-    actual = val_ds['target']
-    error = np.sqrt(np.sum((out - actual)**2) / len(val_ds))
-    print "RMSE:", error
-
-    if min_error == -1 or error < min_error:
-        min_error = error
-        min_h = h2
-
-    stop = time.time()
-    print "Time:", stop - start
+else:
+    pkl_file = open('nn.pkl', 'rb')
+    nbest = pickle.load(pkl_file)
 
 # iterate through
-print "best number of h2 nodes:", min_h
-out_test = ns[min_h - 1].activateOnDataset(test_ds)
+out_test = nbest.activateOnDataset(test_ds)
 actual_test = test_ds['target']
 print "Test RMSE", np.sqrt(np.sum((out_test - actual_test)**2) / len(test_ds))
 

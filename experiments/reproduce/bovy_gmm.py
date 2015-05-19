@@ -2,6 +2,9 @@ import fitsio
 import numpy as np
 from sklearn import mixture
 import time
+import pickle
+
+CACHED = True
 
 # import FITS file
 data_file = fitsio.FITS('dr7qso.fit')[1].read()
@@ -38,40 +41,53 @@ len_test = len(test)
 test_below = len(test[test[:,0] < min_i])
 test_above = len(test[test[:,0] > max_i])
 
-for n in range(60):
-    print "testing Gaussian with components:", n
-    score = 0.
-    for bin in np.arange(min_i, max_i, diff):
-        print "processing bin", bin
-        train_bin = train[train[:,0] > bin]
-        train_bin = train_bin[train_bin[:,0] < (bin + diff)]
-
-        g = mixture.GMM(n_components=n, covariance_type='full')
-        g.fit(train_bin[:,1:])
-
-        val_bin = val[val[:,0] > bin]
-        val_bin = val_bin[val_bin[:,0] < (bin + diff)]
-        score += np.sum(g.score(val_bin[:,1:]))
-
-    print "score", score
-    if score > max_score:
-        max_score = score
-        max_n = n
-
-print "best n is:", max_n
+if not CACHED:
+    for n in range(60):
+        print "testing Gaussian with components:", n
+        score = 0.
+        for bin in np.arange(min_i, max_i, diff):
+            print "processing bin", bin
+            train_bin = train[train[:,0] > bin]
+            train_bin = train_bin[train_bin[:,0] < (bin + diff)]
+    
+            g = mixture.GMM(n_components=n, covariance_type='full')
+            g.fit(train_bin[:,1:])
+    
+            val_bin = val[val[:,0] > bin]
+            val_bin = val_bin[val_bin[:,0] < (bin + diff)]
+            score += np.sum(g.score(val_bin[:,1:]))
+    
+        print "score", score
+        if score > max_score:
+            max_score = score
+            max_n = n
+    
+    print "best n is:", max_n
 
 max_n = 25
 
+if CACHED:
+    pkl_file = open('bovy.pkl')
+    gs = pickle.load(pkl_file)
+else:
+    gs = []
+
 # test on test set (calculate mean and MLE)
-for bin in np.arange(min_i, max_i, diff):
+for i,bin in enumerate(np.arange(min_i, max_i, diff)):
     start = time.time()
 
     print "on bin", bin
     train_bin = train[train[:,0] > bin]
     train_bin = train_bin[train_bin[:,0] < (bin + diff)]
 
-    g = mixture.GMM(n_components=max_n, covariance_type='full')
-    g.fit(train_bin[:,1:])
+    if CACHED:
+        print "reading model from cache"
+        g = gs[i]
+    else:
+        g = mixture.GMM(n_components=max_n, covariance_type='full')
+        g.fit(train_bin[:,1:])
+
+        gs.append(g)
 
     test_bin = test[test[:,0] > bin]
     test_bin = test_bin[test_bin[:,0] < (bin + diff)]
@@ -108,4 +124,9 @@ for bin in np.arange(min_i, max_i, diff):
 
 print "mle RMSE", np.sqrt(sum_sq_mle / (len_test - test_above - test_below))
 print "mean RMSE", np.sqrt(sum_sq_mean / (len_test - test_above - test_below))
+
+if not CACHED:
+    output = open('bovy.pkl', 'wb')
+    pickle.dump(gs, output)
+    output.close()
 
