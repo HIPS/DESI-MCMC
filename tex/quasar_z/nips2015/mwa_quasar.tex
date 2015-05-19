@@ -548,6 +548,28 @@ It is clear that from only $400$ noisy spectroscopic measurements, our structure
 Furthermore, because we are directly modeling the latent SED, our method admits a probabilistic estimate of the entire SED sample path conditioned only on observed photometric fluxes.
 Figure~\ref{fig:recon} displays posterior SED samples and their corresponding redshift marginals for test-set quasars inferred from only SDSS photometric measurements.  
 
+\subsection{Comparisons}
+
+We compared the performance of our predictions with those of \cite{bovy2012photometric} and \cite{brescia2013photometric}. The method in \cite{bovy2012photometric} involves binning
+quasars by $i$-band magnitude and then, within each bin,
+fitting a mixture of Gaussians to the joint distribution of
+redshift and the relative magnitudes of the other bands. In our analysis, we binned
+the $i$-magnitude
+into bins of width 0.2 and then fit a mixture of 25 Gaussians for the joint distribution in each bin
+(we chose this number of Gaussians through validation). We can calculate a marginal distribution
+over redshift given the $ugriz$ bands, and we use both the mean and MLE of this posterior as
+point predictions for comparison.
+
+
+The method from \cite{brescia2013photometric} involves a neural network with four layers, i.e.,
+with two hidden layers. Given that the number of inputs is $N$, the first hidden layer has
+$(2N + 1)$ outputs and the second hidden layer has anywhere from 1 to $(N - 1)$ outputs. Tuning
+the number of hidden nodes through validation, we used a neural network with 5 nodes
+in the input layer, for each of the five $ugriz$ bands, 11 nodes in the first hidden layer, 2 nodes
+in the second hidden layer, and a single output node.
+
+
+
 %\subsection{Quasar types}
 %Our sampler yields posterior samples of the templates themselves; one sample is depicted in Figure~\ref{fig:basis}.  The loadings of individual quasars onto these bases intuitively describe the ``type'' of quasar being modeled.  \red{Visualize $w_n$ clusters and look at individual types. Show utility of this decomposition}.  Furthermore, because we restrict the templates to be positive functions, we obtain a more physically interpretable clustering of quasars than PCA-based methods, which will have both negative principal components and negative weights.  
 %\red{Compare $z_n$ measurements to $r$ or $i$-band magnitude/flux level.  Can faint quasars be measured accurately as well?}
