@@ -4,89 +4,125 @@ from pybrain.structure import FeedForwardNetwork, LinearLayer, SigmoidLayer,Full
 import fitsio
 import numpy as np
 import time
+import pickle
 
-# constants to change
-MAX_EPOCHS = 100
-NUM_DATA = 100
+import sys
+sys.path.insert(0, '../')
+from redshift_utils import nanomaggies2mags, mags2nanomaggies
 
-# generate dataset
-data_file = fitsio.FITS('dr7qso.fit')[1].read()
+def brescia_nn(train, test, max_epochs=None, verbose=False):
+    trainval_ds = SupervisedDataSet(5, 1)
+    test_ds = SupervisedDataSet(5, 1)
+    
+    for datum in train:
+        trainval_ds.addSample(datum[:5], (datum[5],))
 
-alldata = SupervisedDataSet(5, 1)
-length = len(data_file['UMAG'])
+    for datum in test:
+        test_ds.addSample(datum[:5], (datum[5],))
+    
+    train_ds, val_ds = trainval_ds.splitWithProportion(0.75)
+    
+    if verbose:
+        print "Train, validation, test:", len(train_ds), len(val_ds), len(test_ds)
+    
+    ns = {}
+    min_error = -1
+    min_h = -1
+    
+    # use validation to form 4-layer network with two hidden layers,
+    # with (2n + 1) nodes in the first hidden layer and somewhere from
+    # 1 to (n - 1) in the second hidden layer
+    for h2 in range(1, 5):
+        if verbose:
+            start = time.time()
+            print "h2 nodes:", h2
+    
+        # create the network
+        if verbose:
+            print "building network"
 
-#for i in range(NUM_DATA):
-for i in range(length):
-    umag = data_file['UMAG'][i]
-    gmag = data_file['GMAG'][i]
-    rmag = data_file['RMAG'][i]
-    imag = data_file['IMAG'][i]
-    zmag = data_file['ZMAG'][i]
-    redshift = data_file['z'][i]
-    alldata.addSample((umag, gmag, rmag, imag, zmag), (redshift,))
+        n = FeedForwardNetwork()
+        inLayer = LinearLayer(5)
+        hiddenLayer1 = SigmoidLayer(11)
+        hiddenLayer2 = SigmoidLayer(h2)
+        outLayer = LinearLayer(1)
+    
+        n.addInputModule(inLayer)
+        n.addModule(hiddenLayer1)
+        n.addModule(hiddenLayer2)
+        n.addOutputModule(outLayer)
+    
+        in_to_hidden = FullConnection(inLayer, hiddenLayer1)
+        hidden_to_hidden = FullConnection(hiddenLayer1, hiddenLayer2)
+        hidden_to_out = FullConnection(hiddenLayer2, outLayer)
+    
+        n.addConnection(in_to_hidden)
+        n.addConnection(hidden_to_hidden)
+        n.addConnection(hidden_to_out)
+    
+        n.sortModules()
+    
+        # training
+        if verbose:
+            print "beginning training"
+        trainer = BackpropTrainer(n, train_ds)
+        trainer.trainUntilConvergence(maxEpochs=max_epochs)
 
-trainval_ds, test_ds = alldata.splitWithProportion(0.8)
-train_ds, val_ds = trainval_ds.splitWithProportion(0.75)
+        ns[h2] = n
+    
+        # validation
+        if verbose:
+            print "beginning validation"
 
-print "Train, validation, test:", len(train_ds), len(val_ds), len(test_ds)
+        out = n.activateOnDataset(val_ds)
+        actual = val_ds['target']
+        error = np.sqrt(np.sum((out - actual)**2) / len(val_ds))
+        if verbose:
+            print "RMSE:", error
+    
+        if min_error == -1 or error < min_error:
+            min_error = error
+            min_h = h2
+    
+        if verbose:
+            stop = time.time()
+            print "Time:", stop - start
+    
+    # iterate through
+    if verbose:
+        print "best number of h2 nodes:", min_h
+    out_test = ns[min_h].activateOnDataset(test_ds)
+    actual_test = test_ds['target']
+    rmse = np.sqrt(np.sum((out_test - actual_test)**2) / len(test_ds))
 
-ns = []
-min_error = -1
-min_h = -1
+    return ns[h2], rmse
 
-# use validation to form 4-layer network with two hidden layers,
-# with (2n + 1) nodes in the first
-for h2 in range(1, 5):
-    start = time.time()
-    print "h2 nodes:", h2
+if __name__ == '__main__':
+    data_file = fitsio.FITS('../dr7qso.fit')[1].read()
+    
+    data = np.zeros((len(data_file['UMAG']), 6))
+    data[:,0] = data_file['UMAG']
+    data[:,1] = data_file['GMAG']
+    data[:,2] = data_file['RMAG']
+    data[:,3] = data_file['IMAG']
+    data[:,4] = data_file['ZMAG']
+    data[:,5] = data_file['z']
 
-    # create the network
-    print "building network"
-    ns.append(FeedForwardNetwork())
-    inLayer = LinearLayer(5)
-    hiddenLayer1 = SigmoidLayer(11)
-    hiddenLayer2 = SigmoidLayer(h2)
-    outLayer = LinearLayer(1)
+    # make sure there are no zero mags
+    for i in range(5):
+        data = data[data[:,i] != 0]
 
-    n = ns[h2 - 1]
-    n.addInputModule(inLayer)
-    n.addModule(hiddenLayer1)
-    n.addModule(hiddenLayer2)
-    n.addOutputModule(outLayer)
+    # convert to nanomaggies for the sake of example
+    data[:,:5] = mags2nanomaggies(data[:,:5])
 
-    in_to_hidden = FullConnection(inLayer, hiddenLayer1)
-    hidden_to_hidden = FullConnection(hiddenLayer1, hiddenLayer2)
-    hidden_to_out = FullConnection(hiddenLayer2, outLayer)
+    # split into training and test
+    train = data[:int(0.8 * len(data)),:]
+    test = data[int(0.8 * len(data)):,:]
 
-    n.addConnection(in_to_hidden)
-    n.addConnection(hidden_to_hidden)
-    n.addConnection(hidden_to_out)
+    model, rmse = brescia_nn(train, test, verbose=True)
 
-    n.sortModules()
+    output = open('brescia_output.pkl', 'wb')
+    pickle.dump(model, output)
+    output.close()
 
-    # training
-    print "beginning training"
-    trainer = BackpropTrainer(n, train_ds)
-    #trainer.trainUntilConvergence(maxEpochs=MAX_EPOCHS)
-    trainer.trainUntilConvergence()
-
-    # validation
-    print "beginning validation"
-    out = n.activateOnDataset(val_ds)
-    actual = val_ds['target']
-    error = np.sqrt(np.sum((out - actual)**2) / len(val_ds))
-    print "RMSE:", error
-
-    if min_error == -1 or error < min_error:
-        min_error = error
-        min_h = h2
-
-    stop = time.time()
-    print "Time:", stop - start
-
-# iterate through
-print "best number of h2 nodes:", min_h
-out_test = ns[min_h - 1].activateOnDataset(test_ds)
-actual_test = test_ds['target']
-print "Test RMSE", np.sqrt(np.sum((out_test - actual_test)**2) / len(test_ds))
-
+    print "RMSE:", rmse

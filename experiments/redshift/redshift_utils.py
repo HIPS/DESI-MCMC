@@ -3,11 +3,11 @@ import fitsio
 import sys, os
 from os.path import basename, splitext
 sys.path.append("../..")
-import planck
+#import planck
 import scipy.integrate as integrate
 from scipy import interpolate
 from scipy.optimize import minimize
-from funkyyak import grad, numpy_wrapper as np
+#from funkyyak import grad, numpy_wrapper as np
 import matplotlib.pyplot as plt
 
 def sinc_interp(new_samples, samples, fvals, left=None, right=None):
@@ -170,6 +170,8 @@ def load_sdss_fluxes_clean_split(Ntest=500, seed=123):
 def mags2nanomaggies(mags): 
     return np.power(10., (mags - 22.5)/-2.5)
 
+def nanomaggies2mags(nanos):
+    return 22.5 - 2.5 * np.log10(nanos)
 
 def load_specs_from_disk(spec_files): 
     # 0. load spectra from fits files
