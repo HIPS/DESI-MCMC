@@ -92,10 +92,8 @@ def brescia_nn(train, test, max_epochs=None, verbose=False):
     if verbose:
         print "best number of h2 nodes:", min_h
     out_test = ns[min_h].activateOnDataset(test_ds)
-    actual_test = test_ds['target']
-    rmse = np.sqrt(np.sum((out_test - actual_test)**2) / len(test_ds))
 
-    return ns[h2], rmse
+    return ns[h2], out_test
 
 if __name__ == '__main__':
     data_file = fitsio.FITS('../dr7qso.fit')[1].read()
@@ -119,10 +117,15 @@ if __name__ == '__main__':
     train = data[:int(0.8 * len(data)),:]
     test = data[int(0.8 * len(data)):,:]
 
-    model, rmse = brescia_nn(train, test, verbose=True)
+    model, preds = brescia_nn(train, test, verbose=True)
+
+    # calculate RMSE
+    actual_test = test[:,5]
+    rmse = np.sqrt(np.sum((preds - actual_test)**2) / len(test))
 
     output = open('brescia_output.pkl', 'wb')
     pickle.dump(model, output)
     output.close()
 
     print "RMSE:", rmse
+
