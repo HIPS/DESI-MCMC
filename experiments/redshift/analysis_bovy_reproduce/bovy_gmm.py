@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, '../')
 from redshift_utils import nanomaggies2mags, mags2nanomaggies
 
+
 """
 Parameters:
     train and test have 6 columns, 5 ugriz bands in nanomaggies + redshift
@@ -149,9 +150,6 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
 
         test[test_idx,6:8] = preds[:,:]
 
-        c = [0, 5, 6, 7]
-        print test[:,c]
-    
         if verbose:
             stop = time.time()
             print "time for bin:", stop - start
