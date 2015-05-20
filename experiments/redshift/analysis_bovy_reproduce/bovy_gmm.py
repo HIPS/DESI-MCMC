@@ -125,7 +125,6 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
             preds[i][1] = mean
 
         test[test_idx,6:8] = preds[:,:]
-        print test_idx, test[:,6:8]
     
         if verbose:
             stop = time.time()
