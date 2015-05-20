@@ -73,15 +73,13 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
     if verbose:
         print "best n is:", max_n
     
-    len_test = len(test)
-    test_below = len(test[test[:,0] < min_i])
-    test_above = len(test[test[:,0] > max_i])
-    
     gs = []
 
     if verbose:
         print "beginning testing"
+
     # test on test set (calculate mean and MLE)
+    test = np.hstack([test, np.zeros((len(test), 2))])
     for bin in np.arange(min_i, max_i, diff):
         if verbose:
             start = time.time()
@@ -95,13 +93,14 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
     
         gs.append(g)
 
-        test_bin = test[test[:,0] > bin]
-        test_bin = test_bin[test_bin[:,0] < (bin + diff)]
-    
+        test_idx = (test[:,0] > bin) & (test[:,0] < (bin + diff))
+        test_bin = test[test_idx]
+
         # calculate mean and mle
         sum_sq_mle = 0.
         sum_sq_mean = 0.
     
+        preds = np.zeros((len(test_bin), 2))
         for i,t in enumerate(test_bin):
             max_score_test = -np.inf
             z_max = -1
@@ -122,16 +121,17 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
                 mean += prob * z
     
             mean /= sum_weights
-            sum_sq_mle += (z_max - t[4])**2
-            sum_sq_mean += (mean - t[4])**2
+            preds[i][0] = z_max
+            preds[i][1] = mean
+
+        test[test_idx,6:8] = preds[:,:]
+        print test_idx, test[:,6:8]
     
         if verbose:
             stop = time.time()
             print "time for bin:", stop - start
     
-    rmse_mle = np.sqrt(sum_sq_mle / (len_test - test_above - test_below))
-    rmse_mean = np.sqrt(sum_sq_mean / (len_test - test_above - test_below))
-    return gs, rmse_mle, rmse_mean
+    return gs, test[:,6], test[:,7]
 
 if __name__ == "__main__":
     # import FITS file
@@ -162,8 +162,19 @@ if __name__ == "__main__":
     width_i = 0.2
     max_gaussians = 50
 
-    model, rmse_mle, rmse_mean = \
+    model, preds_mle, preds_mean = \
         bovy_xdqsoz(train, test, min_i, max_i, width_i, max_gaussians, verbose=True)
+
+    # don't include indices for which we did not make a prediction, i.e.,
+    # i-magnitude out of range
+    pred_idx = preds_mle != 0
+
+    preds_mle = preds_mle[pred_idx]
+    preds_mean = preds_mean[pred_idx]
+    actual_test = test[pred_idx,5]
+
+    rmse_mle = np.sqrt(np.sum((preds_mle - actual_test)**2) / len(actual_test))
+    rmse_mean = np.sqrt(np.sum((preds_mean - actual_test)**2) / len(actual_test))
 
     output = open('bovy_output.pkl', 'wb')
     pickle.dump(model, output)
