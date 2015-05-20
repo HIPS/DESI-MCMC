@@ -7,29 +7,22 @@
 #   - Fit optimize basis and weights in an NMF-like framework (with normal errors)
 #
 import fitsio
-import numpy as np
-import numpy.random as npr
-import numpy as npp
 from scipy import interpolate
-import scipy.optimize as optimize
-import matplotlib.pyplot as plt
-from funkyyak import grad, numpy_wrapper as np
-npr.seed(42)
 from scipy.optimize import minimize
-from redshift_utils import load_data_clean_split, project_to_bands, sinc_interp, \
-                           check_grad, fit_weights_given_basis, \
-                           evaluate_random_direction, ParamParser, \
-                           resample_rest_frame
-from slicesample import slicesample
-import GPy
-import os
+import matplotlib.pyplot as plt
+import GPy, os
 import cPickle as pickle
+from CelestePy.util.misc import ParamParser
+from autograd.core import grad, primitive
+from autograd.util import quick_grad_check
+import autograd.numpy as np
+import autograd.numpy.random as npr
 
-def save_basis_fit(th, lam0, lam0_delta, parser):
+def save_basis_fit(th, lam0, lam0_delta, parser, data_dir=""):
     """ save basis fit info """
     # grab B value for shape info
     B = parser.get(th, 'betas')
-    with open('cache/basis_fit_K-%d_V-%d.pkl'%B.shape, 'wb') as handle:
+    with open(os.path.join(data_dir, 'basis_fit_K-%d_V-%d.pkl'%B.shape), 'wb') as handle:
         pickle.dump(th, handle)
         pickle.dump(lam0, handle)
         pickle.dump(lam0_delta, handle)
@@ -82,7 +75,8 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu)
         B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
         M = np.exp(mus)
         Xtilde = np.dot(W*M, B)
-        return np.nansum( inv_var * np.square(X - Xtilde) )
+        loss_mat = inv_var * np.square(X - Xtilde)
+        return np.sum(loss_mat[~np.isnan(loss_mat)])
     loss_grad = grad(loss_fun)
 
     ## joint prior over parameters
@@ -177,141 +171,159 @@ def train_model(th, loss_fun, loss_grad, prior_loss, prior_grad,
     parser.set(th, 'betas', np.dot(K_chol, betas.T).T)
     return th
 
-if __name__=="__main__":
 
-    ## load a handful of quasar spectra
-    lam_obs, qtrain, qtest = \
-        load_data_clean_split(spec_fits_file = 'quasar_data.fits', 
-                              Ntrain = 400)
 
-    ## first find a positive decomposition of quasar spectra on training data
-    quasar_zerr    = qtrain['Z_err']
-    N              = qtrain['spectra'].shape[0]
+"""This example shows how to define the gradient of your own functions.
+This can be useful for speed, numerical stability, or in cases where
+your code depends on external library calls."""
 
-    ## initialize a basis using existing eigenQuasar Model
-    lam_subsample = 5
-    header        = fitsio.read_header('../../data/eigen_specs/spEigenQSO-55732.fits')
-    eigQSOfits    = fitsio.FITS('../../data/eigen_specs/spEigenQSO-55732.fits')
-    lam0          = 10.**(header['COEFF0'] + np.arange(header['NAXIS1']) * header['COEFF1'])
-    lam0          = lam0[::lam_subsample]
-    lam0_delta    = np.concatenate((lam0[1:] - lam0[:-1], [lam0[-1] - lam0[-2]]))
-    eigQSO        = eigQSOfits[0].read()[:, ::lam_subsample]
-    K             = eigQSO.shape[0]
+# @primitive tells autograd not to look inside this function, but instead
+# to treat it as a black box, whose gradient might be specified# later.
+# Functions with this decorator can contain anything that Python knows
+# how to execute.
+#@primitive
+#def nansum(x): 
+#    return np.nansum(x)
+#
+#
+## Check the gradients numerically, just to be safe.
+#quick_grad_check(nansum, npr.randn(10))
 
-    # resample spectra and spectra inverse variance onto common rest frame
-    spectra_resampled, spectra_ivar_resampled, lam_mat = \
-        resample_rest_frame(qtrain['spectra'], 
-                            qtrain['spectra_ivar'],
-                            qtrain['Z'], 
-                            lam_obs, 
-                            lam0)
-
-    ## construct smooth + spiky prior over betas
-    print "   Computing covariance cholesky "
-    beta_kern = GPy.kern.Matern52(input_dim=1, variance=1., lengthscale=40)
-    K_beta = beta_kern.K(lam0.reshape((-1, 1)))
-    K_chol = np.linalg.cholesky(K_beta)
-
-    ## clean nans in data and inverse variance 
-    X                  = spectra_resampled
-    X[np.isnan(X)]     = 0
-    Lam                = spectra_ivar_resampled
-    Lam[np.isnan(Lam)] = 0
-
-    ## set up the likelihood and prior functions
-    parser, loss_fun, loss_grad, prior_loss, prior_loss_grad  = \
-        make_functions(X, Lam, lam0, lam0_delta, K, 
-                       K_chol     = K_chol,
-                       sig2_omega = 1., 
-                       sig2_mu    = 10.)
-
-    ## initialize basis and weights
-    th = np.zeros(parser.N)
-    parser.set(th, 'betas', .01 * K_chol.dot(np.random.randn(len(lam0), K)).T)
-    parser.set(th, 'omegas', .01 * npr.randn(N, K))
-    parser.set(th, 'mus', .01 * npr.randn(N))
-
-    ## use cache if available
-    basis_cache = 'cache/basis_fit_K-4_V-2728.pkl'
-    USE_CACHE = True
-    if os.path.exists(basis_cache) and USE_CACHE:
-        th_cache, lam0_cache, lam0_delta_cache, parser_cache = load_basis_fit(basis_cache)
-        betas_cache = parser_cache.get(th, 'betas')
-        betas       = parser.get(th, 'betas')
-        if betas_cache.shape[1] != len(lam0):
-            print "    Interpolating cached basis to new lam0. "
-            for k in range(betas_cache.shape[0]):
-                betas[k, :] = np.interp(lam0, lam0_cache, betas_cache[k, :])
-            parser.set(th, 'betas', betas)
-            parser.set(th, 'mus', parser_cache.get(th_cache, 'mus'))
-            parser.set(th, 'omegas', parser_cache.get(th_cache, 'omegas'))
-        else: 
-            th = th_cache
-
-    ## sanity check gradient
-    check_grad(fun = lambda th: loss_fun(th) + prior_loss(th), # X, Lam), 
-               jac = lambda th: loss_grad(th) + prior_loss_grad(th), #, X, Lam),
-               th  = th)
-
-    ## train model
-    parser.set(th, 'betas', np.linalg.solve(K_chol, parser.get(th, 'betas').T).T)
-    th = train_model(th, loss_fun, loss_grad, prior_loss, prior_loss_grad,
-                          cvx_iter=100000, sgd_iter=10,
-                          learning_rate = 1e-3, momentum=.9, verbose=10)
-    print "Fit loss: ", loss_fun(th)
-    dth = loss_grad(th)
-    print "Gradient mag: ", np.sqrt((dth*dth).sum())
-    mus    = parser.get(th, 'mus')
-    betas  = parser.get(th, 'betas')
-    omegas = parser.get(th, 'omegas')
-    W = np.exp(omegas)
-    W = W / np.sum(W, axis=1, keepdims=True)
-    B = np.exp(betas)
-    B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
-    M = np.exp(mus)
-    Xtilde = np.dot(W*M, B)
-
-    # cache result
-    save_basis_fit(th, lam0, lam0_delta, parser)
-
-    ## sanity check out of sample fits
-    if False:
-        def plot_fits(qobj, idxs, W, B, refit_w = True, sgd_iter=1000):
-            for n in idxs:
-                fig, axarr = plt.subplots(2, 1, figsize=(12,6))
-                z_n    = qobj['Z'][n]
-                spec_n = qobj['spectra'][n, :]
-                ivar_n = qobj['spectra_ivar'][n, :]
-                if refit_w:
-                    w = fit_weights_given_basis(B, lam0, spec_n, ivar_n, z_n, lam_obs, sgd_iter=sgd_iter)
-                else:
-                    w = W[n, :]
-                    m = M[n]
-                axarr[0].plot(lam_obs / (1 + z_n), spec_n)
-                axarr[0].plot(lam0, m*w.dot(B), linewidth=3)
-                axarr[0].plot(lam_obs / (1 + z_n), np.sqrt(ivar_n), color='grey', alpha=.5)
-                axarr[0].set_xlim( min(lam_obs/(1+z_n)), max(lam_obs/(1+z_n)) )
-                axarr[1].bar(np.arange(len(w)), w, width=.7, alpha=.5)
-            plt.show()
-
-        train_idxs = [0, 20, 14, 300]
-        plot_fits(qtrain, train_idxs, W, B, refit_w = False)
-        plot_fits(qtrain, train_idxs, W, B, refit_w =True)
-
-        ## visualize one example in a random direction
-        n = 20
-        w,lfun = fit_weights_given_basis(B, lam0, qtrain['spectra'][n],
-                                             qtrain['spectra_ivar'][n],
-                                             qtrain['Z'][n], 
-                                             lam_obs, return_loss=True, sgd_iter=1000)
-        ll_rand = evaluate_random_direction(fun = lfun, x0=np.log(w), n = 100, delta=.01)
-        fig = plt.figure()
-        plt.plot(ll_rand)
-        plt.title(" Random direction for fit_weights_given_basis loss")
-        plt.show()
-        test_idxs = [0, 10, 95, 139]
-        plot_fits(qtest, test_idxs, refit_w = True)
-
+#if __name__=="__main__":
+#
+#    ## load a handful of quasar spectra
+#    lam_obs, qtrain, qtest = \
+#        load_data_clean_split(spec_fits_file = 'quasar_data.fits', 
+#                              Ntrain = 400)
+#
+#    ## first find a positive decomposition of quasar spectra on training data
+#    quasar_zerr    = qtrain['Z_err']
+#    N              = qtrain['spectra'].shape[0]
+#
+#    ## initialize a basis using existing eigenQuasar Model
+#    lam_subsample = 5
+#    header        = fitsio.read_header('../../data/eigen_specs/spEigenQSO-55732.fits')
+#    eigQSOfits    = fitsio.FITS('../../data/eigen_specs/spEigenQSO-55732.fits')
+#    lam0          = 10.**(header['COEFF0'] + np.arange(header['NAXIS1']) * header['COEFF1'])
+#    lam0          = lam0[::lam_subsample]
+#    lam0_delta    = np.concatenate((lam0[1:] - lam0[:-1], [lam0[-1] - lam0[-2]]))
+#    eigQSO        = eigQSOfits[0].read()[:, ::lam_subsample]
+#    K             = eigQSO.shape[0]
+#
+#    # resample spectra and spectra inverse variance onto common rest frame
+#    spectra_resampled, spectra_ivar_resampled, lam_mat = \
+#        resample_rest_frame(qtrain['spectra'], 
+#                            qtrain['spectra_ivar'],
+#                            qtrain['Z'], 
+#                            lam_obs, 
+#                            lam0)
+#
+#    ## construct smooth + spiky prior over betas
+#    print "   Computing covariance cholesky "
+#    beta_kern = GPy.kern.Matern52(input_dim=1, variance=1., lengthscale=40)
+#    K_beta = beta_kern.K(lam0.reshape((-1, 1)))
+#    K_chol = np.linalg.cholesky(K_beta)
+#
+#    ## clean nans in data and inverse variance 
+#    X                  = spectra_resampled
+#    X[np.isnan(X)]     = 0
+#    Lam                = spectra_ivar_resampled
+#    Lam[np.isnan(Lam)] = 0
+#
+#    ## set up the likelihood and prior functions
+#    parser, loss_fun, loss_grad, prior_loss, prior_loss_grad  = \
+#        make_functions(X, Lam, lam0, lam0_delta, K, 
+#                       K_chol     = K_chol,
+#                       sig2_omega = 1., 
+#                       sig2_mu    = 10.)
+#
+#    ## initialize basis and weights
+#    th = np.zeros(parser.N)
+#    parser.set(th, 'betas', .01 * K_chol.dot(np.random.randn(len(lam0), K)).T)
+#    parser.set(th, 'omegas', .01 * npr.randn(N, K))
+#    parser.set(th, 'mus', .01 * npr.randn(N))
+#
+#    ## use cache if available
+#    basis_cache = 'cache/basis_fit_K-4_V-2728.pkl'
+#    USE_CACHE = True
+#    if os.path.exists(basis_cache) and USE_CACHE:
+#        th_cache, lam0_cache, lam0_delta_cache, parser_cache = load_basis_fit(basis_cache)
+#        betas_cache = parser_cache.get(th, 'betas')
+#        betas       = parser.get(th, 'betas')
+#        if betas_cache.shape[1] != len(lam0):
+#            print "    Interpolating cached basis to new lam0. "
+#            for k in range(betas_cache.shape[0]):
+#                betas[k, :] = np.interp(lam0, lam0_cache, betas_cache[k, :])
+#            parser.set(th, 'betas', betas)
+#            parser.set(th, 'mus', parser_cache.get(th_cache, 'mus'))
+#            parser.set(th, 'omegas', parser_cache.get(th_cache, 'omegas'))
+#        else: 
+#            th = th_cache
+#
+#    ## sanity check gradient
+#    check_grad(fun = lambda th: loss_fun(th) + prior_loss(th), # X, Lam), 
+#               jac = lambda th: loss_grad(th) + prior_loss_grad(th), #, X, Lam),
+#               th  = th)
+#
+#    ## train model
+#    parser.set(th, 'betas', np.linalg.solve(K_chol, parser.get(th, 'betas').T).T)
+#    th = train_model(th, loss_fun, loss_grad, prior_loss, prior_loss_grad,
+#                          cvx_iter=100000, sgd_iter=10,
+#                          learning_rate = 1e-3, momentum=.9, verbose=10)
+#    print "Fit loss: ", loss_fun(th)
+#    dth = loss_grad(th)
+#    print "Gradient mag: ", np.sqrt((dth*dth).sum())
+#    mus    = parser.get(th, 'mus')
+#    betas  = parser.get(th, 'betas')
+#    omegas = parser.get(th, 'omegas')
+#    W = np.exp(omegas)
+#    W = W / np.sum(W, axis=1, keepdims=True)
+#    B = np.exp(betas)
+#    B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
+#    M = np.exp(mus)
+#    Xtilde = np.dot(W*M, B)
+#
+#    # cache result
+#    save_basis_fit(th, lam0, lam0_delta, parser)
+#
+#    ## sanity check out of sample fits
+#    if False:
+#        def plot_fits(qobj, idxs, W, B, refit_w = True, sgd_iter=1000):
+#            for n in idxs:
+#                fig, axarr = plt.subplots(2, 1, figsize=(12,6))
+#                z_n    = qobj['Z'][n]
+#                spec_n = qobj['spectra'][n, :]
+#                ivar_n = qobj['spectra_ivar'][n, :]
+#                if refit_w:
+#                    w = fit_weights_given_basis(B, lam0, spec_n, ivar_n, z_n, lam_obs, sgd_iter=sgd_iter)
+#                else:
+#                    w = W[n, :]
+#                    m = M[n]
+#                axarr[0].plot(lam_obs / (1 + z_n), spec_n)
+#                axarr[0].plot(lam0, m*w.dot(B), linewidth=3)
+#                axarr[0].plot(lam_obs / (1 + z_n), np.sqrt(ivar_n), color='grey', alpha=.5)
+#                axarr[0].set_xlim( min(lam_obs/(1+z_n)), max(lam_obs/(1+z_n)) )
+#                axarr[1].bar(np.arange(len(w)), w, width=.7, alpha=.5)
+#            plt.show()
+#
+#        train_idxs = [0, 20, 14, 300]
+#        plot_fits(qtrain, train_idxs, W, B, refit_w = False)
+#        plot_fits(qtrain, train_idxs, W, B, refit_w =True)
+#
+#        ## visualize one example in a random direction
+#        n = 20
+#        w,lfun = fit_weights_given_basis(B, lam0, qtrain['spectra'][n],
+#                                             qtrain['spectra_ivar'][n],
+#                                             qtrain['Z'][n], 
+#                                             lam_obs, return_loss=True, sgd_iter=1000)
+#        ll_rand = evaluate_random_direction(fun = lfun, x0=np.log(w), n = 100, delta=.01)
+#        fig = plt.figure()
+#        plt.plot(ll_rand)
+#        plt.title(" Random direction for fit_weights_given_basis loss")
+#        plt.show()
+#        test_idxs = [0, 10, 95, 139]
+#        plot_fits(qtest, test_idxs, refit_w = True)
+#
 
 
 ## or load from file load and interpolate existing basis

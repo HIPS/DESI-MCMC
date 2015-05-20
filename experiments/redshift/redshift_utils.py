@@ -1,13 +1,15 @@
-import numpy as np
 import fitsio
 import sys, os
 from os.path import basename, splitext
-sys.path.append("../..")
-#import planck
+import CelestePy.planck
 import scipy.integrate as integrate
 from scipy import interpolate
 from scipy.optimize import minimize
-#from funkyyak import grad, numpy_wrapper as np
+import autograd.numpy.linalg as npla
+import autograd.numpy        as np
+import autograd.numpy.random as npr
+import autograd.scipy.misc   as scpm
+from autograd import grad
 import matplotlib.pyplot as plt
 
 def sinc_interp(new_samples, samples, fvals, left=None, right=None):
@@ -66,10 +68,10 @@ def resample_rest_frame(spectra, spectra_ivar, zs, lam_obs, lam0):
                                                       right = np.nan)
     return spectra_resampled, spectra_ivar_resampled, lam_mat
 
-def get_lam0(lam_subsample=10):
+def get_lam0(lam_subsample=10, eigen_file='../../data/eigen_specs/spEigenQSO-55732.fits'):
     """ Gets the lambda values from the spEigenQSO file, uses as fixed basis inputs """
-    header     = fitsio.read_header('../../data/eigen_specs/spEigenQSO-55732.fits')
-    eigQSOfits = fitsio.FITS('../../data/eigen_specs/spEigenQSO-55732.fits')
+    header     = fitsio.read_header()
+    eigQSOfits = fitsio.FITS(eigen_file)
     lam0       = 10.**(header['COEFF0'] + np.arange(header['NAXIS1']) * header['COEFF1'])
     lam0       = lam0[::lam_subsample]
     lam0_delta = np.concatenate((lam0[1:] - lam0[:-1], [lam0[-1] - lam0[-2]]))
@@ -183,6 +185,7 @@ def load_specs_from_disk(spec_files):
     spec_lams   = []
     spec_ivars  = []
     spec_mods   = []
+    spec_zs     = []
     for i in range(len(spec_files)):
         if i % 20 == 0: 
             sys.stdout.write("\r  load_specs_from_disk ... (spec %d of %d)" % (i, len(spec_files)))
@@ -198,6 +201,7 @@ def load_specs_from_disk(spec_files):
         spec_ivar = sdf[1]['ivar'].read()
         spec_lam  = np.power(10., sdf[1]['loglam'].read())
         spec_mod  = sdf[1]['model'].read()
+        spec_z    = sdf[2]['Z'].read()
         unique_lams = np.unique(np.concatenate((unique_lams, spec_lam)))
 
         # store list so we don't have to hit the disk again
@@ -206,20 +210,20 @@ def load_specs_from_disk(spec_files):
         spec_ivars.append(spec_ivar)
         spec_mods.append(spec_mod)
         spec_ids.append( basename( splitext(spec_files[i])[0] ) )
+        spec_zs.append(spec_z)
 
     ## put everything in one big lam_obs
-    spec_grid = np.zeros((len(spec_fluxes), len(unique_lams)))
+    spec_grid      = np.zeros((len(spec_fluxes), len(unique_lams)))
     spec_ivar_grid = np.zeros((len(spec_fluxes), len(unique_lams)))
-    spec_mod_grid = np.zeros((len(spec_fluxes), len(unique_lams)))
+    spec_mod_grid  = np.zeros((len(spec_fluxes), len(unique_lams)))
     for i in range(len(spec_fluxes)):
         start_i = np.where(unique_lams==spec_lams[i][0])[0][0]
         end_i   = np.where(unique_lams==spec_lams[i][-1])[0][0]+1
         spec_grid[i, start_i:end_i]      = spec_fluxes[i]
         spec_ivar_grid[i, start_i:end_i] = spec_ivars[i]
-        spec_mod_grid[i, start_i:end_i] = spec_ivars[i]
-
-    return spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, spec_ids, bad_ids
-
+        spec_mod_grid[i, start_i:end_i]  = spec_mods[i]
+    return spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, \
+           np.array(spec_zs), spec_ids, bad_ids
 
 # precomputed 10^((48.6 - 2.5*17 + 22.5)/2.5)
 flux_constant = 275422870333.81744384765625

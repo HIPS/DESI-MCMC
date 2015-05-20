@@ -51,7 +51,7 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
 
     max_n = -1
     max_score = -np.inf
-    
+
     # loop over number of Gaussians in mixture
     # find which is best through validation likelihood
     for n in range(1, max_gaussians):
@@ -74,23 +74,22 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
                 val_idx = (val[:,0] > bin) & (val[:,0] < (bin + diff))
 
             train_bin = train[train_idx]
-    
+
             g = mixture.GMM(n_components=n, covariance_type='full')
             g.fit(train_bin[:,1:])
 
             val_bin = val[val_idx]
             score += np.sum(g.score(val_bin[:,1:]))
-    
         if verbose:
             print "score", score
 
         if score > max_score:
             max_score = score
             max_n = n
-    
+
     if verbose:
         print "best n is:", max_n
-    
+
     gs = []
 
     if verbose:
@@ -124,7 +123,6 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
         # calculate mean and mle
         sum_sq_mle = 0.
         sum_sq_mean = 0.
-    
         preds = np.zeros((len(test_bin), 2))
         for i,t in enumerate(test_bin):
             max_score_test = -np.inf
@@ -135,16 +133,16 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
                 test_copy = np.zeros((1, 5))
                 test_copy[0,:4] = t[1:5]
                 test_copy[0, 4] = z
-    
+
                 score = g.score(test_copy)
                 if score > max_score_test:
                     max_score_test = score
                     z_max = z
-    
+
                 prob = np.exp(score)
                 sum_weights += prob
                 mean += prob * z
-    
+
             mean /= sum_weights
             preds[i][0] = z_max
             preds[i][1] = mean
@@ -162,22 +160,31 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
 
 if __name__ == "__main__":
     # import FITS file
-    data_file = fitsio.FITS('../dr7qso.fit')[1].read()
+    data_file = fitsio.FITS('../../../data/DR10QSO/DR10Q_v2.fits')[1].read()
     
-    data = np.zeros((len(data_file['UMAG']), 6))
-    data[:,0] = data_file['UMAG']
-    data[:,1] = data_file['GMAG']
-    data[:,2] = data_file['RMAG']
-    data[:,3] = data_file['IMAG']
-    data[:,4] = data_file['ZMAG']
-    data[:,5] = data_file['z']
+    #data = np.zeros((len(data_file['UMAG']), 6))
+    data = np.column_stack((data_file['PSFMAG'], data_file['Z_VI']))
+    data = data[0:1000,:]
+    #data[:,0] = data_file['UMAG']
+    #data[:,1] = data_file['GMAG']
+    #data[:,2] = data_file['RMAG']
+    #data[:,3] = data_file['IMAG']
+    #data[:,4] = data_file['ZMAG']
+    #data[:,5] = data_file['z']
     
+
+    
+    # convert to nanomaggies for the sake of example
+    data[:,:5] = mags2nanomaggies(data[:,:5])
+
     # make sure there are no zero mags
     for i in range(5):
         data = data[data[:,i] != 0]
 
-    # convert to nanomaggies for the sake of example
-    data[:,:5] = mags2nanomaggies(data[:,:5])
+    valid_idx = np.sum(np.isinf(data), axis=1) == 0
+    data      = data[valid_idx, :]
+
+
 
     # split into training and test
     train = data[:int(0.8 * len(data)),:]
@@ -186,8 +193,8 @@ if __name__ == "__main__":
     # minimum and maximum MAGS we want to bin
     min_i = 17.5
     max_i = 20.5
-    width_i = 0.2
-    max_gaussians = 50
+    width_i = 1.
+    max_gaussians = 10
 
     model, preds_mle, preds_mean = \
         bovy_xdqsoz(train, test, min_i, max_i, width_i, max_gaussians, verbose=True)
