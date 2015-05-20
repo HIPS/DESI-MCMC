@@ -9,14 +9,23 @@ sys.path.insert(0, '../')
 from redshift_utils import nanomaggies2mags, mags2nanomaggies
 
 """
-train and test have 6 columns, 5 ugriz bands in nanomaggies + redshift
-min_i, max_i, diff - in units of mags for binning i-magnitude
-max_gaussians - the maximum number of components in the mixture you want
-to validate
-verbose - should we print debugging output?
+Parameters:
+    train and test have 6 columns, 5 ugriz bands in nanomaggies + redshift
+    min_i, max_i, diff - in units of mags for binning i-magnitude
+    max_gaussians - the maximum number of components in the mixture you want
+        to validate
+    restrict_range - should we ignore data with i-magnitude outside of the
+        (min_i, max_i) range?
+    verbose - should we print debugging output?
+
+Returns:
+    model - list of GMM objects
+    preds_mle, preds_mean - mode and mean of posterior for redshift, predictions
+        in same order as test cases. If restrict_range=True, out-of-range
+        predictions are marked as 0.
 """
 def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
-                verbose=False):
+                restrict_range=False, verbose=False):
     train = np.copy(train_raw)
     test = np.copy(test_raw)
 
@@ -53,14 +62,23 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
         for bin in np.arange(min_i, max_i, diff):
             if verbose:
                 print "processing bin", bin
-            train_bin = train[train[:,0] > bin]
-            train_bin = train_bin[train_bin[:,0] < (bin + diff)]
+
+            if not restrict_range and np.isclose(bin, min_i):
+                train_idx = train[:,0] < (bin + diff)
+                val_idx = val[:,0] < (bin + diff)
+            elif not restrict_range and np.isclose(bin, max_i - diff):
+                train_idx = train[:,0] > bin
+                val_idx = val[:,0] > bin
+            else:
+                train_idx = (train[:,0] > bin) & (train[:,0] < (bin + diff))
+                val_idx = (val[:,0] > bin) & (val[:,0] < (bin + diff))
+
+            train_bin = train[train_idx]
     
             g = mixture.GMM(n_components=n, covariance_type='full')
             g.fit(train_bin[:,1:])
 
-            val_bin = val[val[:,0] > bin]
-            val_bin = val_bin[val_bin[:,0] < (bin + diff)]
+            val_bin = val[val_idx]
             score += np.sum(g.score(val_bin[:,1:]))
     
         if verbose:
@@ -85,15 +103,22 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
             start = time.time()
             print "on bin", bin
 
-        train_bin = train[train[:,0] > bin]
-        train_bin = train_bin[train_bin[:,0] < (bin + diff)]
+        if not restrict_range and np.isclose(bin, min_i):
+            train_idx = train[:,0] < (bin + diff)
+            test_idx = test[:,0] < (bin + diff)
+        elif not restrict_range and np.isclose(bin, max_i - diff):
+            train_idx = test[:,0] > bin
+            test_idx = test[:,0] > bin
+        else:
+            train_idx = (train[:,0] > bin) & (train[:,0] < (bin + diff))
+            test_idx = (test[:,0] > bin) & (test[:,0] < (bin + diff))
+
+        train_bin = train[train_idx]
     
         g = mixture.GMM(n_components=max_n, covariance_type='full')
         g.fit(train_bin[:,1:])
-    
         gs.append(g)
 
-        test_idx = (test[:,0] > bin) & (test[:,0] < (bin + diff))
         test_bin = test[test_idx]
 
         # calculate mean and mle
@@ -125,6 +150,9 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
             preds[i][1] = mean
 
         test[test_idx,6:8] = preds[:,:]
+
+        c = [0, 5, 6, 7]
+        print test[:,c]
     
         if verbose:
             stop = time.time()
