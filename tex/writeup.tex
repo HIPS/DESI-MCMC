@@ -497,6 +497,27 @@ where
 \begin{align}
   f_{n,m,s} &= \sum_{k=1}^{K^{(psf)}} w_{n,k}^{(psf)} \sum_{i=1}^2 \theta_{s,i} \sum_{j=1}^{K_i} w_{i,j} \mathcal{N} \left(m | u_s + \mu^{(psf)}_{n,k}, \Sigma^{(psf)}_{n,k} + \sigma_{i,j} R_s R_s^\trans \right)
 \end{align}
+For the source specific brightness parameters, $b_{s,u}, \dots, b_{s,z}$, we can derive the gradient of the conditional likelihood with respect to the brightness parameters for $u \in \{ugriz\}$.  
+\begin{align}
+  \ell(\Theta_s; \{z_{n,m,s}\}) &= \sum_{n,m} z_{n,m,s} \log\left( b_{s, \beta_n} f_{n,m,s} \right) - b_{s, \beta_n} f_{n,m,s}  \\
+  \frac{\partial \ell}{\partial b_{s,u}} &= \sum_{n \in I_u} \sum_{m \in \mathcal{P}_n} \frac{z_{n,m,s}}{b_{s,u}} - f_{n,m,s}
+\end{align}
+
+Differentiating with respect to the exponential/DeVacouler's mixing parameter can be easily calculated by rewriting the conditional likelihood
+\begin{align}
+  f_{n,m,s} &= \theta_s f^{(exp)}_{n,m,s} + (1 - \theta_s) f^{(dev)}_{n,m,s} \\
+  f^{(exp)}_{n,m,s} 
+    &= \sum_{k=1}^{K^{(psf)}} w_{n,k}^{(psf)} \sum_{j=1}^{K_i} w_j^{(exp)} \mathcal{N} \left(m | u_s + \mu^{(psf)}_{n,k}, \Sigma^{(psf)}_{n,k} + \sigma_j^{(exp)} R_s R_s^\trans \right) \\
+  \ell(\Theta_s; \{z_{n,m,s}\}) 
+    &= \sum_{n,m} z_{n,m,s} \log\left( b_{s, \beta_n} (\theta_s f^{(exp)}_{n,m,s} + (1 - \theta_s) f^{(dev)}_{n,m,s})\right) - \\
+    & b_{s, \beta_n} (\theta_s f^{(exp)}_{n,m,s} + (1 - \theta_s) f^{(dev)}_{n,m,s})  \\ 
+  \frac{\partial \ell}{\partial \theta_s} 
+    &= \sum_{n,m} \frac{z_{n,m,s}}{f_{n,m,s}} \left(f^{(exp)}_{n,m,s} - f^{(dev)}_{n,m,s}\right) -
+       b_{s,\beta_n} \left(f^{(exp)}_{n,m,s} - f^{(dev)}_{n,m,s}\right)
+\end{align}
+
+
+
 
 
 \paragraph{Univariate conditionals}
@@ -915,8 +936,6 @@ We can sample each source specific variable, $t_s, b_s$ and $u_s$ independently 
   \item Propose to kill an existing source $s$. Accept / reject.
   \end{itemize}
 \end{itemize}
-
-
 
 \section{Priors}
 For sampling, we must define priors over all of our source and image parameters.  It is important to note that despite the number of sources, $S$, and the total number of pixel observations, $N \times M$, may grow to very large values, the maximum likelihood estimate of individual source parameters $t_s, u_s$, and $b_s$ may end up quite far from the true value of the source-specific parameters.  For instance, if we know the true value of $u_s$ and the corresponding source responsibility pixels, $z_{n,m,s}$, all of the information we have about $t_s$ and $b_s$ are given by a single Poisson observation 
