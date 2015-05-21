@@ -555,11 +555,17 @@ quasars by $i$-band magnitude and then, within each bin,
 fitting a mixture of Gaussians to the joint distribution of
 redshift and the relative magnitudes of the other bands. In our analysis, we binned
 the $i$-magnitude
-into bins of width 0.2 and then fit a mixture of 25 Gaussians for the joint distribution in each bin
-(we chose this number of Gaussians through validation). We can calculate a marginal distribution
+into bins of width 0.2 and then fit a mixture of Gaussians to the joint distribution in each bin,
+where the number of Gaussians is chosen through validation. We can calculate a marginal distribution
 over redshift given the $ugriz$ bands, and we use both the mean and MLE of this posterior as
 point predictions for comparison.
 
+A disadvantage of the Bovy approach is there there is no physical significance to the mixture
+of Gaussians. In theory, it suggests that there is some probability of negative fluxes in the bands,
+which is physically impossible. Furthermore, the original method trains and tests the model
+on a pre-specified range of $i$-magnitudes, which is problematic if we want to predict
+the redshifts of much brighter or much dimmer stars. For the sake of a fair comparison, we bin
+the out-of-range $i$-magnitudes into the lowest and highest bins appropriately in our experiments.
 
 The method from \cite{brescia2013photometric} involves a neural network with four layers, i.e.,
 with two hidden layers. Given that the number of inputs is $N$, the first hidden layer has
@@ -567,6 +573,8 @@ $(2N + 1)$ outputs and the second hidden layer has anywhere from 1 to $(N - 1)$ 
 the number of hidden nodes through validation, we used a neural network with 5 nodes
 in the input layer, for each of the five $ugriz$ bands, 11 nodes in the first hidden layer, 2 nodes
 in the second hidden layer, and a single output node.
+
+\textbf{some disadvantage}
 
 
 
