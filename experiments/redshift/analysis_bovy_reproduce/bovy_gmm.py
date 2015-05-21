@@ -200,6 +200,7 @@ if __name__ == "__main__":
     # don't include indices for which we did not make a prediction, i.e.,
     # i-magnitude out of range
     pred_idx = preds_mle != 0
+    print "number of predictions:", len(pred_idx)
 
     preds_mle = preds_mle[pred_idx]
     preds_mean = preds_mean[pred_idx]
