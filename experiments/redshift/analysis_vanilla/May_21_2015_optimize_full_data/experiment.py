@@ -75,8 +75,8 @@ if __name__=="__main__":
     train_idx_sub = train_idx[rand_idx[0:NUM_TRAIN_EXAMPLE]]
 
     ## only load in NUM_TRAIN spec files
-    train_spec_files = np.array(qso_files)[train_idx]
-    test_spec_files  = np.array(qso_files)[test_idx]
+    train_spec_files = np.array(spec_files)[train_idx]
+    test_spec_files  = np.array(spec_files)[test_idx]
     spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, spec_zs, spec_ids, badids = \
         ru.load_specs_from_disk(train_spec_files)
 
@@ -158,11 +158,12 @@ if __name__=="__main__":
                    num_iters = 500,
                    step_size = .1,
                    gamma     = .99)
+    qfb.save_basis_fit(min_x, lam0, lam0_delta, parser, data_dir="")
 
     ## tighten it up a bit
     res = minimize(fun = lambda th: loss_fun(th) + prior_loss(th),
                    jac = lambda th: loss_grad(th) + prior_loss_grad(th),
-                   x0  = th_mle,
+                   x0  = min_x,
                    method = 'L-BFGS-B',
                    options = {'maxiter':500, 'disp':True})
 

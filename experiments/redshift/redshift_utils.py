@@ -12,8 +12,13 @@ import autograd.scipy.misc   as scpm
 from autograd import grad
 import matplotlib.pyplot as plt
 
-NERSC_SPECTRA_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/spectro/redux/v5_5_12/spectra"
-NERSC_DR10QSO_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/spectro/redux/v5_5_12/spectra"
+SPECTRA_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/spectro/redux/v5_5_12/spectra"
+DR10QSO_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/qso/DR10Q/"
+TRAIN_TEST_SPLIT_LOC = "/global/homes/a/acmiller/Proj/DESIMCMC/experiments/redshift/"
+
+if not os.path.exists(DR10QSO_LOC):
+    DR10QSO_LOC = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/data/DR10QSO/"
+    TRAIN_TEST_SPLIT_LOC = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/experiments/redshift/"
 
 split_types = ["random", "flux", "redshift"]
 def load_DR10QSO_train_test_idx(split_type="random"):
@@ -21,21 +26,21 @@ def load_DR10QSO_train_test_idx(split_type="random"):
         raise ValueError('split_type %s not found!'%split_type)
 
     # grab the train/test split
-    f = file("split_%s.bin"%split_type, 'rb')
+    f = file(join(TRAIN_TEST_SPLIT_LOC, "split_%s.bin"%split_type), 'rb')
     train_idx =  np.load(f)
     test_idx  =  np.load(f)
     f.close()
 
-    dr10file = fitsio.FITS('../../data/DR10QSO/DR10Q_v2.fits')
+    # select DR10Q_v2 file
+    dr10filepath = join(DR10QSO_LOC, 'DR10Q_v2.fits')
+    dr10file     = fitsio.FITS(dr10filepath)
     qso_psf_flux = dr10file[1]['PSFFLUX'].read()
-    qso_z        = dr10file[1]['Z_VI']
-    qso_data = np.column_stack((dr10file[1]['PSFFLUX'].read(),
-                                dr10file[1]['Z_VI'].read()))
+    qso_z        = dr10file[1]['Z_VI'].read()
 
     # construct NERSC file paths
     print "constructing NERSC file paths to %d quasar spectra"%(qso_z.shape[0])
     qso_ids           = dr10file[1][['PLATE', 'MJD', 'FIBERID']].read()
-    spec_url_template = join(NERSC_SPECTRA_LOC, "%04d/spec-%04d-%05d-%04d.fits")
+    spec_url_template = join(SPECTRA_LOC, "%04d/spec-%04d-%05d-%04d.fits")
     qso_files         = [spec_url_template%(qid[0], qid[0], qid[1], qid[2]) for qid in qso_ids]
     return qso_psf_flux, qso_z, qso_files, train_idx, test_idx
 
