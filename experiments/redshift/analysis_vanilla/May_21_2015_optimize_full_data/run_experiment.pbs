@@ -1,6 +1,6 @@
-#PBS -q debug
+#PBS -q regular                      # debug or regular
 #PBS -l mppwidth=24                  # number of nodes * cores per node, edison nodes have 24 cores
-#PBS -l walltime=00:15:00            # hr:min:sec or hr:min or just min
+#PBS -l walltime=00:45:00            # hr:min:sec or hr:min or just min
 #PBS -N optimize_random
 #PBS -e optimize_basis.$PBS_JOBID.err
 #PBS -o optimize_basis.$PBS_JOBID.out

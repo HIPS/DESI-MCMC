@@ -16,6 +16,8 @@ import GPy
 ### Experiment Params
 ###
 NUM_TRAIN_EXAMPLE = 20000
+MAX_LBFGS_ITER    = 20000
+MAX_RMSPROP_ITER  = 500
 SEED              = 42
 NUM_BASES         = 4
 BETA_VARIANCE     = 1.
@@ -74,9 +76,12 @@ if __name__=="__main__":
     rand_idx      = np.random.permutation(len(train_idx))
     train_idx_sub = train_idx[rand_idx[0:NUM_TRAIN_EXAMPLE]]
 
+    #rand_idx      = np.random.permutation(len(test_idx))
+    #test_idx_sub  = test_idx[rand_idx[0:NUM_TEST_EXAMPLE]]
+
     ## only load in NUM_TRAIN spec files
-    train_spec_files = np.array(spec_files)[train_idx]
-    test_spec_files  = np.array(spec_files)[test_idx]
+    train_spec_files = np.array(spec_files)[train_idx_sub]
+    #test_spec_files  = np.array(spec_files)[test_idx]
     spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, spec_zs, spec_ids, badids = \
         ru.load_specs_from_disk(train_spec_files)
 
@@ -130,6 +135,15 @@ if __name__=="__main__":
     parser.set(th, 'omegas', .01 * npr.randn(Nspec, NUM_BASES))
     parser.set(th, 'mus', .01 * npr.randn(Nspec))
 
+    ### if file exists, at least pull basis out
+    #if os.path.exists("basis_fit_K-%d_V-2728.pkl"%NUM_BASES):
+    #    print "basis fit file exists! - checking basis"
+    #    th_disk, lam0_disk, lam0_delta_disk, parser_disk = \
+    #        qfb.load_basis_fit("basis_fit_K-%d_V-2728.pkl"%NUM_BASES)
+    #    if np.all(lam0_disk == lam0) and :
+    #        print "basis size is consistent - initializing..."
+    #        parser.set(th, 'betas', parser_disk.get('betas'))
+
     ## sanity check gradient
     check_grad(fun = lambda th: loss_fun(th) + prior_loss(th), # X, Lam), 
                jac = lambda th: loss_grad(th) + prior_loss_grad(th), #, X, Lam),
@@ -155,9 +169,9 @@ if __name__=="__main__":
     out = rms_prop(grad      = lambda th: loss_grad(th) + prior_loss_grad(th),
                    x         = th,
                    callback  = callback,
-                   num_iters = 500,
-                   step_size = .1,
-                   gamma     = .99)
+                   num_iters = MAX_RMSPROP_ITER,
+                   step_size = .01,
+                   gamma     = .98)
     qfb.save_basis_fit(min_x, lam0, lam0_delta, parser, data_dir="")
 
     ## tighten it up a bit
@@ -165,7 +179,7 @@ if __name__=="__main__":
                    jac = lambda th: loss_grad(th) + prior_loss_grad(th),
                    x0  = min_x,
                    method = 'L-BFGS-B',
-                   options = {'maxiter':500, 'disp':True})
+                   options = {'maxiter':MAX_LBFGS_ITER, 'disp':True})
 
     ## save result
     qfb.save_basis_fit(res.x, lam0, lam0_delta, parser, data_dir="")
