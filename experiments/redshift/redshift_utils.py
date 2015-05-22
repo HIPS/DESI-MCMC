@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 SPECTRA_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/spectro/redux/v5_5_12/spectra"
 DR10QSO_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/qso/DR10Q/"
 TRAIN_TEST_SPLIT_LOC = "/global/homes/a/acmiller/Proj/DESIMCMC/experiments/redshift/"
+EIGEN_FILE_LOC = "/global/homes/a/acmiller/Proj/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
 
 if not os.path.exists(DR10QSO_LOC):
     DR10QSO_LOC = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/data/DR10QSO/"
@@ -102,8 +103,8 @@ def resample_rest_frame(spectra, spectra_ivar, zs, lam_obs, lam0):
 
 def get_lam0(lam_subsample=10, eigen_file='../../data/eigen_specs/spEigenQSO-55732.fits'):
     """ Gets the lambda values from the spEigenQSO file, uses as fixed basis inputs """
-    header     = fitsio.read_header()
-    eigQSOfits = fitsio.FITS(eigen_file)
+    header     = fitsio.read_header(EIGEN_FILE_LOC)
+    eigQSOfits = fitsio.FITS(EIGEN_FILE_LOC)
     lam0       = 10.**(header['COEFF0'] + np.arange(header['NAXIS1']) * header['COEFF1'])
     lam0       = lam0[::lam_subsample]
     lam0_delta = np.concatenate((lam0[1:] - lam0[:-1], [lam0[-1] - lam0[-2]]))
