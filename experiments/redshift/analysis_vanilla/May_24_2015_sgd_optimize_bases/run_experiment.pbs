@@ -1,0 +1,29 @@
+#PBS -q regular                      # debug or regular or premium
+#PBS -l mppwidth=24                  # number of nodes * cores per node, edison nodes have 24 cores
+#PBS -l walltime=06:45:00           # hr:min:sec or hr:min or just min
+#PBS -N optimize_random
+#PBS -e optimize_basis.$PBS_JOBID.err
+#PBS -o optimize_basis.$PBS_JOBID.out
+#PBS -j oe
+##PBS -M acm@seas.harvard.edu
+##PBS -m be
+
+# sends you to where the location where you submitted the job?
+cd $PBS_O_WORKDIR
+
+# for open mp (cython prange calls)
+#export OMP_NUM_THREADS=12
+
+# for Intel compiled programs
+# the "-cc none" option should be used if the number of threads is larger than 12
+# aprun arguments:
+#  -n  Number of MPI tasks.
+#  -N  (Optional) Number of tasks per Hopper Node. Default is 24.
+#  -d  (Optional) Depth, or number of threads, per MPI task. Use this 
+#        very important option in addition to OMP_NUM_THREADS for OpenMP. 
+#        Values can be 1-24. The default is 1. For OpenMP values of 2-6 are
+#        recommended.
+# sample stamp takes in: <stamp index> <num_samps> <num_chains> <stamp dir> <print_freq>
+echo "Running experiment in ${PBS_O_WORKDIR}"
+aprun -n 1 -N 1 -d 1 -cc none python experiment.py
+
