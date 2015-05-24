@@ -46,7 +46,7 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu)
 
     ## weighted loss function - observations have gaussian noise
     #def loss_fun(th_vec, X, inv_var, lam0_delta, K):
-    def loss_fun(th_vec):
+    def loss_fun(th_vec, idx=None):
         """ Negative log likelihood function.  The likelihood model encoded here is
 
                 beta_k  ~ GP(0, K)
@@ -68,6 +68,13 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu)
         betas  = parser.get(th_vec, 'betas')
         omegas = parser.get(th_vec, 'omegas')
 
+        # subselect for SGD
+        if idx is not None:
+            mus     = mus[idx]
+            omegas  = omegas[idx,:]
+            X       = X[idx, :]
+            inv_var = inv_var[idx, :]
+
         # exponentiate and normalize params
         W = np.exp(omegas)
         W = W / np.sum(W, axis=1, keepdims=True)
@@ -80,7 +87,7 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu)
     loss_grad = grad(loss_fun)
 
     ## joint prior over parameters
-    def prior_loss(th):
+    def prior_loss(th, idx=None):
         """ WHITENED SPACE PRIOR 
             - th_mat    : K x (N + V) matrix holding all weights and basis params
             - N         : number of examples in training set
@@ -89,13 +96,15 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu)
         mus    = parser.get(th, 'mus')
         betas  = parser.get(th, 'betas')
         omegas = parser.get(th, 'omegas')
+        if idx is not None:
+            mus    = mus[idx]
+            omegas = omegas[idx,:]
         loss_mus    = .5 / (sig2_mu) * np.sum(np.square(mus))
         loss_omegas = .5 / (sig2_omega) * np.sum(np.square(omegas))
         loss_betas  = .5 * np.sum(np.square(betas))
         return loss_omegas + loss_mus + loss_betas 
     prior_loss_grad = grad(prior_loss)
     return parser, loss_fun, loss_grad, prior_loss, prior_loss_grad
-
 
 ## simple gradient based NMF w/ gaussian noise training function
 def train_model(th, loss_fun, loss_grad, prior_loss, prior_grad, 
