@@ -26,7 +26,7 @@ NUM_BASES         = 4
 BETA_VARIANCE     = 1.
 BETA_LENGTHSCALE  = 40.
 
-CACHE_TRAIN_FILE = "qso_spec_data.bin"
+CACHE_TRAIN_FILE = "../../cache/qso_spectra_matrix/qso_spec_data_%s_split.bin"%SPLIT_TYPE
 def load_cached_train_matrix(train_spec_files, train_idx, force_no_cache=False):
     # check if cached file exists and is legit
     if os.path.exists(CACHE_TRAIN_FILE) and not force_no_cache:
@@ -34,7 +34,7 @@ def load_cached_train_matrix(train_spec_files, train_idx, force_no_cache=False):
       train_idx_disk = np.load(handle)
       # confirm input train_idx from script matches train_idx from disk
       if np.all(train_idx_disk == train_idx):
-          print "Found matching cached qso_spec_data matrix on disk!"
+          print "Found matching cached qso_spec_data matrix on disk! (%s)"%CACHE_TRAIN_FILE
           spec_grid      = np.load(handle)
           spec_ivar_grid = np.load(handle)
           spec_mod_grid  = np.load(handle)
@@ -68,7 +68,7 @@ def minimize_chunk(fun, jac, x0, method, chunk_size=250):
         qfb.save_basis_fit(res.x, lam0, lam0_delta, parser, data_dir="")
     return res
 
-def minibatch_minimize(grad, num_epochs=100, batch_size=250,
+def minibatch_minimize(grad, x, num_epochs=100, batch_size=250,
                         callback=None, step_size=0.1, mass=0.9, eps=1e-8):
     avg_sq_grad = np.ones(len(x)) # Is this really a sensible initialization?
     for epoch in xrange(num_epochs):

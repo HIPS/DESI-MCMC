@@ -63,7 +63,6 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu)
                 X_lam ~ Normal(f, var_lam)
         """
         # unpack params
-        N      = X.shape[0]
         mus    = parser.get(th_vec, 'mus')
         betas  = parser.get(th_vec, 'betas')
         omegas = parser.get(th_vec, 'omegas')
