@@ -15,11 +15,13 @@ import matplotlib.pyplot as plt
 SPECTRA_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/spectro/redux/v5_5_12/spectra"
 DR10QSO_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/qso/DR10Q/"
 TRAIN_TEST_SPLIT_LOC = "/global/homes/a/acmiller/Proj/DESIMCMC/experiments/redshift/"
-EIGEN_FILE_LOC = "/global/homes/a/acmiller/Proj/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
-
 if not os.path.exists(DR10QSO_LOC):
     DR10QSO_LOC = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/data/DR10QSO/"
     TRAIN_TEST_SPLIT_LOC = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/experiments/redshift/"
+
+EIGEN_FILE_LOC = "/global/homes/a/acmiller/Proj/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
+if not os.path.exists(EIGEN_FILE_LOC):
+    EIGEN_FILE_LOC = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
 
 split_types = ["random", "flux", "redshift"]
 def load_DR10QSO_train_test_idx(split_type="random"):
@@ -37,6 +39,13 @@ def load_DR10QSO_train_test_idx(split_type="random"):
     dr10file     = fitsio.FITS(dr10filepath)
     qso_psf_flux = dr10file[1]['PSFFLUX'].read()
     qso_z        = dr10file[1]['Z_VI'].read()
+
+    # remove zero'd fluxes
+    zero_idx = np.any(qso_psf_flux==0, axis=1)
+    print "    found %d rows with zero fluxes (removing from training)"%zero_idx.sum()
+    if zero_idx.sum() > 0:
+        for bad_idx in np.where(zero_idx)[0]:
+            train_idx = train_idx[train_idx != bad_idx]
 
     # construct NERSC file paths
     print "constructing NERSC file paths to %d quasar spectra"%(qso_z.shape[0])
