@@ -3,6 +3,7 @@ import numpy as np
 from sklearn import mixture
 import time
 import pickle
+import scipy.misc as scpm
 
 import sys
 sys.path.insert(0, '../')
@@ -107,14 +108,14 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
             train_idx = train[:,0] < (bin + diff)
             test_idx = test[:,0] < (bin + diff)
         elif not restrict_range and np.isclose(bin, max_i - diff):
-            train_idx = test[:,0] > bin
+            train_idx = train[:,0] > bin
             test_idx = test[:,0] > bin
         else:
             train_idx = (train[:,0] > bin) & (train[:,0] < (bin + diff))
             test_idx = (test[:,0] > bin) & (test[:,0] < (bin + diff))
 
         train_bin = train[train_idx]
-    
+
         g = mixture.GMM(n_components=max_n, covariance_type='full')
         g.fit(train_bin[:,1:])
         gs.append(g)
@@ -126,26 +127,40 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
         sum_sq_mean = 0.
         preds = np.zeros((len(test_bin), 2))
         for i,t in enumerate(test_bin):
-            max_score_test = -np.inf
-            z_max = -1
-            mean = 0.
-            sum_weights = 0.
-            for z in np.arange(0, 6, 0.01):
-                test_copy = np.zeros((1, 5))
-                test_copy[0,:4] = t[1:5]
-                test_copy[0, 4] = z
+            #max_score_test = -np.inf
+            #z_max = -1
+            #mean = 0.
+            #sum_weights = 0.
+            #for z in np.arange(0, 6, 0.01):
+            #    test_copy = np.zeros((1, 5))
+            #    test_copy[0,:4] = t[1:5]
+            #    test_copy[0, 4] = z
 
-                score = g.score(test_copy)
-                if score > max_score_test:
-                    max_score_test = score
-                    z_max = z
+            #    score = g.score(test_copy)
+            #    if score > max_score_test:
+            #        max_score_test = score
+            #        z_max = z
 
-                prob = np.exp(score)
-                sum_weights += prob
-                mean += prob * z
+            #    prob = np.exp(score)
+            #    sum_weights += prob
+            #    mean += prob * z
 
-            mean /= sum_weights
-            preds[i][0] = z_max
+            #mean /= sum_weights
+            #preds[i][0] = z_max
+            #preds[i][1] = mean
+            #print "slow z max = ", z_max
+            #print "slow max score = ", max_score_test
+            #print "slow mean = ", mean
+
+            ## much faster scoring computation (with einsum, below)
+            zgrid = np.arange(0,6,.01)
+            t_mat = np.column_stack( (np.tile(t[1:5], (len(zgrid), 1)), zgrid))
+            icovs = np.array([np.linalg.inv(c) for c in g.covars_])
+            dets  = np.array([np.linalg.det(c) for c in g.covars_])
+            scores = mog_loglike(t_mat, g.means_, icovs, dets, g.weights_)
+            probs = np.exp(scores) / np.sum(np.exp(scores))
+            mean  = np.sum(probs * zgrid)
+            preds[i][0] = zgrid[scores.argmax()]
             preds[i][1] = mean
 
         test[test_idx,6:8] = preds[:,:]
@@ -155,6 +170,18 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
             print "time for bin:", stop - start
     
     return gs, test[:,6], test[:,7]
+
+
+def mog_loglike(x, means, icovs, dets, pis):
+    xx = np.atleast_2d(x)
+    centered = xx[:,:,np.newaxis] - means.T[np.newaxis,:,:]
+    solved   = np.einsum('ijk,lji->lki', icovs, centered)
+    logprobs = -0.5*np.sum(solved * centered, axis=1) - np.log(2*np.pi) - 0.5*np.log(dets) + np.log(pis)
+    logprob  = scpm.logsumexp(logprobs, axis=1)
+    if len(x.shape) == 1:
+        return logprob[0]
+    else:
+        return logprob
 
 if __name__ == "__main__":
     # import FITS file
