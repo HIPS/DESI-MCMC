@@ -1,11 +1,17 @@
-#
-# This script implements functions for maximum likelihood 
-# estimation of a basis for a group of Quasar Spectra.  
-#
-# Roughly, this procedure is the following:
-#   - Resample spectra from lam_obs into rest frame grid lam0, (using Z_spec)
-#   - Fit optimize basis and weights in an NMF-like framework (with normal errors)
-#
+"""
+  Functions for fitting a positive basis to a collection of
+  quasar spectra using maximum likelihood.
+   Roughly, this procedure is the following:
+   - Resample spectra from lam_obs into rest frame grid lam0, (using Z_spec)
+   - Fit optimize basis and weights in an NMF-like framework (with normal errors)
+
+  The functions in this file are used in 
+
+    preproc_fit_basis.py
+    analysis_vanillia/.../experiment.py
+
+"""
+
 import fitsio
 from scipy import interpolate
 from scipy.optimize import minimize
@@ -17,26 +23,30 @@ from autograd.core import grad, primitive
 from autograd.util import quick_grad_check
 import autograd.numpy as np
 import autograd.numpy.random as npr
+import redshift_utils as ru
 
-def save_basis_fit(th, lam0, lam0_delta, parser, data_dir=""):
-    """ save basis fit info """
-    # grab B value for shape info
-    B = parser.get(th, 'betas')
-    with open(os.path.join(data_dir, 'basis_fit_K-%d_V-%d.pkl'%B.shape), 'wb') as handle:
-        pickle.dump(th, handle)
-        pickle.dump(lam0, handle)
-        pickle.dump(lam0_delta, handle)
-        pickle.dump(parser, handle)
-
-def load_basis_fit(fname):
-    with open(fname, 'rb') as handle:
-        th         = pickle.load(handle)
-        lam0       = pickle.load(handle)
-        lam0_delta = pickle.load(handle)
-        parser     = pickle.load(handle)
-    return th, lam0, lam0_delta, parser
-
+##############################################################################
+## Likelihood functions, prior functions
+##############################################################################
 def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu):
+    """ Make basis fitting functions
+      INPUTS: 
+        - X       : N_spec x len(lam0) matrix of spectra 
+                    (missing stuff can be 0'd out)
+        - inv_var : N_spec x len(lam0) matrix of spectra inverse variances 
+                    (0 = infinite variance = no observation)
+        - lam0       : wavelength observation locations
+        - lam0_delta : wavelength observation jumps (could be inferred...)
+        - K          : number of bases
+        - K_chol     : cholesky decomposition of MVN covariance prior for 
+                       a single basis
+        - sig2_omega : variance for omega (logit loadings)
+        - sig2_mu    : variance for log magnitudes 
+
+      OUTPUTS: 
+        - loss_fun, loss_fun_grad, prior_loss, prior_loss_grad, train_model
+    """
+
     parser = ParamParser()
     V      = len(lam0)
     N      = X.shape[0]
@@ -69,10 +79,13 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu)
 
         # subselect for SGD
         if idx is not None:
-            mus     = mus[idx]
-            omegas  = omegas[idx,:]
-            X       = X[idx, :]
-            inv_var = inv_var[idx, :]
+            mus         = mus[idx]
+            omegas      = omegas[idx,:]
+            X_idx        = X[idx, :]
+            inv_var_idx = inv_var[idx, :]
+        else:
+            X_idx = X
+            inv_var_idx = inv_var
 
         # exponentiate and normalize params
         W = np.exp(omegas)
@@ -81,7 +94,7 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu)
         B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
         M = np.exp(mus)
         Xtilde = np.dot(W*M, B)
-        loss_mat = inv_var * np.square(X - Xtilde)
+        loss_mat = inv_var_idx * np.square(X_idx - Xtilde)
         return np.sum(loss_mat[~np.isnan(loss_mat)])
     loss_grad = grad(loss_fun)
 
@@ -105,7 +118,9 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu)
     prior_loss_grad = grad(prior_loss)
     return parser, loss_fun, loss_grad, prior_loss, prior_loss_grad
 
-## simple gradient based NMF w/ gaussian noise training function
+###############################################################################
+## Training functions - some optimization methods heuristically daisy-chained
+## together because it seems to work...
 def train_model(th, loss_fun, loss_grad, prior_loss, prior_grad, 
                 cvx_iter=20000, sgd_iter = 5000,
                 learning_rate = 1e-5, momentum = .9, verbose=100):
@@ -180,22 +195,62 @@ def train_model(th, loss_fun, loss_grad, prior_loss, prior_grad,
     return th
 
 
+##############################################################################
+## Basis and Training Data I/O
+##############################################################################
+def save_basis_fit(th, lam0, lam0_delta, parser, data_dir=""):
+    """ save basis fit info """
+    # grab B value for shape info
+    B = parser.get(th, 'betas')
+    with open(os.path.join(data_dir, 'basis_fit_K-%d_V-%d.pkl'%B.shape), 'wb') as handle:
+        pickle.dump(th, handle)
+        pickle.dump(lam0, handle)
+        pickle.dump(lam0_delta, handle)
+        pickle.dump(parser, handle)
 
-"""This example shows how to define the gradient of your own functions.
-This can be useful for speed, numerical stability, or in cases where
-your code depends on external library calls."""
+def load_basis_fit(fname):
+    with open(fname, 'rb') as handle:
+        th         = pickle.load(handle)
+        lam0       = pickle.load(handle)
+        lam0_delta = pickle.load(handle)
+        parser     = pickle.load(handle)
+    return th, lam0, lam0_delta, parser
 
-# @primitive tells autograd not to look inside this function, but instead
-# to treat it as a black box, whose gradient might be specified# later.
-# Functions with this decorator can contain anything that Python knows
-# how to execute.
-#@primitive
-#def nansum(x): 
-#    return np.nansum(x)
-#
-#
-## Check the gradients numerically, just to be safe.
-#quick_grad_check(nansum, npr.randn(10))
+CACHE_TRAIN_FILE_TEMPLATE = "cache/qso_spectra_matrix/qso_spec_data_%s_split.bin"
+def load_cached_train_matrix(train_spec_files, train_idx, split_type, force_no_cache=False):
+    # check if cached file exists and is legit
+    CACHE_TRAIN_FILE = CACHE_TRAIN_FILE_TEMPLATE%split_type
+    if os.path.exists(CACHE_TRAIN_FILE) and not force_no_cache:
+      handle    = open(CACHE_TRAIN_FILE, 'rb')
+      train_idx_disk = np.load(handle)
+      # confirm input train_idx from script matches train_idx from disk
+      if np.all(train_idx_disk == train_idx):
+          print "Found matching cached qso_spec_data matrix on disk! (%s)"%CACHE_TRAIN_FILE
+          spec_grid      = np.load(handle)
+          spec_ivar_grid = np.load(handle)
+          spec_mod_grid  = np.load(handle)
+          unique_lams    = np.load(handle)
+          spec_zs        = np.load(handle)
+          spec_ids       = np.load(handle)
+          return spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, spec_zs, spec_ids
+
+    #### load the slow way :(
+    print "cached training matrix is not the same!!! loading from spec files! (this will take a while)"
+    spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, spec_zs, spec_ids, badids = \
+        ru.load_specs_from_disk(train_spec_files)
+    with open(CACHE_TRAIN_FILE, 'wb') as handle:
+        np.save(handle, train_idx)
+        np.save(handle, spec_grid)
+        np.save(handle, spec_ivar_grid)
+        np.save(handle, spec_mod_grid)
+        np.save(handle, unique_lams)
+        np.save(handle, spec_zs)
+        np.save(handle, spec_ids)
+    return spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, spec_zs, spec_ids
+
+
+
+
 
 #if __name__=="__main__":
 #
@@ -352,6 +407,12 @@ your code depends on external library calls."""
 
 
 ## DEAD CODE
+
+
+
+
+
+
 ## iteratively minimize weight/basis pairs
 #def train_iterative(th, X, Lam, max_iter=100): 
 #    def loss_omegas(omegas, B):
