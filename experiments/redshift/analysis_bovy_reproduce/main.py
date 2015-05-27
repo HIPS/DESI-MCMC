@@ -19,10 +19,10 @@ NUM_TRAIN_EXAMPLE = "all"       #20000
 NUM_TEST_EXAMPLE  = 10000
 SEED              = 42
 MIN_I             = 17.5
-MAX_I             = 20.5
+MAX_I             = 21.3
 WIDTH_I           = .2
-MAX_GAUSSIANS     = 50
-
+MAX_GAUSSIANS     = 20
+FLUX_UNITS        = "mags" # "mags" or "nanos"
 
 def save_bovy_experiment(**kwargs):
     # populate dict
@@ -32,16 +32,17 @@ def save_bovy_experiment(**kwargs):
 
     # create filename
     bovy_experiment_filename = \
-        "bovy_exp_TRAIN-{num_train}_TEST-{num_test}_SEED-{seed}_MAXGAUSS-{maxgauss}_WIDTH-{width}.pkl".format(
+        "bovy_exp_SPLIT-{split}_TRAIN-{num_train}_TEST-{num_test}_SEED-{seed}_MAXGAUSS-{maxgauss}_WIDTH-{width}_UNITS-{units}.pkl".format(
+            split     = SPLIT_TYPE,
             num_train = experiment_dict['NUM_TRAIN_EXAMPLE'],
             num_test  = experiment_dict['NUM_TEST_EXAMPLE'],
             seed      = experiment_dict['SEED'],
             maxgauss  = experiment_dict['MAX_GAUSSIANS'],
-            width     = experiment_dict['WIDTH_I'])
+            width     = experiment_dict['WIDTH_I'], 
+            units     = FLUX_UNITS)
 
     with open(bovy_experiment_filename, 'wb') as handle:
         pickle.dump(experiment_dict, handle)
-
 
 if __name__=="__main__":
 
@@ -68,7 +69,7 @@ Running BOVY REPRODUCE experiment with
            max_gauss  = MAX_GAUSSIANS)
 
     # DR10 qso dataset and spec files
-    qso_psf_flux, qso_z, spec_files, train_idx, test_idx = \
+    qso_psf_flux, qso_psf_mags, qso_z, spec_files, train_idx, test_idx = \
         ru.load_DR10QSO_train_test_idx(split_type = SPLIT_TYPE)
 
     ## randomly subselect NUM_TRAIN
@@ -85,7 +86,10 @@ Running BOVY REPRODUCE experiment with
     test_idx_sub  = test_idx[rand_idx[0:NUM_TEST_EXAMPLE]]
 
     # create data matrix and fit model
-    data = np.column_stack((qso_psf_flux, qso_z))
+    if FLUX_UNITS == "nanos":
+        data = np.column_stack((qso_psf_flux, qso_z))
+    else:
+        data = np.column_stack((qso_psf_mags, qso_z))
 
     # grab 
     model, preds_mle, preds_mean = \
@@ -95,6 +99,7 @@ Running BOVY REPRODUCE experiment with
                         max_i         = MAX_I,
                         diff          = WIDTH_I,
                         max_gaussians = MAX_GAUSSIANS,
+                        flux_units    = FLUX_UNITS,
                         verbose       = True)
 
     # true values
@@ -104,7 +109,7 @@ Running BOVY REPRODUCE experiment with
 
     ## build an experiment dict for output
     save_bovy_experiment(
-         experiment_name   = "bovy_gmm", 
+         experiment_name   = "bovy_gmm",
          SPLIT_TYPE        = SPLIT_TYPE,
          NUM_TRAIN_EXAMPLE = NUM_TRAIN_EXAMPLE,
          NUM_TEST_EXAMPLE  = NUM_TEST_EXAMPLE,
@@ -113,6 +118,7 @@ Running BOVY REPRODUCE experiment with
          MAX_I             = MAX_I,
          WIDTH_I           = WIDTH_I,
          MAX_GAUSSIANS     = MAX_GAUSSIANS,
+         FLUX_UNITS        = FLUX_UNITS,
          preds_mle         = preds_mle,
          preds_mean        = preds_mean,
          z_test            = z_test,
@@ -121,4 +127,5 @@ Running BOVY REPRODUCE experiment with
          test_idx          = test_idx,
          test_idx_sub      = test_idx_sub
         )
+
 

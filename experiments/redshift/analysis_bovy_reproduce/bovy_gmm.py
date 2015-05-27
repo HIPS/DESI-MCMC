@@ -18,6 +18,7 @@ Parameters:
         to validate
     restrict_range - should we ignore data with i-magnitude outside of the
         (min_i, max_i) range?
+    fit_mags - should we save the distribution in log scale, or flux scale?
     verbose - should we print debugging output?
 
 Returns:
@@ -27,27 +28,38 @@ Returns:
         predictions are marked as 0.
 """
 def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
+                flux_units, #either nanos
                 restrict_range=False, verbose=False):
     train = np.copy(train_raw)
-    test = np.copy(test_raw)
+    test  = np.copy(test_raw)
 
-    # rearrange to get IUGRZz
-    for data,raw in [(train,train_raw), (test,test_raw)]:
-        data[:,0] = raw[:,3]
-        data[:,1] = raw[:,0]
-        data[:,2] = raw[:,1]
-        data[:,3] = raw[:,2]
+    # rearrange train/test to IUGRZz
+    train[:,0] = train_raw[:,3]  # 0 => I
+    train[:,1] = train_raw[:,0]  # 1 => U
+    train[:,2] = train_raw[:,1]  # 2 => G
+    train[:,3] = train_raw[:,2]  # 3 => R
+    test[:,0] = test_raw[:,3]  # 0 => I
+    test[:,1] = test_raw[:,0]  # 1 => U
+    test[:,2] = test_raw[:,1]  # 2 => G
+    test[:,3] = test_raw[:,2]  # 3 => R
 
-    for i in range(1, 5):
-        train[:,i] /= train[:,0] 
-        test[:,i] /= test[:,0] 
+    # train in terms of flux ratios
+    # always express 0 as mags (for the range)
+    if flux_units == "nanos":
+        for i in range(1, 5):
+            train[:,i] /= train[:,0] 
+            test[:,i] /= test[:,0] 
+        train[:,0] = nanomaggies2mags(train[:,0])
+        test[:,0]  = nanomaggies2mags(test[:,0])
 
-    train[:,0] = nanomaggies2mags(train[:,0])
-    test[:,0] = nanomaggies2mags(test[:,0])
+    elif flux_units == "mags":
+        for i in range(1, 5):  # difference ratio for mags
+            train[:,i] -= train[:,0]
+            test[:,i] -= test[:,0]
 
+    # separate train/val
     val = train[(0.75 * len(train)):,:]
     train = train[:(0.75 * len(train)),:]
-
     if verbose:
         print "Sizes:", len(train), len(val), len(test)
 
@@ -62,9 +74,6 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
 
         score = 0.
         for bin in np.arange(min_i, max_i, diff):
-            if verbose:
-                print "processing bin", bin
-
             if not restrict_range and np.isclose(bin, min_i):
                 train_idx = train[:,0] < (bin + diff)
                 val_idx = val[:,0] < (bin + diff)
@@ -74,6 +83,9 @@ def bovy_xdqsoz(train_raw, test_raw, min_i, max_i, diff, max_gaussians,
             else:
                 train_idx = (train[:,0] > bin) & (train[:,0] < (bin + diff))
                 val_idx = (val[:,0] > bin) & (val[:,0] < (bin + diff))
+
+            if verbose:
+                print "processing bin %2.2f (%d train, %d val)"%(bin, train_idx.sum(), val_idx.sum())
 
             train_bin = train[train_idx]
 
