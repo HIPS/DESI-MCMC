@@ -73,6 +73,7 @@ def make_functions(X, inv_var, lam0, lam0_delta, K, K_chol, sig2_omega, sig2_mu)
                 X_lam ~ Normal(f, var_lam)
         """
         # unpack params
+        N      = X.shape[0]
         mus    = parser.get(th_vec, 'mus')
         betas  = parser.get(th_vec, 'betas')
         omegas = parser.get(th_vec, 'omegas')
@@ -216,10 +217,14 @@ def load_basis_fit(fname):
         parser     = pickle.load(handle)
     return th, lam0, lam0_delta, parser
 
-CACHE_TRAIN_FILE_TEMPLATE = "cache/qso_spectra_matrix/qso_spec_data_%s_split.bin"
 def load_cached_train_matrix(train_spec_files, train_idx, split_type, force_no_cache=False):
     # check if cached file exists and is legit
-    CACHE_TRAIN_FILE = CACHE_TRAIN_FILE_TEMPLATE%split_type
+
+    CACHE_TRAIN_FILE = \
+      "cache/qso_spectra_matrix/qso_spec_data_split-{split}_num_train-{num_train}.bin".format(
+      split = split_type, num_train = len(train_idx))
+    print "cache filename = %s"%CACHE_TRAIN_FILE
+
     if os.path.exists(CACHE_TRAIN_FILE) and not force_no_cache:
       handle    = open(CACHE_TRAIN_FILE, 'rb')
       train_idx_disk = np.load(handle)
