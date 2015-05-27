@@ -238,7 +238,11 @@ def load_specs_from_disk(spec_files):
         try: 
             sdf = fitsio.FITS(spec_files[i])
         except:
+            print "BAD FILE: %s"%spec_files[i]
             bad_ids.append(i)
+            if len(bad_ids) > 1000: 
+                print "too many bad files - EXITING"
+                sys.exit(1)
             continue
         spec_flux = sdf[1]['flux'].read()
         spec_ivar = sdf[1]['ivar'].read()
