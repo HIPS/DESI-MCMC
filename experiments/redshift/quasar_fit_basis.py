@@ -217,12 +217,14 @@ def load_basis_fit(fname):
         parser     = pickle.load(handle)
     return th, lam0, lam0_delta, parser
 
+def cache_file_name(split_type, num_train):
+    return "cache/qso_spectra_matrix/qso_spec_data_split-{split}_num_train-{num_train}.bin".format(
+        split = split_type, num_train = num_train)
+
 def load_cached_train_matrix(train_spec_files, train_idx, split_type, force_no_cache=False):
     # check if cached file exists and is legit
 
-    CACHE_TRAIN_FILE = \
-      "cache/qso_spectra_matrix/qso_spec_data_split-{split}_num_train-{num_train}.bin".format(
-      split = split_type, num_train = len(train_idx))
+    CACHE_TRAIN_FILE = cache_file_name(split_type, len(train_idx))
     print "cache filename = %s"%CACHE_TRAIN_FILE
 
     if os.path.exists(CACHE_TRAIN_FILE) and not force_no_cache:
@@ -231,6 +233,7 @@ def load_cached_train_matrix(train_spec_files, train_idx, split_type, force_no_c
       # confirm input train_idx from script matches train_idx from disk
       if np.all(train_idx_disk == train_idx):
           print "Found matching cached qso_spec_data matrix on disk! (%s)"%CACHE_TRAIN_FILE
+          train_idx      = np.load(handle)
           spec_grid      = np.load(handle)
           spec_ivar_grid = np.load(handle)
           spec_mod_grid  = np.load(handle)

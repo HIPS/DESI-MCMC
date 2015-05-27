@@ -5,7 +5,7 @@ import quasar_fit_basis as qfb
 ###
 ### Experiment Params
 ###
-SPLIT_TYPE        = "flux" #split_types = ["random", "flux", "redshift"]
+SPLIT_TYPE        = "redshift" #split_types = ["random", "flux", "redshift"]
 NUM_TRAIN_EXAMPLE = 2000
 SEED              = 42
 BASIS_DIR         = "cache/basis_fits/"
@@ -36,7 +36,17 @@ if __name__=="__main__":
 
     ## only load in NUM_TRAIN spec files
     train_spec_files = np.array(spec_files)[train_idx_sub]
-    spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, spec_zs, spec_ids = \
-         qfb.load_cached_train_matrix(train_spec_files, train_idx_sub, SPLIT_TYPE)
+    spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, spec_zs, spec_ids, badids = \
+        ru.load_specs_from_disk(train_spec_files)
 
+    ## cache 
+    CACHE_TRAIN_FILE = qfb.cache_file_name(SPLIT_TYPE, NUM_TRAIN_EXAMPLE)
+    with open(CACHE_TRAIN_FILE, 'wb') as handle:
+        np.save(handle, train_idx)
+        np.save(handle, spec_grid)
+        np.save(handle, spec_ivar_grid)
+        np.save(handle, spec_mod_grid)
+        np.save(handle, unique_lams)
+        np.save(handle, spec_zs)
+        np.save(handle, spec_ids)
 

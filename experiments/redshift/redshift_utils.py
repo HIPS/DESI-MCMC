@@ -240,7 +240,7 @@ def load_specs_from_disk(spec_files):
         except:
             print "BAD FILE: %s"%spec_files[i]
             bad_ids.append(i)
-            if len(bad_ids) > 1000: 
+            if len(bad_ids) > 100: 
                 print "too many bad files - EXITING"
                 sys.exit(1)
             continue
