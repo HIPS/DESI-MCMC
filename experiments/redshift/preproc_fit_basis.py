@@ -15,9 +15,9 @@ import GPy
 ###
 ### Experiment Params
 ###
-SPLIT_TYPE        = "redshift"  #split_types = ["random", "flux", "redshift"]
+SPLIT_TYPE        = "flux"  #split_types = ["random", "flux", "redshift"]
 NUM_TRAIN_EXAMPLE = 2000
-MAX_LBFGS_ITER    = 5000
+MAX_LBFGS_ITER    = 10000
 NUM_BASES         = 4
 BETA_VARIANCE     = 1.
 BETA_LENGTHSCALE  = 40.
@@ -40,6 +40,10 @@ def initialize_from_lower_res(th_lo, lam_lo, parser_lo,
     return th_hi
 
 if __name__=="__main__":
+
+    # read in split type first
+    if len(sys.argv) > 1:
+        SPLIT_TYPE = sys.argv[1]
 
     print \
 """
