@@ -41,6 +41,22 @@ def initialize_from_lower_res(th_lo, lam_lo, parser_lo,
 
 if __name__=="__main__":
 
+    print \
+"""
+==============================================================================
+===  preproc fit basis with params
+==============================================================================
+    SPLIT_TYPE        = {split}
+    NUM_TRAIN_EXAMPLE = {ntrain}
+    MAX_LBFGS_ITER    = {maxiter}
+    NUM_BASES         = {num_bases}
+    BETA_VARIANCE     = {beta_var}
+    BETA_LENGTHSCALE  = {beta_ell}
+    BASIS_DIR         = {bdir}
+""".format(split = SPLIT_TYPE, ntrain=NUM_TRAIN_EXAMPLE, maxiter = MAX_LBFGS_ITER,
+           num_bases = NUM_BASES, beta_var = BETA_VARIANCE, beta_ell = BETA_LENGTHSCALE,
+           bdir = BASIS_DIR)
+
     # DR10 qso dataset and spec files
     qso_psf_flux, qso_psf_mags, qso_z, spec_files, train_idx, test_idx = \
         ru.load_DR10QSO_train_test_idx(split_type = SPLIT_TYPE)
