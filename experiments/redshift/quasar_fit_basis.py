@@ -199,11 +199,18 @@ def train_model(th, loss_fun, loss_grad, prior_loss, prior_grad,
 ##############################################################################
 ## Basis and Training Data I/O
 ##############################################################################
-def save_basis_fit(th, lam0, lam0_delta, parser, data_dir=""):
+def basis_filename(num_bases, split_type, lam0):
+    return "basis_fit_K-{num_bases}_V-{lam_len}_split-{split_type}.pkl".format(
+            num_bases = num_bases, lam_len=len(lam0), split_type=split_type)
+
+def save_basis_fit(th, lam0, lam0_delta, parser, split_type, data_dir=""):
     """ save basis fit info """
     # grab B value for shape info
     B = parser.get(th, 'betas')
-    with open(os.path.join(data_dir, 'basis_fit_K-%d_V-%d.pkl'%B.shape), 'wb') as handle:
+    bfname = basis_filename(num_bases  = B.shape[0],
+                            split_type = split_type,
+                            lam0       = lam0)
+    with open(os.path.join(data_dir, bfname), 'wb') as handle:
         pickle.dump(th, handle)
         pickle.dump(lam0, handle)
         pickle.dump(lam0_delta, handle)
