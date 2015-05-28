@@ -15,7 +15,7 @@ import GPy
 ###
 ### Experiment Params
 ###
-SPLIT_TYPE        = "random"  #split_types = ["random", "flux", "redshift"]
+SPLIT_TYPE        = "redshift"  #split_types = ["random", "flux", "redshift"]
 NUM_TRAIN_EXAMPLE = 2000
 MAX_LBFGS_ITER    = 5000
 NUM_BASES         = 4
@@ -155,8 +155,8 @@ if __name__=="__main__":
                     (i, loss_val, np.sqrt(np.dot(g,g)))
                 obj_vals.append(loss_val)
 
-        step_sizes = np.logspace(-1, -4.5, 15)
-        momentums  = np.logspace(-.1, -2.5, 15)
+        step_sizes = np.logspace(-1, -4.5, 16)
+        momentums  = np.logspace(-.1, -2.5, 16)
         for step_size, momentum in zip(step_sizes, momentums):
             print " === step_size = %2.6g, momentum = %2.6g ==="%(step_size, momentum)
             rms_prop(full_loss_grad, x=th, callback=callback,
@@ -201,33 +201,34 @@ if __name__=="__main__":
 
         ## plot random profiles
         #plot a handful of random directions
-        egrid = np.linspace(-1.5, 1.5, 30)
-        def gen_random_profile(th): 
-            rdir     = npr.randn(th.shape[0])
-            rdir     = rdir / np.sqrt(np.sum(rdir**2))
-            rdirloss = lambda(e): loss_fun(th + e*rdir) + prior_loss(th + e*rdir)
-            lgrid = np.array([rdirloss(e) for e in egrid])
-            return lgrid
+        #if False:
+        #    egrid = np.linspace(-1.5, 1.5, 30)
+        #    def gen_random_profile(th): 
+        #        rdir     = npr.randn(th.shape[0])
+        #        rdir     = rdir / np.sqrt(np.sum(rdir**2))
+        #        rdirloss = lambda(e): loss_fun(th + e*rdir) + prior_loss(th + e*rdir)
+        #        lgrid = np.array([rdirloss(e) for e in egrid])
+        #        return lgrid
 
-        plt.figure(1)
-        for i in range(5):
-            lprof = gen_random_profile(th_mle)
-            plt.plot(egrid, lprof)
-        plt.vlines(x = 0, ymin = lprof.min(), ymax = lprof.max(), linewidth=4)
-        plt.title("objective function, random directions")
-        plt.savefig("obj_fun_dirs.pdf", bbox_inches='tight')
-        plt.close("all")
+        #    plt.figure(1)
+        #    for i in range(5):
+        #        lprof = gen_random_profile(th_mle)
+        #        plt.plot(egrid, lprof)
+        #    plt.vlines(x = 0, ymin = lprof.min(), ymax = lprof.max(), linewidth=4)
+        #    plt.title("objective function, random directions")
+        #    plt.savefig("obj_fun_dirs_lamsample_%d.pdf"%lam_subsample, bbox_inches='tight')
+        #    plt.close("all")
 
     # exponentiate and normalize params
-    betas  = parser.get(th, 'betas')
-    omegas = parser.get(th, 'omegas')
-    mus    = parser.get(th, 'mus')
-    W = np.exp(omegas)
-    W = W / np.sum(W, axis=1, keepdims=True)
-    B = np.exp(np.dot(K_chol, betas.T).T)
-    B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
-    M = np.exp(mus)
-    Xtilde = np.dot(W*M, B)
+    #betas  = parser.get(th, 'betas')
+    #omegas = parser.get(th, 'omegas')
+    #mus    = parser.get(th, 'mus')
+    #W = np.exp(omegas)
+    #W = W / np.sum(W, axis=1, keepdims=True)
+    #B = np.exp(np.dot(K_chol, betas.T).T)
+    #B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
+    #M = np.exp(mus)
+    #Xtilde = np.dot(W*M, B)
 
 #def minibatch_minimize(grad, x, N_example, num_epochs=100, batch_size=10000,
 #                        callback=None, step_size=0.1, mass=0.9, eps=1e-8):
