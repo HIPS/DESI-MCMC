@@ -7,20 +7,19 @@
 #   - Fit optimize basis and weights in an NMF-like framework (with normal errors)
 #
 import fitsio
-import numpy as np
-import numpy.random as npr
-from funkyyak import grad, numpy_wrapper as np
+import autograd.numpy as np
+import autograd.numpy.random as npr
 from scipy.optimize import minimize
 from redshift_utils import load_data_clean_split, project_to_bands, sinc_interp, \
                            check_grad, fit_weights_given_basis, \
-                           evaluate_random_direction, ParamParser, \
+                           evaluate_random_direction, \
                            resample_rest_frame, get_lam0
-from slicesample import slicesample
+from CelestePy.util.infer.slicesample import slicesample
+from CelestePy.util.infer.hmc import hmc
 from quasar_fit_basis import load_basis_fit, make_functions
 import GPy
 import os, sys
 import cPickle as pickle
-from hmc import hmc
 
 def save_basis_samples(th_samps, ll_samps, lam0, lam0_delta, parser, chain_idx):
     """ save basis fit info """
