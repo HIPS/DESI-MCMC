@@ -2,6 +2,7 @@
 # https://github.com/HIPS/hypergrad/blob/master/hypergrad/optimizers.py
 # Thanks Dougal and David!
 import numpy as np
+from scipy.optimize import minimize
 
 def simple_sgd(grad, x, callback=None, num_iters=200, step_size=0.1, mass=0.9):
     """Stochastic gradient descent with momentum.
@@ -58,3 +59,21 @@ def bfgs(obj_and_grad, x, callback=None, num_iters=100):
     res =  minimize(fun=obj_and_grad, x0=x, jac =True, callback=wrapped_callback,
                     options = {'maxiter':num_iters, 'disp':True})
     return res.x
+
+def minimize_chunk(fun, jac, x0, method, max_iter, 
+                   chunk_size = 25,
+                   callback   = None,
+                   verbose    = True):
+    """ minimize function that saves every few iterations """
+    num_chunks = int(np.ceil(max_iter / float(chunk_size)))
+    for chunk_i in range(num_chunks):
+        print "optimizing chunk %d of %d (curr_ll = %2.5g)"%(chunk_i, num_chunks, fun(x0))
+        res = minimize(fun = fun, jac = jac, x0 = x0, method = method,
+                       options = {'maxiter': chunk_size, 'disp': verbose})
+        x0  = res.x
+
+        # perform callback at certain iter
+        if callback is not None:
+            callback(x0, chunk_i)
+    return res
+
