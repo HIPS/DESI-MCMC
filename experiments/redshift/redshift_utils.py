@@ -1,7 +1,7 @@
 import fitsio
 import sys, os
 from os.path import basename, splitext, join
-import CelestePy.planck
+import CelestePy.planck as planck
 import scipy.integrate as integrate
 from scipy import interpolate
 from scipy.optimize import minimize
@@ -38,6 +38,7 @@ def load_DR10QSO_train_test_idx(split_type="random"):
     dr10filepath = join(DR10QSO_LOC, 'DR10Q_v2.fits')
     dr10file     = fitsio.FITS(dr10filepath)
     qso_psf_flux = dr10file[1]['PSFFLUX'].read()
+    qso_psf_flux_ivar = dr10file[1]['IVAR_PSFFLUX'].read()
     qso_z        = dr10file[1]['Z_VI'].read()
     qso_psf_mags = dr10file[1]['PSFMAG'].read()
 
@@ -53,7 +54,8 @@ def load_DR10QSO_train_test_idx(split_type="random"):
     qso_ids           = dr10file[1][['PLATE', 'MJD', 'FIBERID']].read()
     spec_url_template = join(SPECTRA_LOC, "%04d/spec-%04d-%05d-%04d.fits")
     qso_files         = [spec_url_template%(qid[0], qid[0], qid[1], qid[2]) for qid in qso_ids]
-    return qso_psf_flux, qso_psf_mags, qso_z, qso_files, train_idx, test_idx
+    return qso_psf_flux, qso_psf_flux_ivar, qso_psf_mags, qso_z, \
+           qso_files, train_idx, test_idx
 
 def sinc_interp(new_samples, samples, fvals, left=None, right=None):
     """
@@ -360,6 +362,7 @@ def check_grad(fun, jac, th):
     print "Checking grads. Relative diff is: {0}".format((nd - ad)/np.abs(nd))
 
 def softmax(x):
-    x_tilde = np.exp(x)
+    x_max   = x.max()
+    x_tilde = np.exp(x-x_max)
     return x_tilde / x_tilde.sum()
 
