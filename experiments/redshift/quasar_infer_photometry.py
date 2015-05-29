@@ -226,6 +226,19 @@ def load_basis(num_bases, split_type, lam_subsample, basis_dir=""):
     M_mle = np.exp(mus)
     return B_mle
 
+def load_fit_params(num_bases, split_type, lam_subsample, basis_dir=""):
+    ### load MLE basis 
+    lam0, lam0_delta = ru.get_lam0(lam_subsample=LAM_SUBSAMPLE)
+    th, lam0, lam0_delta, parser = load_basis_fit(
+        os.path.join(basis_dir,
+                     qfb.basis_filename(num_bases  = NUM_BASES, 
+                                        split_type = SPLIT_TYPE,
+                                        lam0       = lam0))
+        )
+    mus    = parser.get(th, 'mus')
+    betas  = parser.get(th, 'betas')
+    omegas = parser.get(th, 'omegas')
+    return mus, betas, omegas, th, lam0, lam0_delta, parser
 
 ##############################################################################
 ### Start Script
