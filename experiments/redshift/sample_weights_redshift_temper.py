@@ -19,6 +19,7 @@ if __name__=="__main__":
     NUM_BASES      = int(sys.argv[5]) if narg > 5 else 4
     SPLIT_TYPE     = sys.argv[6] if narg > 6 else "redshift"  #"random", "flux", "redshift"
     BASIS_DIR      = "cache/basis_fits"
+    SAMPLES_DIR    = "cache/photo_z_samps"
     NUM_TRAIN_EXAMPLE = "all"
     NUM_TEST_EXAMPLE = "all"
     SEED             = 42
@@ -59,7 +60,7 @@ if __name__=="__main__":
 
     ## grab the we're sampling
     n             = test_idx_sub[test_n]
-    spec_id       = os.path.basename(spec_files[n])
+    spec_id       = os.path.splitext(os.path.basename(spec_files[n]))[0]
     z_n           = qso_z[n]
     y_flux        = qso_psf_flux[n, :]
     y_flux_ivar   = qso_psf_flux_ivar[n, :] #qso_n_info['IVAR_PSFFLUX']
@@ -82,6 +83,7 @@ if __name__=="__main__":
     NUM_BASES           = {num_bases}
     SPLIT_TYPE          = {split}
     BASIS_DIR           = {bdir}
+    SAMPLES_DIR         = {sdir}
     SEED                = {seed}
     NUM_TEST_EXAMPLE    = {num_test}
     NUM_TRAIN_EXAMPLE   = {num_train}
@@ -95,6 +97,7 @@ if __name__=="__main__":
            num_bases = NUM_BASES,
            split     = SPLIT_TYPE,
            bdir      = BASIS_DIR,
+           sdir      = SAMPLES_DIR,
            seed      = SEED,
            num_test  = NUM_TEST_EXAMPLE,
            num_train = NUM_TRAIN_EXAMPLE,
@@ -126,22 +129,23 @@ if __name__=="__main__":
     ##########################################################################
     ## Draw samples of redshift and weights
     ##########################################################################
-    temps   = np.linspace(.4, 1., 8)
+    temps   = np.linspace(.1, 1., 8)
     D       = B_mle.shape[0] + 2  # num(omegas) + m + z
     x0      = 10 * np.random.randn(len(temps), D)
     x0[:,0] = 6  * np.random.rand(len(temps))
     chain, chain_ll = parallel_temper_slice(
-        lnpdf    = lambda(th): ln_post(th, B_mle),
-        x0       = x0,
-        Nsamps   = Nsamps,
-        Nchains  = len(temps),
-        temps    = temps,
-        callback = None,
-        verbose  = True, printskip=20, 
-        compwise = True)
-
-    print "z mean!: %2.4f"%chain[-1, :, 0].mean()
-    print "z mode!: %2.4f"%chain[-1, chain_ll[-1,:].argmax(), 0]
+        lnpdf     = lambda(th): ln_post(th, B_mle),
+        x0        = x0,
+        Nsamps    = Nsamps,
+        Nchains   = len(temps),
+        temps     = temps,
+        callback  = None,
+        verbose   = True, 
+        printskip = 50,
+        compwise  = True)
+    print "z mean: %2.4f"%chain[-1, :, 0].mean()
+    print "z mode: %2.4f"%chain[-1, chain_ll[-1,:].argmax(), 0]
+    print "z true: %2.2f"%z_n
 
     if False:
         fig, axarr = plt.subplots(2, 1)
@@ -149,8 +153,14 @@ if __name__=="__main__":
             axarr[0].plot(chain[-1,:,0])
             axarr[1].plot(chain_ll[-1,:])
         plt.show()
+        plt.hist(chain[-1, Nsamps/2:, 0], 50); plt.show()
 
-        plt.hist(chain[-1, :, 0], 50); plt.show()
-
-
+    # save redshift samples
+    fname = "redshift_samples_{spec}_K-{num_bases}_lamsamp-{lamsamp}.bin".format(
+        spec      = spec_id,
+        num_bases = B_mle.shape[0],
+        lamsamp   = LAM_SUBSAMPLE)
+    with open(os.path.join(SAMPLES_DIR, fname), 'wb') as handle:
+        np.save(handle, chain[-1])
+        np.save(handle, chain_ll)
 
