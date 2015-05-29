@@ -16,12 +16,20 @@ import GPy
 ### Experiment Params
 ###
 SPLIT_TYPE        = "flux"  #split_types = ["random", "flux", "redshift"]
-NUM_TRAIN_EXAMPLE = 2000
+NUM_TRAIN_EXAMPLE = 8000
 MAX_LBFGS_ITER    = 10000
 NUM_BASES         = 4
 BETA_VARIANCE     = 1.
 BETA_LENGTHSCALE  = 40.
 BASIS_DIR         = "cache/basis_fits/"
+
+# set up experiment list
+import itertools
+Ks         = [3, 6, 8, 16, 32]
+SPLITS     = ["random", "flux", "redshift"]
+EXP_PARAMS = list(itertools.product(Ks, SPLITS))
+for i,ep in enumerate(EXP_PARAMS):
+    print "task_no %d: "%i, ep
 
 def initialize_from_lower_res(th_lo, lam_lo, parser_lo, 
                                      lam_hi, parser_hi ):
@@ -41,9 +49,17 @@ def initialize_from_lower_res(th_lo, lam_lo, parser_lo,
 
 if __name__=="__main__":
 
-    # read in split type first
-    if len(sys.argv) > 1:
-        SPLIT_TYPE = sys.argv[1]
+    ##########################################################################
+    ## set sampling parameters
+    ##########################################################################
+    narg              = len(sys.argv)
+    EXP_INT           = int(sys.argv[1]) if narg > 1 else 2
+    NUM_BASES, SPLIT_TYPE = EXP_PARAMS[EXP_INT]
+    #SPLIT_TYPE        = sys.argv[1] if narg > 1 else SPLIT_TYPE
+    #NUM_TRAIN_EXAMPLE = int(sys.argv[2]) if narg > 2 else NUM_TRAIN_EXAMPLE
+    #MAX_LBFGS_ITER    = int(sys.argv[3]) if narg > 3 else MAX_LBFGS_ITER
+    #NUM_BASES         = int(sys.argv[4]) if narg > 4 else NUM_BASES
+    #BASIS_DIR         = sys.argv[5] if narg > 5 else BASIS_DIR
 
     print \
 """
@@ -62,7 +78,7 @@ if __name__=="__main__":
            bdir = BASIS_DIR)
 
     # DR10 qso dataset and spec files
-    qso_psf_flux, qso_psf_mags, qso_z, spec_files, train_idx, test_idx = \
+    qso_psf_flux, qso_psf_flux_ivar, qso_psf_mags, qso_z, spec_files, train_idx, test_idx = \
         ru.load_DR10QSO_train_test_idx(split_type = SPLIT_TYPE)
 
     # dig into the cache, grab the spec files
@@ -86,6 +102,7 @@ if __name__=="__main__":
     for lam_idx, lam_subsample in enumerate(lam_schedule):
         print "========================================================="
         print " FITTING LAM SUBSAMPLE %d"%lam_subsample
+        sys.stdout.flush()
 
         ## initialize a basis using existing eigenQuasar Model
         lam0, lam0_delta = ru.get_lam0(lam_subsample=lam_subsample,eigen_file = "")
@@ -157,6 +174,7 @@ if __name__=="__main__":
                     min_val = loss_val
                 print " %d, loss = %2.4g, grad = %2.4g " % \
                     (i, loss_val, np.sqrt(np.dot(g,g)))
+                sys.stdout.flush()
                 obj_vals.append(loss_val)
 
         step_sizes = np.logspace(-1, -4.5, 16)
@@ -177,6 +195,7 @@ if __name__=="__main__":
             g = full_loss_grad(x)
             print "    chunk %d grad mag = %2.4g " % \
                     (i, np.sqrt(np.dot(g,g)))
+            sys.stdout.flush() 
             if i%10 == 0:
                 print "    .... writing out chunk %d result to disk"%i
                 qfb.save_basis_fit(x, lam0, lam0_delta, parser, 
