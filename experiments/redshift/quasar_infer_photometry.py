@@ -207,11 +207,11 @@ def load_redshift_samples(fname):
 ############################################################################
 ## Basis helper setup and methods
 ############################################################################
-def load_basis(num_bases, split_type, lam_subsample):
+def load_basis(num_bases, split_type, lam_subsample, basis_dir=""):
     ### load MLE basis 
     lam0, lam0_delta = ru.get_lam0(lam_subsample=LAM_SUBSAMPLE)
     th, lam0, lam0_delta, parser = load_basis_fit(
-        os.path.join(BASIS_DIR, 
+        os.path.join(basis_dir,
                      qfb.basis_filename(num_bases  = NUM_BASES, 
                                         split_type = SPLIT_TYPE,
                                         lam0       = lam0))

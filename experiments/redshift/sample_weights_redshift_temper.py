@@ -19,8 +19,8 @@ if __name__=="__main__":
     LAM_SUBSAMPLE  = int(sys.argv[4]) if narg > 4 else 10
     NUM_BASES      = int(sys.argv[5]) if narg > 5 else 4
     SPLIT_TYPE     = sys.argv[6] if narg > 6 else "redshift"  #"random", "flux", "redshift"
-    BASIS_DIR      = "cache/basis_fits"
-    SAMPLES_DIR    = "cache/photo_z_samps"
+    SAMPLES_DIR    = sys.argv[7] if narg > 7 else "cache/photo_z_samps"
+    BASIS_DIR      = sys.argv[8] if narg > 8 else "cache/basis_fits"
     NUM_TRAIN_EXAMPLE = "all"
     NUM_TEST_EXAMPLE = "all"
     SEED             = 42
@@ -30,7 +30,8 @@ if __name__=="__main__":
     ##########################################################################
     B_mle = qip.load_basis(num_bases     = NUM_BASES,
                            split_type    = SPLIT_TYPE,
-                           lam_subsample = LAM_SUBSAMPLE)
+                           lam_subsample = LAM_SUBSAMPLE,
+                           basis_dir     = BASIS_DIR)
     lam0, lam0_delta = ru.get_lam0(lam_subsample=LAM_SUBSAMPLE)
     def get_basis_sample(idx, mle = False): 
         """ Method to return a basis sample to condition on 
