@@ -1,18 +1,27 @@
-import fitsio
-import numpy as np
-import numpy.random as npr
-from scipy.optimize import minimize
-from scipy import interpolate
-from funkyyak import grad, numpy_wrapper as np
-from redshift_utils import load_data_clean_split, project_to_bands, \
-                           check_grad, softmax
-from quasar_fit_basis import load_basis_fit
-from quasar_sample_basis import load_basis_samples
-from hmc import hmc
+import fitsio, sys, os
 from glob import glob
+from scipy.optimize import minimize
+from quasar_fit_basis import load_basis_fit
+from CelestePy.util.infer.hmc import hmc
 import cPickle as pickle
 import GPy
-import sys, os
+import autograd.numpy as np
+import autograd.numpy.random as npr
+import redshift_utils as ru
+import quasar_sample_basis as qsb
+import quasar_fit_basis as qfb
+
+
+#############################################################################
+## Params
+#############################################################################
+LAM_SUBSAMPLE     = 10
+NUM_BASES         = 4
+SPLIT_TYPE        = "redshift"      #"random", "flux", "redshift"
+BASIS_DIR         = "cache/basis_fits"
+SEED              = 42
+NUM_TEST_EXAMPLE  = 10000
+NUM_TRAIN_EXAMPLE = "all"
 
 ############################################################################
 ## Likelihood and prior functions
@@ -27,10 +36,12 @@ def pixel_likelihood(z, w, m, fluxes, fluxes_ivar, lam0, B):
         lam0 : basis wavelength values
         B    : (matrix) K x P basis 
     """
+    if np.isinf(m): 
+        return -np.inf
     # at rest frame for lam0
     lam_obs = lam0 * (1. + z)
     spec    = np.dot(w, B)
-    mu      = project_to_bands(spec, lam_obs) * m / (1. + z)
+    mu      = ru.project_to_bands(spec, lam_obs) * m / (1. + z)
     ll      = -0.5 * np.sum(fluxes_ivar * (fluxes-mu)*(fluxes-mu))
     return ll
 
@@ -49,7 +60,7 @@ def dprior_z(z):
     return -(z - MEAN_Z_DIST) / (STDEV_Z_DIST * STDEV_Z_DIST)
 
 # TODO(awu): lognormal for now
-STDEV_M_DIST = 20.0
+STDEV_M_DIST = 10.0
 def prior_mu(mu):
     return - mu * mu / (2. * STDEV_M_DIST*STDEV_M_DIST)
 def dprior_mu(mu):
@@ -58,73 +69,8 @@ def dprior_mu(mu):
 ##############################################################################
 ## Posterior sampler function - factored out for multiple chains
 ##############################################################################
-def gen_redshift_samples(chain_idx, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf, USE_MLE):
-    """ Generate posterior samples of red-shift using HMC """
-    ll_samps = np.zeros(Nsamps)
-    B        = get_basis_sample(0, USE_MLE)
-
-    ## initialize samples
-    samps                    = np.zeros((Nsamps, B.shape[0] + 2))
-    samps[0,:]               = .001 * npr.randn(B.shape[0] + 2)
-    samps[0, 0]              = INIT_REDSHIFT
-    samps[0, B.shape[0] + 1] = np.log(INIT_MAG)
-    ll_samps[0]              = lnpdf(samps[0,:], B)
-
-    ## sanity check gradient
-    check_grad(fun = lambda(x): lnpdf(x, B),
-               jac = lambda(x): dlnpdf(x, B),
-               th  = samps[0,:])
-
-    ## sample
-    Naccept         = 0
-    step_sz         = .01
-    avg_accept_rate = .9
-    adapt_step = True
-    print "{0:17}|{1:15}|{2:15}|{3:15}|{4:15}".format(
-        " iter ",
-        " ll ",
-        " step_sz ",
-        " Naccept(rate)",
-        " z (z_spec)")
-    for s in np.arange(1, Nsamps):
-        # stop adapting after warmup
-        if s > Nsamps/2:
-            adapt_step = False
-
-        # hmc draw
-        B = get_basis_sample(s, USE_MLE)
-        samps[s,:], step_sz, avg_accept_rate = hmc(
-                 U                 = lambda(x): lnpdf(x, B),
-                 grad_U            = lambda(x): dlnpdf(x, B),
-                 step_sz           = step_sz,
-                 n_steps           = STEPS_PER_SAMPLE,
-                 q_curr            = samps[s-1,:],
-                 negative_log_prob = False, 
-                 adaptive_step_sz  = adapt_step,
-                 min_step_sz       = 0.00005,
-                 avg_accept_rate   = avg_accept_rate, 
-                 tgt_accept_rate   = .55)
-
-        ## store sample
-        ll_samps[s] = lnpdf(samps[s, :], B)
-        if ll_samps[s] != ll_samps[s-1]: 
-            Naccept += 1 
-        if s % 5 == 0:
-            print "{0:17}|{1:15}|{2:15}|{3:15}|{4:15}".format(
-                "%d/%d(chain %d)"%(s, Nsamps, chain_idx),
-                " %2.4f"%ll_samps[s],
-                " %2.5f"%step_sz,
-                " %d (%2.2f)"%(Naccept, avg_accept_rate), 
-                " %2.2f (%2.2f)"%(samps[s,0], z_n))
-        if s % 200:
-            save_redshift_samples(samps, ll_samps, q_idx=n, chain_idx=chain_idx,
-                                  K=B.shape[0], V=B.shape[1], qso_info = qso_n_info)
-    ### save samples 
-    save_redshift_samples(samps, ll_samps, q_idx=n, chain_idx=chain_idx,
-                          K=B.shape[0], V=B.shape[1], qso_info = qso_n_info)
-    return samps, ll_samps
-
-def gen_redshift_samples_tempering(Nchains, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf, USE_MLE):
+def gen_redshift_samples_tempering(Nchains, Nsamps, INIT_REDSHIFT,
+                                   lnpdf, dlnpdf, USE_MLE):
     """ Generate posterior samples of red-shift using HMC + Parallel Tempering """
 
     print "=== PARALLEL TEMPERING WITH %d CHAINS === "%Nchains
@@ -146,14 +92,14 @@ def gen_redshift_samples_tempering(Nchains, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf
         chains_lls[ci][0] = temps[ci] * lnpdf(chs[0, :], B)
 
     ## sanity check gradient
-    check_grad(fun = lambda(x): temps[1] * lnpdf(x, B),
+    ru.check_grad(fun = lambda(x): temps[1] * lnpdf(x, B),
                jac = lambda(x): temps[1] * dlnpdf(x, B),
                th  = chains_samps[1][0,:])
 
     ## sample
     Naccepts   = np.zeros(Nchains)
     Nswaps     = 0
-    step_sizes = .01 * np.ones(Nchains)
+    step_sizes = .005 * np.ones(Nchains)
     avg_rates  = .9 * np.ones(Nchains)
     adapt_step = True
     print "{0:10}|{1:10}|{2:10}|{3:10}|{4:15}|{5:15}".format(
@@ -171,13 +117,13 @@ def gen_redshift_samples_tempering(Nchains, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf
         # Nchains HMC draws
         for ci in range(Nchains):
             B = get_basis_sample(s, USE_MLE)
-            chains_samps[ci][s, :], step_sizes[ci], avg_rates[ci] = hmc(
-                     U                 = lambda(x): temps[ci] * lnpdf(x, B),
-                     grad_U            = lambda(x): temps[ci] * dlnpdf(x, B),
-                     step_sz           = step_sizes[ci],
-                     n_steps           = STEPS_PER_SAMPLE,
-                     q_curr            = chains_samps[ci][s-1,:],
-                     negative_log_prob = False, 
+            chains_samps[ci][s, :], P, step_sizes[ci], avg_rates[ci] = hmc(
+                     x_curr           = chains_samps[ci][s-1,:],
+                     llhfunc           = lambda(x): temps[ci] * lnpdf(x, B),
+                     grad_llhfunc      = lambda(x): temps[ci] * dlnpdf(x, B),
+                     eps               = step_sizes[ci],
+                     num_steps         = STEPS_PER_SAMPLE,
+                     mass              = 1.,
                      adaptive_step_sz  = adapt_step,
                      min_step_sz       = 0.00005,
                      avg_accept_rate   = avg_rates[ci], 
@@ -215,7 +161,7 @@ def gen_redshift_samples_tempering(Nchains, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf
                 " %2.5f"%step_sizes[-1],
                 " %d (%2.2f)"%(Nswaps, avg_rates[-1]), 
                 " (%d) (%d) (%d)"%(Naccepts[0], Naccepts[-2], Naccepts[-1]),
-                " (0: %2.2f), (-2: %2.2f), (-1: %2.2f) (%2.2f)"%(
+                " (hot: %2.2f), (cold: %2.2f), (pi: %2.2f) (true: %2.2f)"%(
                     chains_samps[0][s, 0], chains_samps[-2][s, 0], 
                     chains_samps[-1][s, 0], z_n))
         if s % 200:
@@ -237,9 +183,9 @@ def save_redshift_samples(th_samps, ll_samps, q_idx, K, V, qso_info, chain_idx, 
     """ save basis fit info """
     #dump separately - pickle is super inefficient
     if chain_idx == "temper":
-        fbase = 'cache/redshift_samples_K-%d_V-%d_qso_%d_chain_%s_mle_%r'%(K, V, q_idx, chain_idx, use_mle)
+        fbase = 'cache/photo_z_samps/redshift_samples_K-%d_V-%d_qso_%d_chain_%s_mle_%r'%(K, V, q_idx, chain_idx, use_mle)
     else:
-        fbase = 'cache/redshift_samples_K-%d_V-%d_qso_%d_chain_%d_mle_%r'%(K, V, q_idx, chain_idx, use_mle)
+        fbase = 'cache/photo_z_samps/redshift_samples_K-%d_V-%d_qso_%d_chain_%d_mle_%r'%(K, V, q_idx, chain_idx, use_mle)
     np.save(fbase + '.npy', th_samps)
     with open(fbase + '.pkl', 'wb') as handle:
         pickle.dump(ll_samps, handle)
@@ -261,18 +207,25 @@ def load_redshift_samples(fname):
 ############################################################################
 ## Basis helper setup and methods
 ############################################################################
+def load_basis(num_bases, split_type, lam_subsample):
+    ### load MLE basis 
+    lam0, lam0_delta = ru.get_lam0(lam_subsample=LAM_SUBSAMPLE)
+    th, lam0, lam0_delta, parser = load_basis_fit(
+        os.path.join(BASIS_DIR, 
+                     qfb.basis_filename(num_bases  = NUM_BASES, 
+                                        split_type = SPLIT_TYPE,
+                                        lam0       = lam0))
+        )
+    mus    = parser.get(th, 'mus')
+    betas  = parser.get(th, 'betas')
+    omegas = parser.get(th, 'omegas')
+    W_mle  = np.exp(omegas)
+    W_mle /= np.sum(W_mle, axis=1, keepdims=True)
+    B_mle  = np.exp(betas)
+    B_mle /= np.sum(B_mle * lam0_delta, axis=1, keepdims=True)
+    M_mle = np.exp(mus)
+    return B_mle
 
-### load MLE basis 
-V_mle = 2728
-th, lam0, lam0_delta, parser = load_basis_fit('cache/basis_fit_K-4_V-%d.pkl'%V_mle)
-mus    = parser.get(th, 'mus')
-betas  = parser.get(th, 'betas')
-omegas = parser.get(th, 'omegas')
-W_mle  = np.exp(omegas)
-W_mle /= np.sum(W_mle, axis=1, keepdims=True)
-B_mle  = np.exp(betas)
-B_mle /= np.sum(B_mle * lam0_delta, axis=1, keepdims=True)
-M_mle = np.exp(mus)
 
 ##############################################################################
 ### Start Script
@@ -282,17 +235,21 @@ if __name__=="__main__":
     ##########################################################################
     ## set sampling parameters
     ##########################################################################
-    narg    = len(sys.argv)
-    test_n  = int(sys.argv[1]) if narg > 1 else 0
-    Nsamps  = int(sys.argv[2]) if narg > 2 else 20
-    Nchains = int(sys.argv[3]) if narg > 3 else 2
-    USE_MLE = True if narg > 4 and sys.argv[4] == "USE_MLE" else True
+    narg           = len(sys.argv)
+    test_n         = int(sys.argv[1]) if narg > 1 else 1645
+    Nsamps         = int(sys.argv[2]) if narg > 2 else 1000
+    Nchains        = int(sys.argv[3]) if narg > 3 else 5
+    LAM_SUBSAMPLE  = int(sys.argv[4]) if narg > 4 else 10
+    NUM_BASES      = int(sys.argv[5]) if narg > 5 else 4
+    SPLIT_TYPE     = sys.argv[6] if narg > 6 else "redshift"  #"random", "flux", "redshift"
+    BASIS_DIR      = "cache/basis_fits"
 
     # HMC parameters
     INIT_REDSHIFT    = 1.0
     INIT_MAG         = 10000.
-    STEP_SIZE        = 0.00001
+    STEP_SIZE        = 0.000001
     STEPS_PER_SAMPLE = 10
+    USE_MLE          = True
 
     ##########################################################################
     ### load and curate basis samples
@@ -307,7 +264,7 @@ if __name__=="__main__":
         for si, sfile in enumerate(sample_files):
             print "pre-processing chain %d of %d"%(si, len(sample_files))
             th_samples, ll_samps, lam0, lam0_delta, parser, chain_idx = \
-                load_basis_samples(sfile)
+                qsb.load_basis_samples(sfile)
             Nsamps = th_samples.shape[0]
             # discard first half and randomly permute
             th_samples = th_samples[Nsamps/2:, :]
@@ -326,7 +283,11 @@ if __name__=="__main__":
         B_samps = np.vstack(B_chains)
         B_samps = B_samps[npr.permutation(B_samps.shape[0]), :, :]
 
-    def get_basis_sample(idx, mle = False, ): 
+    B_mle = load_basis(num_bases     = NUM_BASES,
+                       split_type    = SPLIT_TYPE,
+                       lam_subsample = LAM_SUBSAMPLE)
+    lam0, lam0_delta = ru.get_lam0(lam_subsample=LAM_SUBSAMPLE)
+    def get_basis_sample(idx, mle = False): 
         """ Method to return a basis sample to condition on 
         (or the MLE if specified) """
         if mle: 
@@ -337,44 +298,87 @@ if __name__=="__main__":
     ##########################################################################
     ## Load in spectroscopically measured quasars + fluxes
     ##########################################################################
-    qso_df   = fitsio.FITS('../../data/DR10QSO/DR10Q_v2.fits')[1].read()
-    r_fluxes = qso_df['PSFFLUX'][:, 2]
-    all_zs   = qso_df['Z_VI']
+    # DR10 qso dataset and spec files
+    qso_psf_flux, qso_psf_flux_ivar, qso_psf_mags, qso_z, \
+    spec_files, train_idx, test_idx = \
+        ru.load_DR10QSO_train_test_idx(split_type = SPLIT_TYPE)
 
-    # set TEST INDICES 
-    npr.seed(13)
-    test_idx       = npr.permutation(len(qso_df))
-    high_shift_idx = np.where(all_zs > 3.8)[0]
-    test_idx       = np.unique(np.concatenate([high_shift_idx, test_idx[0:1000]]))
+    ## subselect train/test to match other experiments
+    if NUM_TRAIN_EXAMPLE == "all": 
+        NUM_TRAIN_EXAMPLE = len(train_idx)
+    if NUM_TEST_EXAMPLE == "all":
+        NUM_TEST_EXAMPLE = len(test_idx)
+    np.random.seed(SEED)
+    rand_idx      = np.random.permutation(len(train_idx))
+    train_idx_sub = train_idx[rand_idx[0:NUM_TRAIN_EXAMPLE]]
+    rand_idx      = np.random.permutation(len(test_idx))
+    test_idx_sub  = test_idx[rand_idx[0:NUM_TEST_EXAMPLE]]
 
     ## grab the we're sampling
-    #n             = test_idx[test_n]
-    n             = high_shift_idx[test_n]
-    qso_n_info    = qso_df[n]
-    z_n           = qso_n_info['Z_VI']
-    y_flux        = qso_n_info['PSFFLUX']
-    y_flux_ivar   = qso_n_info['IVAR_PSFFLUX']
-    print "======== SAMPLING QUASAR %d ==============="%n
-    if USE_MLE:
-        print "    Sampling with cached MLE basis"
-    else:
-        print "    Sampling with basis samples"
-    print "    PLATE               = %d"%qso_n_info['PLATE']
-    print "    MJD                 = %d"%qso_n_info['MJD']
-    print "    FIBERID             = %d"%qso_n_info['FIBERID']
-    print "    qso_idx             = %d"%n
-    print "    test_idx            = %d"%test_n
-    print "    z_n (percentile)   = %2.2f (%2.2f)"%(z_n, np.sum(all_zs < z_n) / float(len(all_zs)))
-    print "    r-flux (percentile) = %2.2f (%2.2f)"%(y_flux[2], np.sum(r_fluxes < y_flux[2])/float(len(r_fluxes)))
+    n             = test_idx_sub[test_n]
+    spec_id       = os.path.basename(spec_files[n])
+    z_n           = qso_z[n]
+    y_flux        = qso_psf_flux[n, :]
+    y_flux_ivar   = qso_psf_flux_ivar[n, :] #qso_n_info['IVAR_PSFFLUX']
+    print \
+"""
+=================== SAMPLING QUASAR qso idx = {qso_idx} ================
+  Quasar Info: 
+    PLATE-MJD-FIBER     = {spec_id}
+    qso_idx             = {qso_idx}
+    test_idx            = {test_idx}
+    z_n (percentile)    = {z} ({z_per})
+    r-flux (percentile) = {r} ({r_per})
+
+  MCMC Params:
+    Nsamps              = {num_samps}
+    Nchains             = {num_chains}
+    INIT_REDSHIFT       = {init_redshift}
+    INIT_MAG            = {init_mag}
+    STEP_SIZE           = {step_size}
+    STEPS_PER_SAMPLE    = {steps_per_sample}
+
+  Sampling with Model Params:
+    LAM_SUBSAMPLE       = {lam_sub}
+    NUM_BASES           = {num_bases}
+    SPLIT_TYPE          = {split}
+    BASIS_DIR           = {bdir}
+    SEED                = {seed}
+    NUM_TEST_EXAMPLE    = {num_test}
+    NUM_TRAIN_EXAMPLE   = {num_train}
+========================================================================
+""".format(spec_id=spec_id, qso_idx=n, test_idx=test_n,
+           z         = z_n,
+           z_per     = np.sum(qso_z < z_n) / float(len(qso_z)),
+           r         = y_flux[2], 
+           r_per     = np.sum(qso_psf_flux[:,2] < y_flux[2]) / float(len(qso_psf_flux[:,2])),
+           lam_sub   = LAM_SUBSAMPLE,
+           num_bases = NUM_BASES,
+           split     = SPLIT_TYPE,
+           bdir      = BASIS_DIR,
+           seed      = SEED,
+           num_test  = NUM_TEST_EXAMPLE,
+           num_train = NUM_TRAIN_EXAMPLE,
+           num_samps = Nsamps,
+           num_chains = Nchains,
+           init_redshift = INIT_REDSHIFT,
+           init_mag = INIT_MAG,
+           step_size = STEP_SIZE,
+           steps_per_sample = STEPS_PER_SAMPLE
+           )
 
     ##########################################################################
     ## functions to pass into HMC
     ##########################################################################
-    def lnpdf(q, B):
+    def ln_post(q, B):
         z     = q[0]
         omega = q[1:(B.shape[0] + 1)]
         mu    = q[B.shape[0] + 1]
-        ll    =  pixel_likelihood(z, softmax(omega), np.exp(mu), y_flux, y_flux_ivar, lam0, B)
+
+
+        if z < 0. or z > 8.:
+            return -np.inf
+        ll    =  pixel_likelihood(z, ru.softmax(omega), np.exp(mu), y_flux, y_flux_ivar, lam0, B)
         return ll + prior_omega(omega) + prior_mu(mu) + prior_z(z)
 
     def dlnpdf(q, B):
@@ -382,7 +386,7 @@ if __name__=="__main__":
         grad_vec = np.zeros(q.shape)
         for i in range(len(q)):
             de[i] = 1e-6
-            grad_vec[i] = (lnpdf(q + de, B) - lnpdf(q - de, B)) / 2e-6
+            grad_vec[i] = (ln_post(q + de, B) - ln_post(q - de, B)) / 2e-6
             de[i] = 0.0
         return grad_vec
 
@@ -403,18 +407,96 @@ if __name__=="__main__":
     #    chain_samps.append(samps)
     #    chain_lls.append(ll_samps)
 
-    #%lprun -f pixel_likelihood -f project_to_bands \
-    samps, ll_samps = gen_redshift_samples_tempering( \
-            Nchains       = 5, \
-            Nsamps        = Nsamps, \
-            INIT_REDSHIFT = 2., \
-            lnpdf         = lnpdf,  \
-            dlnpdf        = dlnpdf, \
-            USE_MLE       = USE_MLE)
-    
+    #%lprun -f pixel_likelihood -f ru.project_to_bands \
+    #samps, ll_samps = gen_redshift_samples_tempering(
+    #        Nchains       = Nchains,
+    #        Nsamps        = Nsamps,
+    #        INIT_REDSHIFT = 2.,
+    #        lnpdf         = lnpdf,
+    #        dlnpdf        = dlnpdf,
+    #        USE_MLE       = USE_MLE)
 
-    ###########################################################################
-    ## debug reconstructions
+    # initalize emcee routine
+    import emcee
+    Nsamps   = 4000
+    D        = B_mle.shape[0] + 2
+    nwalkers = 2*D 
+    p0       = [np.random.randn(B_mle.shape[0] + 2) for i in range(nwalkers)]
+    #emcee_sampler    = emcee.EnsembleSampler(
+    #    nwalkers = nwalkers, 
+    #    a        = .005,
+    #    dim      = D,
+    #    lnpostfn = lambda(q): lnpdf(q, B_mle))
+
+    nwalkers = 12
+    ntemps   = 10
+    p0 = np.random.randn(ntemps, nwalkers, D)
+    def logl(q): 
+        z     = q[0]
+        omega = q[1:(B_mle.shape[0] + 1)]
+        mu    = q[B_mle.shape[0] + 1]
+        ll =  pixel_likelihood(z, ru.softmax(omega), np.exp(mu), y_flux, y_flux_ivar, lam0, B_mle)
+        if np.isnan(ll):
+            #print "NAN NOOOOO:", z, omega, mu
+            ll = -np.inf
+        return ll
+
+    def logp(q):
+        z     = q[0]
+        omega = q[1:(B_mle.shape[0] + 1)]
+        mu    = q[B_mle.shape[0] + 1]
+        ll    = prior_omega(omega) + prior_mu(mu) + prior_z(z)
+        #print "prior ll ", ll
+        return ll
+
+    emcee_sampler = emcee.PTSampler(
+        a        = .5,
+        nwalkers = nwalkers,
+        ntemps   = ntemps,
+        dim      = D,
+        logl     = logl,
+        logp     = logp
+        )
+
+    # burnin sampler
+    print "burning in"
+    for p, lnprob, lnlike in emcee_sampler.sample(p0, iterations=100):
+        pass
+    emcee_sampler.reset()
+
+    # collect samps
+    print "sampling"
+    Nsamps = 10000
+    for i in xrange(Nsamps):
+        if i%20==0:
+            print "%d of %d"%(i, Nsamps)
+        p, lnprob, lnlike in emcee_sampler.sample(
+            p,
+            lnprob0    = lnprob,
+            lnlike0    = lnlike,
+            iterations = 1)
+
+    # pos, prob, state = emcee_sampler.run_mcmc(p0, Nsamps)
+    #samps    = np.row_stack([ ch[Nsamps/2:,:] for ch in emcee_sampler.chain])
+    #samps_ll = np.concatenate([ ln[Nsamps/2:] for ln in emcee_sampler.lnprobability])
+
+    print "mean!: %2.4f"%samps[:,0].mean()
+    print "mode!: %2.4f"%samps[samps_ll.argmax(),0]
+
+    #
+    if False:
+        fig, axarr = plt.subplots(2, 1)
+        for w in range(4):
+            axarr[0].plot(emcee_sampler.chain[0][w][:,0])
+            axarr[1].plot(emcee_sampler.lnprobability[0][w])
+        plt.show()
+
+        plt.hist(emcee_sampler.flatchain[0][::10,0], 50); plt.show()
+
+
+    ##########################################################################
+    ############ DEBUG #######################################################
+    ##########################################################################
     if False:
         names = np.concatenate([ ["z"], 
                                  ["w_%d"%i for i in range(B.shape[0])],
@@ -439,11 +521,6 @@ if __name__=="__main__":
         #plt.savefig("z_compare_idx_%d.pdf"%n, bbox_inches='tight')
         plt.show()
 
-
-    ##########################################################################
-    ############ DEBUG #######################################################
-    ##########################################################################
-    if False:
         #n=95
         #z_n    = qtest['Z'][n]
         #spec_n = qtest['spectra'][n, :]
@@ -519,5 +596,71 @@ if __name__=="__main__":
     #plt.title("Quasar %d: red-shift posterior"%n)
     #plt.xlim(th_samps[(Nsamps/2):,-1].min() - .25, th_samps[(Nsamps/2):, -1].max() + .25)
     #plt.savefig(out_dir + "quasar_%d_posterior_z.pdf"%n, bbox_inches='tight')
+
+### DEAD CODE
+#def gen_redshift_samples(chain_idx, Nsamps, INIT_REDSHIFT, lnpdf, dlnpdf, USE_MLE):
+#    """ Generate posterior samples of red-shift using HMC """
+#    ll_samps = np.zeros(Nsamps)
+#    B        = get_basis_sample(0, USE_MLE)
+#
+#    ## initialize samples
+#    samps                    = np.zeros((Nsamps, B.shape[0] + 2))
+#    samps[0,:]               = .001 * npr.randn(B.shape[0] + 2)
+#    samps[0, 0]              = INIT_REDSHIFT
+#    samps[0, B.shape[0] + 1] = np.log(INIT_MAG)
+#    ll_samps[0]              = lnpdf(samps[0,:], B)
+#
+#    ## sanity check gradient
+#    ru.check_grad(fun = lambda(x): lnpdf(x, B),
+#               jac = lambda(x): dlnpdf(x, B),
+#               th  = samps[0,:])
+#
+#    ## sample
+#    Naccept         = 0
+#    step_sz         = .01
+#    avg_accept_rate = .9
+#    adapt_step      = True
+#    print "{0:17}|{1:15}|{2:15}|{3:15}|{4:15}".format(
+#        " iter ",
+#        " ll ",
+#        " step_sz ",
+#        " Naccept(rate)",
+#        " z (z_spec)")
+#    for s in np.arange(1, Nsamps):
+#        # stop adapting after warmup
+#        if s > Nsamps/2:
+#            adapt_step = False
+#
+#        # hmc draw
+#        B = get_basis_sample(s, USE_MLE)
+#        samps[s,:], step_sz, avg_accept_rate = hmc(
+#                 x_curr            = samps[s-1,:],
+#                 llhfunc           = lambda(x): lnpdf(x, B),
+#                 grad_llhfunc      = lambda(x): dlnpdf(x, B),
+#                 eps               = step_sz,
+#                 num_steps         = STEPS_PER_SAMPLE,
+#                 adaptive_step_sz  = adapt_step,
+#                 min_step_sz       = 0.00005,
+#                 avg_accept_rate   = avg_accept_rate, 
+#                 tgt_accept_rate   = .55)
+#
+#        ## store sample
+#        ll_samps[s] = lnpdf(samps[s, :], B)
+#        if ll_samps[s] != ll_samps[s-1]: 
+#            Naccept += 1 
+#        if s % 5 == 0:
+#            print "{0:17}|{1:15}|{2:15}|{3:15}|{4:15}".format(
+#                "%d/%d(chain %d)"%(s, Nsamps, chain_idx),
+#                " %2.4f"%ll_samps[s],
+#                " %2.5f"%step_sz,
+#                " %d (%2.2f)"%(Naccept, avg_accept_rate), 
+#                " %2.2f (%2.2f)"%(samps[s,0], z_n))
+#        if s % 200:
+#            save_redshift_samples(samps, ll_samps, q_idx=n, chain_idx=chain_idx,
+#                                  K=B.shape[0], V=B.shape[1], qso_info = qso_n_info)
+#    ### save samples 
+#    save_redshift_samples(samps, ll_samps, q_idx=n, chain_idx=chain_idx,
+#                          K=B.shape[0], V=B.shape[1], qso_info = qso_n_info)
+#    return samps, ll_samps
 
 
