@@ -1,0 +1,18 @@
+#!/bin/bash
+#PBS -q debug
+#PBS -l mppwidth=2400
+#PBS -l walltime=01:55:00
+#PBS -N qsoz
+#PBS -e qsoz.$PBS_JOBID.err
+#PBS -o qsoz.$PBS_JOBID.out
+#PBS -A das
+
+module load taskfarmer
+cd $PBS_O_WORKDIR
+
+#use taskfarmer to do a bunch of independent serial jobs
+num_tasks=10000
+num_nodes=100
+echo "Task Farming out ${num_tasks} tasks on ${num_nodes} nodes"
+tf -t ${num_tasks} -n ${num_nodes} -e serial.err -o serial.out ./sample_weights_redshift.sh ${PBS_O_WORKDIR}
+
