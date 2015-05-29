@@ -40,6 +40,7 @@ def hmc(x_curr,
     negative_log_prob   - If True, assume U is the negative log prob
 
     """
+    new_accept_rate = 0.
     imass = 1./mass
     def energy(X): 
         return -llhfunc(X)
@@ -63,7 +64,7 @@ def hmc(x_curr,
     # sample initial momentum
     X = x_curr.copy()
     if p_curr is None:
-        P = np.sqrt(mass)*npr.randn(X.shape)
+        P = np.sqrt(mass)*npr.randn(X.shape[0])
     else:
         P = p_curr.copy()
     ll_curr = -hamiltonian(X, P)
@@ -74,8 +75,8 @@ def hmc(x_curr,
         Pp     = -Pp
 
         ll_prop = -hamiltonian(Xp, Pp)
-        if np.log(npr.rand()) < ll_prop - ll_curr:
-            print "ACCEPTED!"
+        accept = np.log(npr.rand()) < ll_prop - ll_curr
+        if accept:
             X       = Xp
             P       = Pp
             ll_curr = ll_prop
@@ -83,19 +84,18 @@ def hmc(x_curr,
         # re-negate the momentum regardless of accept/reject
         P = -P
 
-    # Do adaptive step size updates if requested
-    if adaptive_step_sz:
-        new_accept_rate = avg_accept_time_const * avg_accept_rate + \
-                          (1.0-avg_accept_time_const) * accept
-        if avg_accept_rate > tgt_accept_rate:
-            new_step_sz = step_sz * 1.02
-        else:
-            new_step_sz = step_sz * 0.98
-        new_step_sz = np.clip(new_step_sz, min_step_sz, max_step_sz)
-        return (q_next, new_step_sz, new_accept_rate)
+        # Do adaptive step size updates if requested
+        if adaptive_step_sz:
+            new_accept_rate = avg_accept_time_const * avg_accept_rate + \
+                              (1.0-avg_accept_time_const) * accept
+            if avg_accept_rate > tgt_accept_rate:
+                eps = eps * 1.02
+            else:
+                eps = eps * 0.98
+            eps = np.clip(eps, min_step_sz, max_step_sz)
 
     # return X, P, some other info if not adaptive
-    return X, P, eps, 0.0
+    return X, P, eps, new_accept_rate
 
 
 def test_hmc():

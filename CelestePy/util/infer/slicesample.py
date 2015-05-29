@@ -185,7 +185,7 @@ def slicesample(init_x, logprob, *logprob_args, **slice_sample_args):
         while True:
             steps_in += 1
             if steps_in % 100 == 0:
-                print "shrinknig, steps", steps_in
+                print "shrinking, steps", steps_in
             new_z     = (upper - lower)*npr.rand() + lower
             new_llh   = dir_logprob(new_z)
             if np.isnan(new_llh):
