@@ -283,13 +283,18 @@ def project_to_bands(spectra, wavelengths):
         sensitivity = np.interp(wavelengths, planck.wavelength_lookup[band]*(10**10), 
                                              planck.sensitivity_lookup[band])
         norm        = np.sum(sensitivity)
-        # conversion
-        flambda2fnu  = wavelengths**2 / 2.99792e18
-        fthru        = np.sum(sensitivity * spectra * flambda2fnu) / norm 
-        #mags         = -2.5 * np.log10(fthru) - (48.6 - 2.5*17)
-        #fluxes[i]    = np.power(10., (mags - 22.5)/-2.5)
-        # We don't have to log and exponentiate 
-        fluxes[i] = fthru * flux_constant 
+        if norm <= 0.:
+            fluxes[i] = 0.  # catch zero case
+        else: 
+            # conversion
+            flambda2fnu  = wavelengths**2 / 2.99792e18
+            fthru        = np.sum(sensitivity * spectra * flambda2fnu) / norm 
+            #mags         = -2.5 * np.log10(fthru) - (48.6 - 2.5*17)
+            #fluxes[i]    = np.power(10., (mags - 22.5)/-2.5)
+            # We don't have to log and exponentiate 
+            fluxes[i] = fthru * flux_constant 
+            if np.isnan(fluxes[i]):
+                print "project_to_bands isnan in band %s"%band, fthru, flux_constant, norm
     return fluxes
 
 def fit_weights_given_basis(B, lam0, X, inv_var, z_n, lam_obs, return_loss=False, sgd_iter=100):
