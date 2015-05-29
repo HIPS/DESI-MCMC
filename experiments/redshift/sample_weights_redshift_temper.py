@@ -1,4 +1,5 @@
 import sys, os
+import numpy as np
 import quasar_infer_photometry as qip
 import redshift_utils as ru
 from CelestePy.util.infer.parallel_tempering import parallel_temper_slice
@@ -13,7 +14,7 @@ if __name__=="__main__":
     ##########################################################################
     narg           = len(sys.argv)
     test_n         = int(sys.argv[1]) if narg > 1 else 120 #1645
-    Nsamps         = int(sys.argv[2]) if narg > 2 else 1000
+    Nsamps         = int(sys.argv[2]) if narg > 2 else 20
     Nchains        = int(sys.argv[3]) if narg > 3 else 5
     LAM_SUBSAMPLE  = int(sys.argv[4]) if narg > 4 else 10
     NUM_BASES      = int(sys.argv[5]) if narg > 5 else 4
@@ -114,7 +115,7 @@ if __name__=="__main__":
         mu    = q[B.shape[0] + 1]
         if z < 0. or z > 8.:
             return -np.inf
-        ll    =  pixel_likelihood(z, ru.softmax(omega), np.exp(mu), y_flux, y_flux_ivar, lam0, B)
+        ll    =  qip.pixel_likelihood(z, ru.softmax(omega), np.exp(mu), y_flux, y_flux_ivar, lam0, B)
         return ll + qip.prior_omega(omega) + qip.prior_mu(mu) + qip.prior_z(z)
 
     def dlnpdf(q, B):
@@ -129,7 +130,7 @@ if __name__=="__main__":
     ##########################################################################
     ## Draw samples of redshift and weights
     ##########################################################################
-    temps   = np.linspace(.1, 1., 8)
+    temps   = np.linspace(.1, 1., Nchains)
     D       = B_mle.shape[0] + 2  # num(omegas) + m + z
     x0      = 10 * np.random.randn(len(temps), D)
     x0[:,0] = 6  * np.random.rand(len(temps))
@@ -143,7 +144,19 @@ if __name__=="__main__":
         verbose   = True, 
         printskip = 50,
         compwise  = True)
-    print "z mean: %2.4f"%chain[-1, :, 0].mean()
+
+    # save redshift samples
+    fname = "redshift_samples_{spec}_K-{num_bases}_lamsamp-{lamsamp}_split-{split}.bin".format(
+        spec      = spec_id,
+        num_bases = B_mle.shape[0],
+        lamsamp   = LAM_SUBSAMPLE,
+        split     = SPLIT_TYPE)
+    print "Saving samples to file %s"%fname
+    with open(os.path.join(SAMPLES_DIR, fname), 'wb') as handle:
+        np.save(handle, chain[-1])
+        np.save(handle, chain_ll)
+
+    print "z mean: %2.4f"%chain[-1, Nsamps/2:, 0].mean()
     print "z mode: %2.4f"%chain[-1, chain_ll[-1,:].argmax(), 0]
     print "z true: %2.2f"%z_n
 
@@ -154,13 +167,4 @@ if __name__=="__main__":
             axarr[1].plot(chain_ll[-1,:])
         plt.show()
         plt.hist(chain[-1, Nsamps/2:, 0], 50); plt.show()
-
-    # save redshift samples
-    fname = "redshift_samples_{spec}_K-{num_bases}_lamsamp-{lamsamp}.bin".format(
-        spec      = spec_id,
-        num_bases = B_mle.shape[0],
-        lamsamp   = LAM_SUBSAMPLE)
-    with open(os.path.join(SAMPLES_DIR, fname), 'wb') as handle:
-        np.save(handle, chain[-1])
-        np.save(handle, chain_ll)
 
