@@ -15,8 +15,8 @@ import GPy
 ###
 ### Experiment Params
 ###
-SPLIT_TYPE        = "flux"  #split_types = ["random", "flux", "redshift"]
-NUM_TRAIN_EXAMPLE = 8000
+SPLIT_TYPE        = "random"  #split_types = ["random", "flux", "redshift"]
+NUM_TRAIN_EXAMPLE = 2000
 MAX_LBFGS_ITER    = 10000
 NUM_BASES         = 4
 BETA_VARIANCE     = 1.
@@ -47,8 +47,18 @@ def initialize_from_lower_res(th_lo, lam_lo, parser_lo,
     parser_hi.set(th_hi, 'mus', mus_lo)
     return th_hi
 
-if __name__=="__main__":
 
+# WE ARE OPTIMIZING IN THE WHITENED SPACE, BUT DON'T SAVE IT IN THE WHITENED
+# SPACE YOU DOPE
+def save_unwhitened(th, lam0, lam0_delta, parser, K_chol, data_dir, split_type):
+    # grab betas, hit em w/ K_chol, and save
+    to_save = th.copy()
+    betas  = parser.get(to_save, 'betas')
+    parser.set(to_save, 'betas', np.dot(K_chol, betas.T).T)
+    qfb.save_basis_fit(to_save, lam0, lam0_delta, parser, 
+                           data_dir=BASIS_DIR, split_type=SPLIT_TYPE)
+
+if __name__=="__main__":
     ##########################################################################
     ## set sampling parameters
     ##########################################################################
@@ -147,6 +157,16 @@ if __name__=="__main__":
             parser.set(th, 'omegas', .01 * npr.randn(Nspec, NUM_BASES))
             parser.set(th, 'mus', .01 * npr.randn(Nspec))
 
+        # already in cache (WE ARE OPTIMIZING IN CHOLESKY DECOMP MODE, SO 
+        # WHITEN THE MATRIX)
+        basis_file = "cache/basis_fits/basis_fit_K-%d_V-%d_split-%s.pkl"%(NUM_BASES, len(lam0), SPLIT_TYPE)
+        if os.path.exists(basis_file):
+            print "grabbing file from CACHE, optimizing more!"
+            th, lam0, lam0_delta, parser = qfb.load_basis_fit(basis_file)
+            betas = parser.get(th, 'betas')
+            betas_white = np.linalg.solve(K_chol, betas.T).T
+            parser.set(th, 'betas', betas_white)
+
         ## make sure loss works
         print "Starting at loss: %2.5g"%(loss_fun(th) + prior_loss(th))
         def full_loss_grad(th, idx=None):
@@ -187,8 +207,9 @@ if __name__=="__main__":
                      gamma     = momentum,
                      eps       = 1e-9)
             th = min_x
-        qfb.save_basis_fit(th, lam0, lam0_delta, parser, 
-                           data_dir=BASIS_DIR, split_type=SPLIT_TYPE)
+        save_unwhitened(th, lam0, lam0_delta, parser, K_chol,
+                        data_dir   = BASIS_DIR,
+                        split_type = SPLIT_TYPE)
 
         ## tighten it up a bit
         def chunk_callback(x, i):
@@ -198,15 +219,16 @@ if __name__=="__main__":
             sys.stdout.flush() 
             if i%10 == 0:
                 print "    .... writing out chunk %d result to disk"%i
-                qfb.save_basis_fit(x, lam0, lam0_delta, parser, 
-                                   data_dir=BASIS_DIR, split_type=SPLIT_TYPE)
+                save_unwhitened(th, lam0, lam0_delta, parser, K_chol,
+                                data_dir   = BASIS_DIR,
+                                split_type = SPLIT_TYPE)
 
         res = minimize_chunk(fun = lambda th: loss_fun(th) + prior_loss(th),
                              jac = lambda th: loss_grad(th) + prior_loss_grad(th),
                              x0  = th,
                              max_iter   = MAX_LBFGS_ITER,
                              method     = 'L-BFGS-B',
-                             chunk_size = 100,
+                             chunk_size = 50,
                              callback   = chunk_callback, 
                              verbose    = False)
         th = res.x
@@ -243,15 +265,22 @@ if __name__=="__main__":
         #    plt.close("all")
 
     # exponentiate and normalize params
-    #betas  = parser.get(th, 'betas')
-    #omegas = parser.get(th, 'omegas')
-    #mus    = parser.get(th, 'mus')
-    #W = np.exp(omegas)
-    #W = W / np.sum(W, axis=1, keepdims=True)
-    #B = np.exp(np.dot(K_chol, betas.T).T)
-    #B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
-    #M = np.exp(mus)
-    #Xtilde = np.dot(W*M, B)
+    if False:
+        betas  = parser.get(th, 'betas')
+        omegas = parser.get(th, 'omegas')
+        mus    = parser.get(th, 'mus')
+        W = np.exp(omegas)
+        W = W / np.sum(W, axis=1, keepdims=True)
+        B = np.exp(np.dot(K_chol, betas.T).T)
+        B = B / np.sum(B * lam0_delta, axis=1, keepdims=True)
+        M = np.exp(mus)
+        Xtilde = np.dot(W*M, B)
+
+        ex_idx = 10
+        plt.plot(lam0, X[ex_idx,:])
+        plt.plot(lam0, Xtilde[ex_idx,:])
+        plt.show()
+
 
 #def minibatch_minimize(grad, x, N_example, num_epochs=100, batch_size=10000,
 #                        callback=None, step_size=0.1, mass=0.9, eps=1e-8):
