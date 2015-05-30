@@ -209,11 +209,11 @@ def load_redshift_samples(fname):
 ############################################################################
 def load_basis(num_bases, split_type, lam_subsample, basis_dir=""):
     ### load MLE basis 
-    lam0, lam0_delta = ru.get_lam0(lam_subsample=LAM_SUBSAMPLE)
+    lam0, lam0_delta = ru.get_lam0(lam_subsample=lam_subsample)
     th, lam0, lam0_delta, parser = load_basis_fit(
         os.path.join(basis_dir,
-                     qfb.basis_filename(num_bases  = NUM_BASES, 
-                                        split_type = SPLIT_TYPE,
+                     qfb.basis_filename(num_bases  = num_bases,
+                                        split_type = split_type,
                                         lam0       = lam0))
         )
     mus    = parser.get(th, 'mus')
@@ -228,11 +228,11 @@ def load_basis(num_bases, split_type, lam_subsample, basis_dir=""):
 
 def load_fit_params(num_bases, split_type, lam_subsample, basis_dir=""):
     ### load MLE basis 
-    lam0, lam0_delta = ru.get_lam0(lam_subsample=LAM_SUBSAMPLE)
+    lam0, lam0_delta = ru.get_lam0(lam_subsample=lam_subsample)
     th, lam0, lam0_delta, parser = load_basis_fit(
         os.path.join(basis_dir,
-                     qfb.basis_filename(num_bases  = NUM_BASES, 
-                                        split_type = SPLIT_TYPE,
+                     qfb.basis_filename(num_bases  = num_bases,
+                                        split_type = split_type,
                                         lam0       = lam0))
         )
     mus    = parser.get(th, 'mus')
