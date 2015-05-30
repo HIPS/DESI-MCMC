@@ -12,6 +12,7 @@ if __name__=="__main__":
     ##########################################################################
     ## set sampling parameters
     ##########################################################################
+    print sys.argv
     narg           = len(sys.argv)
     test_n         = int(sys.argv[1]) if narg > 1 else 120 #1645
     Nsamps         = int(sys.argv[2]) if narg > 2 else 20
@@ -20,7 +21,7 @@ if __name__=="__main__":
     NUM_BASES      = int(sys.argv[5]) if narg > 5 else 4
     SPLIT_TYPE     = sys.argv[6] if narg > 6 else "redshift"  #"random", "flux", "redshift"
     SAMPLES_DIR    = sys.argv[7] if narg > 7 else "cache/photo_z_samps"
-    BASIS_DIR      = sys.argv[8] if narg > 8 else "cache/basis_fits"
+    BASIS_DIR      = sys.argv[8] if narg > 8 else "cache/basis_locked"
     NUM_TRAIN_EXAMPLE = "all"
     NUM_TEST_EXAMPLE = "all"
     SEED             = 42
@@ -33,13 +34,6 @@ if __name__=="__main__":
                            lam_subsample = LAM_SUBSAMPLE,
                            basis_dir     = BASIS_DIR)
     lam0, lam0_delta = ru.get_lam0(lam_subsample=LAM_SUBSAMPLE)
-    def get_basis_sample(idx, mle = False): 
-        """ Method to return a basis sample to condition on 
-        (or the MLE if specified) """
-        if mle: 
-            return B_mle
-        else:
-            return B_samps[idx]
 
     ##########################################################################
     ## Load in spectroscopically measured quasars + fluxes
@@ -128,6 +122,17 @@ if __name__=="__main__":
             de[i] = 0.0
         return grad_vec
 
+    def save_sample(s, chain, chain_ll):
+        fname = "redshift_samples_{spec}_K-{num_bases}_lamsamp-{lamsamp}_split-{split}.bin".format(
+            spec      = spec_id,
+            num_bases = B_mle.shape[0],
+            lamsamp   = LAM_SUBSAMPLE,
+            split     = SPLIT_TYPE)
+        print "   Saving samples to file %s"%os.path.join(SAMPLES_DIR, fname)
+        with open(os.path.join(SAMPLES_DIR, fname), 'wb') as handle:
+            np.save(handle, chain[-1,:s,:])
+            np.save(handle, chain_ll[-1,:s])
+
     ##########################################################################
     ## Draw samples of redshift and weights
     ##########################################################################
@@ -135,27 +140,23 @@ if __name__=="__main__":
     D       = B_mle.shape[0] + 2  # num(omegas) + m + z
     x0      = 10 * np.random.randn(len(temps), D)
     x0[:,0] = 6  * np.random.rand(len(temps))
+
+    def callback(s, chain, chain_lls):
+        if s % 200 == 0 and s>1: 
+            print " ... iteration %d, saving samples"%s
+            sys.stdout.flush()
+            save_sample(s, chain, chain_lls)
+
     chain, chain_ll = parallel_temper_slice(
         lnpdf     = lambda(th): ln_post(th, B_mle),
         x0        = x0,
         Nsamps    = Nsamps,
         Nchains   = len(temps),
         temps     = temps,
-        callback  = None,
+        callback  = callback,
         verbose   = True, 
         printskip = 50,
         compwise  = True)
-
-    # save redshift samples
-    fname = "redshift_samples_{spec}_K-{num_bases}_lamsamp-{lamsamp}_split-{split}.bin".format(
-        spec      = spec_id,
-        num_bases = B_mle.shape[0],
-        lamsamp   = LAM_SUBSAMPLE,
-        split     = SPLIT_TYPE)
-    print "Saving samples to file %s"%fname
-    with open(os.path.join(SAMPLES_DIR, fname), 'wb') as handle:
-        np.save(handle, chain[-1])
-        np.save(handle, chain_ll)
 
     print "z mean: %2.4f"%chain[-1, Nsamps/2:, 0].mean()
     print "z mode: %2.4f"%chain[-1, chain_ll[-1,:].argmax(), 0]
