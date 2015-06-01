@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.misc as scpm
 from scipy.misc import logsumexp
 from scipy.stats import multivariate_normal
 
@@ -91,6 +92,35 @@ def ein_gmm_like(x, ws, mus, sigs):
     norm  = np.power(2.*np.pi, -x.shape[1]/2.)
     probs = np.sum( (ws*dets*norm) * eterm,  axis=1)
     return probs
+
+def mog_logmarglike(x, means, covs, pis, ind=0):
+    """ marginal x or y (depending on ind) """
+    K = pis.shape[0]
+    xx = np.atleast_2d(x)
+    centered = xx.T - means[:,ind,np.newaxis].T
+    logprobs = []
+    for kk in xrange(K):
+        quadterm  = centered[:,kk] * centered[:,kk] * (1./covs[kk,ind,ind])
+        logprobsk = -.5*quadterm - .5*np.log(2*np.pi) \
+                    -.5*np.log(covs[kk,ind,ind]) + np.log(pis[kk])
+        logprobs.append(np.squeeze(logprobsk))
+    logprobs = np.array(logprobs)
+    logprob  = scpm.logsumexp(logprobs, axis=0)
+    if np.isscalar(x):
+        return logprob[0]
+    else:
+        return logprob 
+
+def mog_loglike(x, means, icovs, dets, pis):
+    xx = np.atleast_2d(x)
+    centered = xx[:,:,np.newaxis] - means.T[np.newaxis,:,:]
+    solved   = np.einsum('ijk,lji->lki', icovs, centered)
+    logprobs = -0.5*np.sum(solved * centered, axis=1) - np.log(2*np.pi) - 0.5*np.log(dets) + np.log(pis)
+    logprob  = scpm.logsumexp(logprobs, axis=1)
+    if len(x.shape) == 1:
+        return logprob[0]
+    else:
+        return logprob
 
 if __name__ == "__main__":
   # Vis test to make sure GMM is sensible

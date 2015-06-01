@@ -3,6 +3,7 @@ import numpy as np
 import quasar_infer_photometry as qip
 import redshift_utils as ru
 from CelestePy.util.infer.parallel_tempering import parallel_temper_slice
+from CelestePy.util.like.gmm_like import mog_logmarglike, mog_loglike
 
 ##############################################################################
 ### Start Script
@@ -15,13 +16,14 @@ if __name__=="__main__":
     print sys.argv
     narg           = len(sys.argv)
     test_n         = int(sys.argv[1]) if narg > 1 else 120 #1645
-    Nsamps         = int(sys.argv[2]) if narg > 2 else 20
-    Nchains        = int(sys.argv[3]) if narg > 3 else 5
+    Nsamps         = int(sys.argv[2]) if narg > 2 else 1000
+    Nchains        = int(sys.argv[3]) if narg > 3 else 8
     LAM_SUBSAMPLE  = int(sys.argv[4]) if narg > 4 else 10
     NUM_BASES      = int(sys.argv[5]) if narg > 5 else 4
     SPLIT_TYPE     = sys.argv[6] if narg > 6 else "redshift"  #"random", "flux", "redshift"
     SAMPLES_DIR    = sys.argv[7] if narg > 7 else "cache/photo_z_samps"
-    BASIS_DIR      = sys.argv[8] if narg > 8 else "cache/basis_locked"
+    BASIS_DIR      = sys.argv[8] if narg > 8 else "cache/basis_fits"
+    PRIOR_TYPE     = sys.argv[9] if narg > 9 else "naive"
     NUM_TRAIN_EXAMPLE = "all"
     NUM_TEST_EXAMPLE = "all"
     SEED             = 42
@@ -102,26 +104,35 @@ if __name__=="__main__":
            )
     sys.stdout.flush()
 
+    #### load prior file
+    bfname = qfb.basis_filename(num_bases = NUM_BASES, 
+                                split_type = SPLIT_TYPE,
+                                lam0       = lam0)
+    gmm_fname = BASIS_DIR + "/prior_" + bfname
+    with open(gmm_fname, 'rb') as handle:
+        omega_dict = pickle.load(handle)
+        mu_dict    = pickle.load(handle)
+
     ##########################################################################
     ## functions to pass into HMC
     ##########################################################################
     def ln_post(q, B):
         z     = q[0]
-        omega = q[1:(B.shape[0] + 1)]
-        mu    = q[B.shape[0] + 1]
+        omega = q[1:(B.shape[0])]
+        w     = ru.softmax(np.concatenate([omega, [0]]))
+        mu    = q[-1]
         if z < 0. or z > 8.:
             return -np.inf
-        ll    =  qip.pixel_likelihood(z, ru.softmax(omega), np.exp(mu), y_flux, y_flux_ivar, lam0, B)
-        return ll + qip.prior_omega(omega) + qip.prior_mu(mu) + qip.prior_z(z)
 
-    def dlnpdf(q, B):
-        de = np.zeros(q.shape)
-        grad_vec = np.zeros(q.shape)
-        for i in range(len(q)):
-            de[i] = 1e-6
-            grad_vec[i] = (ln_post(q + de, B) - ln_post(q - de, B)) / 2e-6
-            de[i] = 0.0
-        return grad_vec
+        # use MOG prior?
+        if PRIOR_TYPE == "naive":
+            ll_omega = qip.prior_omega(omega)
+            ll_mu    = qip.prior_mu(mu)
+        else:
+            ll_omega = mog_loglike(omega, omega_dict['mean'], omega_dict['icovs'], omega_dict['dets'], omega_dict['pis'])
+            ll_mu    = mog_loglike(mu, mu_dict['mean'], mu_dict['icovs'], mu_dict['dets'], mu_dict['pis'])
+        ll =  qip.pixel_likelihood(z, w, np.exp(mu), y_flux, y_flux_ivar, lam0, B)
+        return ll + ll_omega + ll_mu
 
     def save_sample(s, chain, chain_ll):
         fname = "redshift_samples_{spec}_K-{num_bases}_lamsamp-{lamsamp}_split-{split}.bin".format(
@@ -138,7 +149,7 @@ if __name__=="__main__":
     ## Draw samples of redshift and weights
     ##########################################################################
     temps   = np.linspace(.1, 1., Nchains)
-    D       = B_mle.shape[0] + 2  # num(omegas) + m + z
+    D       = B_mle.shape[0] + 1  # num(omegas) + m + z
     x0      = 10 * np.random.randn(len(temps), D)
     x0[:,0] = 6  * np.random.rand(len(temps))
 
