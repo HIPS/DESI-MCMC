@@ -176,9 +176,13 @@ if __name__=="__main__":
 
     if False:
         fig, axarr = plt.subplots(2, 1)
+        axarr[0].plot(chain[-1, Nsamps/2:,:])
+        axarr[1].plot(chain_ll[-1, Nsamps/2:])
         for w in range(4):
             axarr[0].plot(chain[-1,:,0])
             axarr[1].plot(chain_ll[-1,:])
         plt.show()
         plt.hist(chain[-1, Nsamps/2:, 0], 50); plt.show()
+
+
 
