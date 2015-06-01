@@ -15,7 +15,7 @@ import GPy
 ###
 ### Experiment Params
 ###
-SPLIT_TYPE        = "random"  #split_types = ["random", "flux", "redshift"]
+SPLIT_TYPE        = "redshift"  #split_types = ["random", "flux", "redshift"]
 NUM_TRAIN_EXAMPLE = 2000
 MAX_LBFGS_ITER    = 10000
 NUM_BASES         = 4
@@ -63,8 +63,8 @@ if __name__=="__main__":
     ## set sampling parameters
     ##########################################################################
     narg              = len(sys.argv)
-    EXP_INT           = int(sys.argv[1]) if narg > 1 else 2
-    NUM_BASES, SPLIT_TYPE = EXP_PARAMS[EXP_INT]
+    #EXP_INT           = int(sys.argv[1]) if narg > 1 else 2
+    #NUM_BASES, SPLIT_TYPE = EXP_PARAMS[EXP_INT]
     #SPLIT_TYPE        = sys.argv[1] if narg > 1 else SPLIT_TYPE
     #NUM_TRAIN_EXAMPLE = int(sys.argv[2]) if narg > 2 else NUM_TRAIN_EXAMPLE
     #MAX_LBFGS_ITER    = int(sys.argv[3]) if narg > 3 else MAX_LBFGS_ITER
@@ -108,7 +108,7 @@ if __name__=="__main__":
 
     ## iterate over different lambda subsamples to get a quick starting
     ## point for more refined model
-    lam_schedule = [50, 25, 10, 5]
+    lam_schedule = [5]
     for lam_idx, lam_subsample in enumerate(lam_schedule):
         print "========================================================="
         print " FITTING LAM SUBSAMPLE %d"%lam_subsample
@@ -161,7 +161,7 @@ if __name__=="__main__":
         # WHITEN THE MATRIX)
         basis_file = "cache/basis_fits/basis_fit_K-%d_V-%d_split-%s.pkl"%(NUM_BASES, len(lam0), SPLIT_TYPE)
         if os.path.exists(basis_file):
-            print "grabbing file from CACHE, optimizing more!"
+            print "grabbing file (%s) from CACHE, optimizing more!"%basis_file
             th, lam0, lam0_delta, parser = qfb.load_basis_fit(basis_file)
             betas = parser.get(th, 'betas')
             betas_white = np.linalg.solve(K_chol, betas.T).T
@@ -192,7 +192,7 @@ if __name__=="__main__":
                 if loss_val < min_val:
                     min_x = x.copy()
                     min_val = loss_val
-                print " %d, loss = %2.4g, grad = %2.4g " % \
+                print " %d, loss = %2.7g, grad = %2.4g " % \
                     (i, loss_val, np.sqrt(np.dot(g,g)))
                 sys.stdout.flush()
                 obj_vals.append(loss_val)
@@ -219,7 +219,7 @@ if __name__=="__main__":
             sys.stdout.flush() 
             if i%10 == 0:
                 print "    .... writing out chunk %d result to disk"%i
-                save_unwhitened(th, lam0, lam0_delta, parser, K_chol,
+                save_unwhitened(x, lam0, lam0_delta, parser, K_chol,
                                 data_dir   = BASIS_DIR,
                                 split_type = SPLIT_TYPE)
 
