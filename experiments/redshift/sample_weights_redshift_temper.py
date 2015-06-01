@@ -1,6 +1,8 @@
 import sys, os
 import numpy as np
+import cPickle as pickle
 import quasar_infer_photometry as qip
+import quasar_fit_basis as qfb
 import redshift_utils as ru
 from CelestePy.util.infer.parallel_tempering import parallel_temper_slice
 from CelestePy.util.like.gmm_like import mog_logmarglike, mog_loglike
