@@ -100,6 +100,7 @@ if __name__=="__main__":
            num_samps = Nsamps,
            num_chains = Nchains
            )
+    sys.stdout.flush()
 
     ##########################################################################
     ## functions to pass into HMC
