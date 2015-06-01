@@ -12,16 +12,26 @@ import autograd.scipy.misc   as scpm
 from autograd import grad
 import matplotlib.pyplot as plt
 
-SPECTRA_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/spectro/redux/v5_5_12/spectra"
-DR10QSO_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/qso/DR10Q/"
-TRAIN_TEST_SPLIT_LOC = "/global/homes/a/acmiller/Proj/DESIMCMC/experiments/redshift/"
-if not os.path.exists(DR10QSO_LOC):
-    DR10QSO_LOC = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/data/DR10QSO/"
-    TRAIN_TEST_SPLIT_LOC = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/experiments/redshift/"
+#determine which system we're on
+if os.path.exists("/project/projectdirs/cosmo/sdss"):
+    print "REDSHIFT_UTIL: loading nersc paths"
+    SPECTRA_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/spectro/redux/v5_5_12/spectra"
+    DR10QSO_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/qso/DR10Q/"
+    TRAIN_TEST_SPLIT_LOC = "/global/homes/a/acmiller/Proj/DESIMCMC/experiments/redshift/"
+    EIGEN_FILE_LOC = "/global/homes/a/acmiller/Proj/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
 
-EIGEN_FILE_LOC = "/global/homes/a/acmiller/Proj/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
-if not os.path.exists(EIGEN_FILE_LOC):
-    EIGEN_FILE_LOC = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
+elif os.path.exists("/n/home09/amiller01/Proj/DESIMCMC/experiments/redshift"):
+    print "REDSHIFT_UTIL: loading odyssey paths"
+    SPECTRA_LOC = "/n/home09/amiller01/Proj/DESIMCMC/experiments/redshift/"
+    DR10QSO_LOC = "/n/home09/amiller01/Proj/DESIMCMC/data/DR10QSO/"
+    TRAIN_TEST_SPLIT_LOC = "/n/home09/amiller01/Proj/DESIMCMC/experiments/redshift/"
+    EIGEN_FILE_LOC = "/n/home09/amiller01/Proj/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
+
+elif os.path.exists("/Users/acm/Proj/DESIMCMC/"):
+    DR10QSO_LOC = "/Users/acm/Proj/astro/DESIMCMC/data/DR10QSO/"
+    TRAIN_TEST_SPLIT_LOC = "/Users/acm/Proj/astro/DESIMCMC/experiments/redshift/"
+    SPECTRA_LOC = "/n/home09/amiller01/Proj/DESIMCMC/experiments/redshift/"
+    EIGEN_FILE_LOC = "/Users/acm/Proj/astro/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
 
 split_types = ["random", "flux", "redshift"]
 def load_DR10QSO_train_test_idx(split_type="random"):
