@@ -67,7 +67,7 @@ def minimize_chunk(fun, jac, x0, method, max_iter,
     """ minimize function that saves every few iterations """
     num_chunks = int(np.ceil(max_iter / float(chunk_size)))
     for chunk_i in range(num_chunks):
-        print "optimizing chunk %d of %d (curr_ll = %2.5g)"%(chunk_i, num_chunks, fun(x0))
+        print "optimizing chunk %d of %d (curr_ll = %2.7g)"%(chunk_i, num_chunks, fun(x0))
         res = minimize(fun = fun, jac = jac, x0 = x0, method = method,
                        options = {'maxiter': chunk_size, 'disp': verbose})
         x0  = res.x

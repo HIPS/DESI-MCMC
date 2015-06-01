@@ -28,7 +28,7 @@ def parallel_temper_slice(lnpdf, x0, Nsamps, Nchains, temps=None,
                 ll         = " ln_post ", 
                 num_swaps  = " Nswaps ",
                 cold_swaps = " NColdSwaps ",
-                th0        = " th0 "), verbose)
+                th0        = " th0 (mean, sd)"), verbose)
 
     # set up sample array
     assert x0.shape[0] == Nchains, "initial x has to have shape Nchains x Dim"
@@ -78,7 +78,8 @@ def parallel_temper_slice(lnpdf, x0, Nsamps, Nchains, temps=None,
                 ll         = " %2.4g "%chain_lls[-1, s],
                 num_swaps  = " %d "%np.sum(Nswaps),
                 cold_swaps = " %d"%Nswaps[-1],
-                th0        = " %2.2f"%chain[-1,s,0]), verbose and s%printskip==0)
+                th0        = " %2.2f (%2.2f, %2.2f)"%(chain[-1,s,0], chain[-1,:s,0].mean(), chain[-1,:s,0].std())), 
+                verbose and s%printskip==0)
 
         if callback is not None:
             callback(s, chain, chain_lls)
