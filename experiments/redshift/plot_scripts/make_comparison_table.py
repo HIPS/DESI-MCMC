@@ -112,19 +112,27 @@ if __name__=="__main__":
                 nn_true  = nn_true[hi_idx]
 
         # bold the best error in each case
+        def format_errors(errfn):
+            spec = errfn(mog_true, mog_preds)
+            xd   = errfn(bovy_true, bovy_preds)
+            NN   = errfn(nn_true, nn_preds)
+            errs = np.array([xd, NN, spec])
+            strs = ["%2.3f"%s for s in errs]
+            strs[errs.argmin()] = "\\textbf{%s}"%strs[errs.argmin()]
+            return strs
 
         # print table row
         row_strings[i] = sub(row_strings[i], 
                              div      = div_string,
-                             specmae  = "%2.3f"%mae(mog_true, mog_preds),
-                             specmape = "%2.3f"%mape(mog_true, mog_preds),
-                             specrmse = "%2.3f"%rmse(mog_true, mog_preds),
-                             xdmae    = "%2.3f"%mae(bovy_true, bovy_preds),
-                             xdmape   = "%2.3f"%mape(bovy_true, bovy_preds),
-                             xdrmse   = "%2.3f"%rmse(bovy_true, bovy_preds),
-                             NNmae    = "%2.3f"%mae(nn_true, nn_preds),
-                             NNmape   = "%2.3f"%mape(nn_true, nn_preds),
-                             NNrmse   = "%2.3f"%rmse(nn_true, nn_preds)
+                             xdmae    = format_errors(mae)[0],
+                             NNmae    = format_errors(mae)[1],
+                             specmae  = format_errors(mae)[2],
+                             xdmape   = format_errors(mape)[0],
+                             NNmape   = format_errors(mape)[1],
+                             specmape = format_errors(mape)[2],
+                             xdrmse   = format_errors(rmse)[0],
+                             NNrmse   = format_errors(rmse)[1],
+                             specrmse = format_errors(rmse)[2]
                             )
 
     ##############################################################################
