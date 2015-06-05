@@ -108,6 +108,7 @@ The two methods of spectral information collection are graphically compared in F
 \label{fig:filters}
 \end{center}
 \end{figure*} 
+\vskip -.1in
 %--------------------------------------------------------------------------
 
 Despite carrying less spectral information, broadband photometry is more widely available and exists for a larger number of sources than spectroscopic measurements. 
@@ -146,13 +147,13 @@ Some observed quasar spectra and their ``de-redshifted'' rest frame spectra are 
 \begin{figure*}[t]
 \vskip -.16in
 \begin{center}
-\centerline{\includegraphics[width=\textwidth]{../figs/quasar_redshift_example}}
+\centerline{\includegraphics[width=.9\textwidth]{../figs/quasar_redshift_example}}
 \vskip -.16in
 \caption{%
 Spectroscopic measurements of multiple quasars at different redshifts, $z$.
-The top graphic depicts the sample spectrograph in the observation frame, intuitively thought of as ``stretched'' by a factor $(1+z)$.
-The lower figure depicts the ``de-redshifted'' version of the same quasar spectra.
-This effectively squashes observations, and reconstructs each quasar spectrum as it would be seen in the quasar's rest frame.  
+The upper graph depicts the sample spectrograph in the observation frame, intuitively thought of as ``stretched'' by a factor $(1+z)$.
+The lower figure depicts the ``de-redshifted'' (rest-frame) version of the same quasar spectra, 
+%This effectively squashes observations, and reconstructs each quasar spectrum as it would be seen in the quasar's rest frame.  
 The two lines show the corresponding locations of the characteristic peak in each reference frame.  
 Note that the $x$-axis has been changed to ease the visualization - the transformation is much more dramatic.  The appearance of translation is due to missing data; we don't observe SED samples outside the range 3,500-10,500 $\angstrom$.   
 }
@@ -481,11 +482,12 @@ Within each chain, we use component-wise slice sampling \cite{neal2003slice} to 
 \label{sec:experiments}
 We fit our model to three training sets composed of spectroscopically measured quasars from the DR10QSO dataset \cite{paris2014sloan} with confirmed redshifts in the range ${z \in (.01,  5.85)}$.  
 Our experiments split the data in three ways: (i) randomly, (ii) by $r$-band fluxes, (iii) by redshift values.  In split (ii), we train on the brightest 90\% of quasars, and test on a subset of the remaining.  Split (iii) takes the lowest 85\% of quasars as training data, and a subset of the brightest 15\% as test cases.  Splits (ii) and (iii) are intended to test the method's robustness to different training and testing distributions, mimicking the discovery of fainter and farther sources.  
-For each split, we find a MAP estimate of the basis, $B_1, \dots, B_K$, and weights, $\mathbf{w}_n$, and use them as a prior for photometric inference.  For computational purposes, we limit our training sample to a random subsample of 2,000 quasars.   
+For each split, we find a MAP estimate of the basis, $B_1, \dots, B_K$, and weights, $\mathbf{w}_n$ to use as a prior for photometric inference.  For computational purposes, we limit our training sample to a random subsample of 2,000 quasars.   
 The following sections outline the resulting model fit and inferred SEDs and redshifts. 
 
 %----- -------------------------------------------------
 \begin{figure}[t]
+\vskip -.1in
 \floatbox[{\capbeside\thisfloatsetup{capbesideposition={right,top},capbesidewidth=5.5cm}}]{figure}[\FBwidth]
 { 
   \caption{%
@@ -499,7 +501,7 @@ Bottom: model reconstruction of a training-sample SED. }
   \hskip -.2in \includegraphics[width=.55\textwidth]{../figs/rank_4_basis}
 }
 \includegraphics[width=.99\textwidth]{../figs/idx_4_rank_4_reconstruction.pdf}
-\vskip -.16in
+\vskip -.2in
 \end{figure}
 
 
@@ -575,11 +577,11 @@ Further detail on these two methods and a broader review of ``photo-z'' approach
 We compute mean absolute error (MAE), mean absolute percentage error (MAPE), and root mean square error (RMSE) to measure predictive performance.  
 Table~\ref{tab:error} compares prediction errors for the three different approaches (XD, NN, Spec). %We also quantify average prediction error and posterior quantile interval coverage for sets of quasars with increasing redshift.  
 Our experiments show that accurate redshift measurements are attainable even when the distribution of training set is different from test set by directly modeling the SED itself. Our method dramatically outperforms \cite{bovy2012photometric} and \cite{brescia2013photometric} in split (iii), particularly for very high redshift fluxes.  
-We also note that our ``training set'' is derived from only 2,000 examples, whereas the training set for XDQSOz and the neural network were $\approx$ 80,000 quasars and 50,000 quasars, respectively.  This shortcoming can be overcome with more sophisticated inference techniques for the non-negative basis.  Despite this, the SED-based predictions are comparable.
+We also note that our training set is derived from only 2,000 examples, whereas the training set for XDQSOz and the neural network were $\approx$ 80,000 quasars and 50,000 quasars, respectively.  This shortcoming can be overcome with more sophisticated inference techniques for the non-negative basis.  Despite this, the SED-based predictions are comparable.
   
-Furthermore, because we are directly modeling the latent SED, our method admits a probabilistic estimate of the entire SED conditioned only on observed photometric fluxes.
+Furthermore, because we are directly modeling the latent SED, our method admits a posterior estimate of the entire SED.
 Figure~\ref{fig:recon} displays posterior SED samples and their corresponding redshift marginals for test-set quasars inferred from only SDSS photometric measurements.  
-Our experiments suggest that the SED-based model using a physical generative process will make better predictions for quasars with very different properties from the training set. s
+Our experiments suggest that the SED-based model using a physical generative process will make better predictions for quasars with very different properties from the training set.
 
 %---- TABLE --------------------------------------
 \begin{table*}[t]
