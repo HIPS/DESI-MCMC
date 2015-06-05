@@ -83,10 +83,10 @@ Enormous amounts of astronomical data are collected by a range of instruments at
 Among these data are measurements of the spectral energy distribution (SED) of a source.  
 The SED describes the distribution of energy radiated by a source over the spectrum of wavelengths or photon energy levels.
 The SED of a light source is of interest because it conveys information about its physical properties, including type, distance to the earth, and redshift, which will be an estimand of interest in this work. 
-For intuition, the SED of a star at around 5,800 $K$ (e.g.~the sun) radiates most of its energy in the 4,000 $\angstrom$ to 7,000 $\angstrom$ range, which corresponds roughly to the range of visible light.  
+For intuition, the SED of a star at around 5,800 $K$ (e.g.,~the sun) radiates most of its energy in the 4,000 $\angstrom$ to 7,000 $\angstrom$ range, which corresponds roughly to the range of visible light.  
 However, stars tend to have simple distributions (well-modeled by Planck's law), whereas other objects, such as galaxies and quasars, can have much more complicated SEDs.  
 
-The SED can be thought of as a latent function for which we can only obtain noisy measurements.  Measurements of SEDs, however, are produced by instruments at widely varying spectral resolutions - some instruments measure many wavelengths simultaneously (spectroscopy), while others average over large swaths of the energy spectrum and report a low dimensional summary (photometry). 
+The SED can be thought of as a latent function for which we can only obtain noisy measurements.  Measurements of SEDs, however, are produced by instruments at widely varying spectral resolutions -- some instruments measure many wavelengths simultaneously (spectroscopy), while others average over large swaths of the energy spectrum and report a low dimensional summary (photometry). 
 Spectroscopic data describe a source's SED in finer detail than broadband photometric data.  For example, the Baryonic Oscillation Spectroscopic Survey \cite{dawson2013baryon} measures SED samples at over four thousand wavelengths between 3,500 and 10,500 $\angstrom$.
 In contrast, the Sloan Digital Sky Survey (SDSS)~\cite{alam2015eleventh} collects spectral information in only 5 broad spectral bins by using broadband filters (called $u,g,r,i,$ and $z$).  
 Photometric preprocessing models can then aggregate pixel information into five band-specific fluxes and their uncertainties \cite{stoughton2002sloan}.  
@@ -132,21 +132,21 @@ We conclude with a discussion and an outline of directions for future work.
 The SED of a source describes the distribution of the energy it radiates as a function of wavelength.  
 %For example, most stars are well-modeled as ideal black-body radiators, as their SED is well-described by a parametric form given by Planck's law. 
 The SEDs of most stars are approximately represented by Planck’s law for black body radiators, and are well-described in detail by stellar atmosphere models \cite{gray2001physical}.  
-Quasars, on the other hand, have a complicated SED characterized by some salient features, such as the Lyman-$\alpha$ forest, which is the absorption of light at many wavelengths from neutral hydrogen gas between the earth and the quasar \cite{weinberg2003lymanalpha}.
+Quasars, on the other hand, have complicated SEDs characterized by some salient features, such as the Lyman-$\alpha$ forest, which is the absorption of light at many wavelengths from neutral hydrogen gas between the earth and the quasar~\cite{weinberg2003lymanalpha}.
 
 One of the most important and interesting properties of quasars (and galaxies) conveyed by the SED is redshift. 
 Redshift affects our observation of SEDs by ``stretching'' the wavelengths, ${\lambda \in \Lambda}$, of the quasar's \emph{rest-frame} SED, skewing toward longer (redder) wavelengths.
 Denoting the \emph{rest-frame} SED of a quasar~$n$ as a function,~${f_n^{(\text{rest})} : \Lambda \rightarrow \R_+}$, the effect of redshift with value $z_n$ (typically between 0 and 7) on the \emph{observation-frame} SED is described by the relationship 
 \begin{align}
-  f_n^{(\text{obs})}(\lambda) &= f_n^{(\text{rest})}(\lambda \cdot (1 + z_n)) \, .
+  f_n^{(\text{obs})}(\lambda) &= f_n^{(\text{rest})}\left(\frac{\lambda}{1 + z_n}\right) \, .
 \end{align}
 Some observed quasar spectra and their ``de-redshifted'' rest frame spectra are depicted in Figure~\ref{fig:frames}.
 
 \subsection{Gaussian processes}
 Due to the complicated shape of quasar SEDs, we use Gaussian processes to flexibly encode our prior beliefs about their structure and shape. 
-A Gaussian process (GP) is a stochastic process, ${f: \mathcal{X} \rightarrow \R}$, such that any finite collection of random variables, ${f(x_1),\dots, f(x_N) \in \R}$, is distributed according to a multivariate normal distribution.  
+A Gaussian process (GP) is a stochastic process,~${f: \mathcal{X} \rightarrow \R}$, such that any finite collection of random variables,~${f(x_1),\dots, f(x_N) \in \R}$, is distributed according to a multivariate normal distribution.  
 GPs are frequently used as priors over unknown functions, $f$, where the random variables $f(x_1), \dots, f(x_N)$ correspond to evaluations of the function at inputs ${x_1, \dots, x_N \in \mcX}$.  
-The prior covariance between any two outputs, $f(x_i)$ and $f(x_j)$, encodes prior beliefs about the function~$f$; carefully chosen covariance functions can encode beliefs about a wide range of properties, including smoothness and periodicity.  
+The prior covariance between any two outputs,~$f(x_i)$ and~$f(x_j)$, encodes prior beliefs about the function~$f$; carefully chosen covariance functions can encode beliefs about a wide range of properties, including smoothness and periodicity.  
 
 Throughout this paper we will use the the Mat\'{e}rn \cite{Matern1986spatial} covariance function
 \begin{align}
@@ -174,7 +174,7 @@ The top graphic depicts the sample spectrograph in the observation frame, intuit
 The lower figure depicts the ``de-redshifted'' version of the same quasar spectra.
 This effectively squashes observations, and reconstructs each quasar spectrum as it would be seen in the quasar's rest frame.  
 The two lines show the corresponding locations of the characteristic peak in each reference frame.  
-Note that the $x$-axis has been changed to ease the visualization - the transformation is much more dramatic.  The appearance of translation is due missing data - we don't observe SED samples outside the range 3,500-10,500 $\angstrom$.   
+Note that the $x$-axis has been changed to ease the visualization - the transformation is much more dramatic.  The appearance of translation is due to missing data; we don't observe SED samples outside the range 3,500-10,500 $\angstrom$.   
 }
 \vskip -.16in
 \label{fig:frames}
@@ -188,7 +188,7 @@ Note that the $x$-axis has been changed to ease the visualization - the transfor
 %----------------------------------------------------------------------------------
 \section{Model}
 \label{sec:model}
-This section describes the details of our probabilistic model of spectroscopic and photometric observations.  
+This section describes our probabilistic model of spectroscopic and photometric observations.  
 
 \subsection{Spectroscopic flux model}
 The SED of a quasar is a non-negative function~${f : \Lambda \rightarrow \R^+}$, where~$\Lambda$ denotes the range of wavelengths and~$\R^+$ are non-negative real numbers representing flux density.
@@ -202,13 +202,13 @@ This value could also be fit using model-checking methods for latent factorizati
 We place a normalized log-Gaussian process prior on each of these basis functions.  
 The generative procedure for quasar spectra begins with a shared basis
 \begin{align}
-  \beta_k(\cdot) &\stackrel{\text{iid}}{\sim} \mathcal{GP}(0, K_\theta),\; k=1, \dots, K,\\
+  \beta_k(\cdot) &\stackrel{\text{iid}}{\sim} \mathcal{GP}(0, K_\theta),\; k=1, \dots, K,&
   B_k(\cdot) &= \frac{\exp(\beta_k(\cdot))}{\int_\Lambda \exp(\beta_k(\lambda))\, d\lambda}   \, ,
 \end{align}
-where $K_{\theta}$ is the Mat\'{e}rn kernel and $B_k$ is the exponentiated and normalized version of $\beta_k$. For each quasar $n$,
+where $K_{\theta}$ is the kernel and $B_k$ is the exponentiated and normalized version of $\beta_k$. For each quasar~$n$,
 \begin{align}
-  \mathbf{w}_n &\sim p(\mathbf{w}) \, , \text{ s.t. } \sum_{w_k} w_k = 1, \\
-  m_n  &\sim p(m) \, , \text{ s.t. } m_n > 0, \\
+  \mathbf{w}_n &\sim p(\mathbf{w}) \, , \text{ s.t. } \sum_{w_k} w_k = 1, &
+  m_n  &\sim p(m) \, , \text{ s.t. } m_n > 0, &
   z_n &\sim p(z),
 \end{align}
 where $\mathbf{w}_n$ mixes over the latent types, $m_n$ is the apparent brightness,~$z_n$ is the quasar's redshift, and distributions~$p(\mathbf{w})$,~$p(m)$, and~$p(z)$ are priors to be specified later.
