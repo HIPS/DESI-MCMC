@@ -19,9 +19,11 @@ table_string = \
  %s \\\\
  %s \\\\
  %s \\\\
+ \hline
  %s \\\\
  %s \\\\
  %s \\\\
+ \hline
  %s \\\\
  %s \\\\
  %s \\\\

@@ -552,7 +552,7 @@ More features (e.g.~more photometric bands) can be incorporated into all models,
 We compute mean absolute error (MAE), mean absolute percentage error (MAPE), and root mean square error (RMSE) to measure predictive performance.  
 Table~\ref{tab:error} compares prediction errors for the three different approaches (XD, NN, Spec). %We also quantify average prediction error and posterior quantile interval coverage for sets of quasars with increasing redshift.  
 Our experiments show that accurate redshift measurements are attainable even when the distribution of training set is different from test set by directly modeling the SED itself. Our method dramatically outperforms \cite{bovy2012photometric} and \cite{brescia2013photometric} in split (iii), particularly for very high redshift fluxes.  
-We also note that our ``training set'' is derived from only 2,000 examples, whereas the training set for XDQSOz and the neural network were $\approx$ 80,000 quasars.  This shortcoming can be overcome with more sophisticated inference techniques for the non-negative basis.  Despite this, the SED-based predictions are comparable.
+We also note that our ``training set'' is derived from only 2,000 examples, whereas the training set for XDQSOz and the neural network were $\approx$ 80,000 quasars and 50,000 quasars, respectively.  This shortcoming can be overcome with more sophisticated inference techniques for the non-negative basis.  Despite this, the SED-based predictions are comparable.
   
 Furthermore, because we are directly modeling the latent SED, our method admits a probabilistic estimate of the entire SED conditioned only on observed photometric fluxes.
 Figure~\ref{fig:recon} displays posterior SED samples and their corresponding redshift marginals for test-set quasars inferred from only SDSS photometric measurements.  
@@ -560,7 +560,7 @@ Figure~\ref{fig:recon} displays posterior SED samples and their corresponding re
 
 %---- TABLE --------------------------------------
 \begin{table*}[t]
-\caption{Prediction error for three train-test splits, (i) random, (ii) flux-based, (iii) redshift-based, corresponding to XDQSOz \cite{bovy2012photometric} (XD), the neural network approach \cite{brescia2013photometric} (NN), our SED-based model (Spec). The middle and lowest sections correspond to test redshifts in the upper 50\% and 10\%, respectively.  The XDQSOz and NN models were trained on (roughly) 80,000 example quasars, while the Spec models was trained on 2 thousand. }
+\caption{Prediction error for three train-test splits, (i) random, (ii) flux-based, (iii) redshift-based, corresponding to XDQSOz \cite{bovy2012photometric} (XD), the neural network approach \cite{brescia2013photometric} (NN), our SED-based model (Spec). The middle and lowest sections correspond to test redshifts in the upper 50\% and 10\%, respectively.  The XDQSOz and NN models were trained on (roughly) 80,000 and 50,000 example quasars, respectively, while the Spec models were trained on 2,000. }
 \label{tab:error}
 \begin{center}
 \begin{small}

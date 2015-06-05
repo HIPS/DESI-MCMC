@@ -21,7 +21,7 @@ MAX_LBFGS_ITER    = 10000
 NUM_BASES         = 4
 BETA_VARIANCE     = 1.
 BETA_LENGTHSCALE  = 40.
-BASIS_DIR         = "cache/basis_fits/"
+BASIS_DIR         = "cache/basis_locked/"
 
 # set up experiment list
 import itertools
@@ -47,6 +47,20 @@ def initialize_from_lower_res(th_lo, lam_lo, parser_lo,
     parser_hi.set(th_hi, 'mus', mus_lo)
     return th_hi
 
+def betas_from_lower_subsample(lam_sub_hi, lam_sub_lo):
+    lam_lo, lam_lo_delta = ru.get_lam0(lam_subsample=lam_sub_lo)
+    lam_hi, lam_hi_delta = ru.get_lam0(lam_subsample=lam_sub_hi)
+    basis_file = BASIS_DIR + "basis_fit_K-%d_V-%d_split-%s.pkl" % \
+                 (NUM_BASES, len(lam_lo), SPLIT_TYPE)
+    if os.path.exists(basis_file):
+        print "grabbing file (%s) from CACHE, optimizing more!"%basis_file
+        th, lam0, lam0_delta, parser = qfb.load_basis_fit(basis_file)
+        betas_lo = parser.get(th, 'betas')
+        betas_hi = np.array([np.interp(lam_hi, lam_lo, beta) for beta in betas_lo])
+        return betas_hi
+    else:
+        return None
+
 
 # WE ARE OPTIMIZING IN THE WHITENED SPACE, BUT DON'T SAVE IT IN THE WHITENED
 # SPACE YOU DOPE
@@ -70,7 +84,9 @@ if __name__=="__main__":
     #MAX_LBFGS_ITER    = int(sys.argv[3]) if narg > 3 else MAX_LBFGS_ITER
     #NUM_BASES         = int(sys.argv[4]) if narg > 4 else NUM_BASES
     #BASIS_DIR         = sys.argv[5] if narg > 5 else BASIS_DIR
-
+    NUM_BASES  = 4
+    SPLIT_TYPE = "random"
+    
     print \
 """
 ==============================================================================
@@ -165,6 +181,13 @@ if __name__=="__main__":
             th, lam0, lam0_delta, parser = qfb.load_basis_fit(basis_file)
             betas = parser.get(th, 'betas')
             betas_white = np.linalg.solve(K_chol, betas.T).T
+            parser.set(th, 'betas', betas_white)
+
+        betas_from_lo = betas_from_lower_subsample(lam_sub_hi = lam_subsample, 
+                                                   lam_sub_lo = 10)
+        if betas_from_lo is not None:
+            print "betas from lo??"
+            betas_white = np.linalg.solve(K_chol, betas_from_lo.T).T
             parser.set(th, 'betas', betas_white)
 
         ## make sure loss works

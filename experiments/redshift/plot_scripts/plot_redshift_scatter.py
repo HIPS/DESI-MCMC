@@ -24,9 +24,10 @@ for exp_type in exp_types:
     max_z = max(mog_preds.max(), mog_true.max())
     min_z = min(mog_true.min() - .2, 2.2)
     plt.plot([min_z, max_z], [min_z, max_z], linewidth=2, alpha=.5)
-    plt_idx = np.arange(0, len(mog_true), 5)
+    plt_idx = np.arange(0, len(mog_true), 8)
     for n in plt_idx: 
-        plt.plot([mog_true[n], mog_true[n]], [mog_per[n,0], mog_per[n,-1]], alpha = .15, color = 'grey', linewidth=1)
+        plt.plot([mog_true[n], mog_true[n]], [mog_per[n,0], mog_per[n,-1]], 
+                  alpha = .15, color = 'grey', linewidth=1)
     plt.scatter(mog_true[plt_idx], mog_preds[plt_idx], color=current_palette[2], alpha = 1.0)
     plt.xlim(min_z, max_z)
     plt.ylim(min_z, max_z)
