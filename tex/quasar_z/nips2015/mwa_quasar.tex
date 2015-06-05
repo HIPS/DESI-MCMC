@@ -225,10 +225,10 @@ For each quasar with spectroscopic data, we observe noisy samples of the redshif
 For quasar $n$, our \emph{observation frame} samples are conditionally distributed as
 \begin{align}
   x_{n, \lambda} | z_n, \mathbf{w}_n, \{ B_k \} 
-    &\stackrel{\textrm{ind}}{\sim} \mathcal{N}\left( \frac{1}{(1 + z_n)} \tilde f_n^{(\text{rest})}( \lambda \cdot (1 + z_n) ), \sigma_{n,\lambda}^2 \right)
+    &\stackrel{\textrm{ind}}{\sim} \mathcal{N}\left( \frac{1}{1 + z_n} \tilde f_n^{(\text{rest})}\left( \frac{\lambda}{1 + z_n} \right), \sigma_{n,\lambda}^2 \right)
     \label{eq:spec} 
 \end{align}
-where $\sigma_{n, \lambda}^2$ is known measurement variance from the instruments used to make the observations, and the $1+z_n$ is a factor to preserve the overall volume of the rest-frame unnormalized SED. 
+where $\sigma_{n, \lambda}^2$ is known measurement variance from the instruments used to make the observations, and the $1/(1+z_n)$ is a factor to preserve the overall volume of the rest-frame unnormalized SED. 
 The BOSS spectra (and our rest-frame basis) are stored in units ${10^{-17} \cdot \text{erg} \cdot \text{cm}^{-2} \cdot \text{s}^{-1} \cdot \angstrom^{-1}}$.  
 
 \subsection{Photometric flux model }
