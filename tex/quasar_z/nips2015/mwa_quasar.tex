@@ -66,10 +66,7 @@ Harvard University\\
 %\nipsfinalcopy % Uncomment for camera-ready version
 
 \begin{document}
-
-
 \maketitle
-
 \begin{abstract} 
 We propose a method for combining two sources of astronomical data, spectroscopy and photometry, which carry information about sources of light (e.g., stars, galaxies, and quasars) at extremely different spectral resolutions. 
 Our model treats the spectral energy distribution (SED) of the radiation from a source as a latent variable, hierarchically generating both photometric and spectroscopic observations.  
@@ -332,7 +329,7 @@ Note that ${\Nspec + \Nphoto}$ replicates of $\mathbf{w}_n, m_n$ and $z_n$ are i
 
 \paragraph{Note on priors}
 For photometric weight and redshift inference, we use a flat prior on $z_n$, and empirically derived priors for $m_n$ and $w_n$, from the sample of spectroscopically measured sources.  
-We fit a mixture of Gaussians to the logit space variables, $\omega$, defined 
+We fit a mixture of Gaussians to the logit-space variables, $\omega$, defined 
 \begin{align}
   \omega_k &\sim \mathcal{N}(0, 1), \, k = 1, \dots, K-1 &
   w_k &= \frac{\exp(\omega_k)}{1 + \sum_{k'} \exp(\omega_{k'})} \, .
@@ -506,9 +503,9 @@ Bottom: model reconstruction of a training-sample SED. }
 
 %---------------
 \paragraph{SED Basis}
-We depict a MAP estimate of $B_1, \dots, B_k$ in Figure~\ref{fig:basis}.
+We depict a MAP estimate of $B_1, \dots, B_K$ in Figure~\ref{fig:basis}.
 Our basis decomposition enjoys the benefit of physical interpretability due to our density-estimate formulation of the problem.
-Bases $B_1, B_2$ place mass on the Lyman-$\alpha$ peak around 1,216~$\angstrom$, allowing the model to capture the co-occurrence of more peaked SEDs with a bump around 1,550~$\angstrom$.  
+Basis $B_4$ places mass on the Lyman-$\alpha$ peak around 1,216~$\angstrom$, allowing the model to capture the co-occurrence of more peaked SEDs with a bump around 1,550~$\angstrom$.  
 Furthermore, because of the flexible nonparametric priors on $B_k$ our model automatically learned this feature from the data.
 The positivity of the basis and weights distinguishes our model from PCA-based methods, which sacrifice physical interpretability.   
 
