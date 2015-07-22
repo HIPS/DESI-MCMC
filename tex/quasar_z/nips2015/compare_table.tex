@@ -1,0 +1,19 @@
+
+\begin{tabular}{ p{2.9cm}|ccc|ccc|ccc}
+ & \multicolumn{3}{c}{MAE} & \multicolumn{3}{c}{MAPE} & \multicolumn{3}{c}{RMSE} \\
+ \hline
+ split & XD & NN & Spec & XD & NN & Spec & XD & NN & Spec \\
+ \hline
+ random (all) & \textbf{0.359} & 0.773 & 0.485 & \textbf{0.293} & 0.533 & 0.430 & \textbf{0.519} & 0.974 & 0.808  \\
+ flux (all) & \textbf{0.308} & 0.483 & 0.497 & \textbf{0.188} & 0.283 & 0.339 & \textbf{0.461} & 0.660 & 0.886  \\
+ redshift (all) & 0.841 & 0.736 & \textbf{0.619} & 0.237 & 0.214 & \textbf{0.183} & 1.189 & 0.923 & \textbf{0.831}  \\
+ \hline
+ random ($z > 2.35$) & \textbf{0.247} & 0.530 & 0.255 & \textbf{0.091} & 0.183 & 0.092 & \textbf{0.347} & 0.673 & 0.421  \\
+ flux ($z > 2.33$) & \textbf{0.292} & 0.399 & 0.326 & \textbf{0.108} & 0.143 & 0.124 & \textbf{0.421} & 0.550 & 0.531  \\
+ redshift ($z > 3.20$) & 1.327 & 1.149 & \textbf{0.806} & 0.357 & 0.317 & \textbf{0.226} & 1.623 & 1.306 & \textbf{0.997}  \\
+ \hline
+ random ($z > 3.11$) & \textbf{0.171} & 0.418 & 0.289 & \textbf{0.050} & 0.117 & 0.082 & \textbf{0.278} & 0.540 & 0.529  \\
+ flux ($z > 2.86$) & 0.373 & 0.493 & \textbf{0.334} & 0.112 & 0.144 & \textbf{0.103} & \textbf{0.606} & 0.693 & 0.643  \\
+ redshift ($z > 3.80$) & 2.389 & 2.348 & \textbf{0.829} & 0.582 & 0.569 & \textbf{0.198} & 2.504 & 2.405 & \textbf{1.108}  \\
+ \hline
+\end{tabular}
