@@ -13,7 +13,7 @@ from autograd import grad
 import matplotlib.pyplot as plt
 
 #determine which system we're on
-if os.path.exists("/project/projectdirs/cosmo/sdss"):
+if os.path.exists("/project/projectdirs/cosmo/data/sdss"):
     print "REDSHIFT_UTIL: loading nersc paths"
     SPECTRA_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/spectro/redux/v5_5_12/spectra"
     DR10QSO_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/qso/DR10Q/"
