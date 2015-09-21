@@ -96,7 +96,7 @@ def propose(values, likelihood):
         new_value = np.append(new_weights, np.append(new_means, new_vars))
         prob_new = likelihood(new_value)
         prob_old = likelihood(values)
-        if np.any(means < 0) or np.any(variances < 0) or \
+        if (not np.all(means >= 0) and np.all(variances >= 0) or \
                 prob_new > prob_old or random.random() < prob_new / prob_old:
             curr_values = np.copy(new_value)
 
