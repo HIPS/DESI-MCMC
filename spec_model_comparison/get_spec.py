@@ -22,10 +22,9 @@ def inverse_gamma_pdf(x, a, loc, scale):
 def uniform_pdf(x, start, end):
     return 1 / (end - start)
 
-def dirichlet_pdf(x, alpha):
-    return dirichlet.pdf(x, alpha)
+# weights, means, scales
+COV_ALPHA = 5
 
-# weights, means, variances
 # define uniform interval
 START = 0
 END = 2000
@@ -36,32 +35,40 @@ SCALE = 10
 components = 10
 def simple_model_sample_prior():
     vals = np.zeros(3 * components)
-    vals[:components] = dirichlet.rvs(np.ones(components) / components)
+    vals[:components] = \
+        np.exp(multivariate_normal.rvs(cov=COV_ALPHA*np.eye(components)))
     for i in range(components, 2*components):
         vals[i] = random.random() * (END - START) + START
 
     vals[(2*components):(3*components)] = \
         invgamma.rvs(A, LOC, SCALE, size=components)
+
     return vals
 
 def simple_model_prior_pdf(values):
-    return 1
-    #means = np.prod([uniform_pdf(val, START, END) for val in values[components:(2*components)]])
-    #sds = np.prod([inverse_gamma_pdf(val, A, loc=LOC, scale=SCALE) for val in values[(2*components):(3*components)]])
-    #return dirichlet_pdf(values[:components], np.ones(components) / components) * means * sds
+    means = np.prod([uniform_pdf(val, START, END) for val in values[components:(2*components)]])
+    scales = np.prod([invgamma.pdf(val, A, LOC, SCALE) for val in values[(2*components):(3*components)]])
+    weights = multivariate_normal.pdf(values[:components],
+                                      mean=np.zeros(components),
+                                      cov=COV_ALPHA*np.eye(components))
+    return weights * means * scales
 
 def simple_model_posterior_pdf(values, data):
     prob = 1
     for datum in data:
-        curr_prob = 0.5 
-        for i in range(len(datum)):
+        lambdas = datum['lam']
+        spec    = datum['flux']
+        ivar    = datum['ivar']
+        for i in range(len(lambdas)):
+            pred = 0
             for n in range(components):
                 weight = values[n]
                 mean = values[components + n]
-                var = values[2 * components + n]
-                #curr_prob += weight * norm.pdf(datum[i], mean, var)
+                scale = values[2 * components + n]
 
-        prob *= curr_prob
+                pred += np.exp(-(lambdas[i] - mean)**2 / scale) * weight
+
+            prob *= norm.pdf(spec[i], pred, 1 / np.sqrt(ivar[i]))
 
     return prob * simple_model_prior_pdf(values)
 
@@ -77,7 +84,6 @@ def propose(values, likelihood):
         new_log_weights = multivariate_normal.rvs(mean=log_weights, cov=np.eye(components)*WEIGHT_VAR)
         # convert from softmax
         new_weights = np.exp(new_log_weights)
-        new_weights /= sum(new_weights)
     
         # propose means
         means = values[components:(2*components)]
@@ -90,10 +96,12 @@ def propose(values, likelihood):
         new_value = np.append(new_weights, np.append(new_means, new_vars))
         prob_new = likelihood(new_value)
         prob_old = likelihood(values)
-        if prob_new > prob_old or random.random() < prob_new / prob_old:
+        if np.any(means < 0) or np.any(variances < 0) or \
+                prob_new > prob_old or random.random() < prob_new / prob_old:
             curr_values = np.copy(new_value)
 
     return curr_values
+
 
 # define betas
 # define steps in simulated annealing
@@ -101,8 +109,6 @@ def propose(values, likelihood):
 # dimensions
 betas = np.append(np.linspace(0,0.1,num=10), \
         np.append(np.linspace(0.1,1,num=10), np.linspace(1,100,10)))
-
-print betas
 
 def get_intermediate(prior, posterior, x, data, beta):
     return prior_pdf(x)**(1 - beta) * posterior_pdf(x, data)**beta
@@ -169,12 +175,15 @@ if __name__=="__main__":
     out.close()
 
     df = fitsio.FITS('spec.fits')
-    spec_info = [df[1]['flux'].read()]
+    spec_info = {}
+    spec_info['lam'] = np.power(10., df[1]['loglam'].read())
+    spec_info['flux'] = df[1]['flux'].read()
+    spec_info['ivar'] = df[1]['ivar'].read()
     print spec_info
 
     # get actual spectrum 
     simulated_annealing(simple_model_sample_prior,
                         simple_model_prior_pdf,
                         simple_model_posterior_pdf,
-                        spec_info)
+                        [spec_info])
 
