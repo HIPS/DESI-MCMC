@@ -60,15 +60,16 @@ def simple_model_posterior_pdf(values, data):
         spec    = datum['flux']
         ivar    = datum['ivar']
         for i in range(len(lambdas)):
-            pred = 0
-            for n in range(components):
-                weight = values[n]
-                mean = values[components + n]
-                scale = values[2 * components + n]
+            if ivar != 0:
+                pred = 0
+                for n in range(components):
+                    weight = values[n]
+                    mean = values[components + n]
+                    scale = values[2 * components + n]
 
-                pred += np.exp(-(lambdas[i] - mean)**2 / scale) * weight
+                    pred += np.exp(-(lambdas[i] - mean)**2 / scale) * weight
 
-            prob *= norm.pdf(spec[i], pred, 1 / np.sqrt(ivar[i]))
+                prob *= norm.pdf(spec[i], pred, 1 / np.sqrt(ivar[i]))
 
     return prob * simple_model_prior_pdf(values)
 
