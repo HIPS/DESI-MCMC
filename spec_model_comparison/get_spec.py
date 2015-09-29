@@ -14,20 +14,19 @@ import random
 #     \int P(D | M, theta) P(theta | M) dtheta
 # We use importance simulated annealing
 
-TRIALS = 2
+TRIALS = 5
 
-def inverse_gamma_pdf(x, a, loc, scale):
-    return invgamma.pdf(x, a, loc=loc, scale=scale)
-
-def uniform_pdf(x, start, end):
-    return 1 / (end - start)
+def uniform_logpdf(x, start, end):
+    if x < start or x > end:
+        return -np.inf
+    return -np.log(end - start)
 
 # weights, means, scales
 COV_ALPHA = 5
 
 # define uniform interval
 START = 0
-END = 2000
+END = 10000
 
 A = 1
 LOC = 10
@@ -45,22 +44,22 @@ def simple_model_sample_prior():
 
     return vals
 
-def simple_model_prior_pdf(values):
-    means = np.prod([uniform_pdf(val, START, END) for val in values[components:(2*components)]])
-    scales = np.prod([invgamma.pdf(val, A, LOC, SCALE) for val in values[(2*components):(3*components)]])
-    weights = multivariate_normal.pdf(values[:components],
-                                      mean=np.zeros(components),
-                                      cov=COV_ALPHA*np.eye(components))
-    return weights * means * scales
+def simple_model_prior_logpdf(values):
+    means = np.sum([uniform_logpdf(val, START, END) for val in values[components:(2*components)]])
+    scales = np.sum([invgamma.logpdf(val, A, LOC, SCALE) for val in values[(2*components):(3*components)]])
+    weights = multivariate_normal.logpdf(values[:components],
+                                         mean=np.zeros(components),
+                                         cov=COV_ALPHA*np.eye(components))
+    return weights + means + scales
 
-def simple_model_posterior_pdf(values, data):
+def simple_model_posterior_logpdf(values, data):
     prob = 1
     for datum in data:
         lambdas = datum['lam']
         spec    = datum['flux']
         ivar    = datum['ivar']
         for i in range(len(lambdas)):
-            if ivar != 0:
+            if ivar[i] != 0:
                 pred = 0
                 for n in range(components):
                     weight = values[n]
@@ -69,14 +68,14 @@ def simple_model_posterior_pdf(values, data):
 
                     pred += np.exp(-(lambdas[i] - mean)**2 / scale) * weight
 
-                prob *= norm.pdf(spec[i], pred, 1 / np.sqrt(ivar[i]))
+                prob += norm.logpdf(spec[i], pred, 1 / np.sqrt(ivar[i]))
 
-    return prob * simple_model_prior_pdf(values)
+    return prob + simple_model_prior_logpdf(values)
 
 MEAN_VAR = 10
 VAR_VAR = 10
 WEIGHT_VAR = 1
-def propose(values, likelihood):
+def propose(values, log_likelihood):
     trials = 1
     curr_values = np.copy(values)
     for i in range(trials):
@@ -95,28 +94,37 @@ def propose(values, likelihood):
         new_vars = multivariate_normal.rvs(mean=variances, cov=np.eye(components)*VAR_VAR)
 
         new_value = np.append(new_weights, np.append(new_means, new_vars))
-        prob_new = likelihood(new_value)
-        prob_old = likelihood(values)
+
+        try:
+            prob_new = log_likelihood(new_value)
+            prob_old = log_likelihood(values)
+        except:
+            continue
+
+        if prob_new == -np.inf or prob_old == -np.inf:
+            continue
+
         if np.all(means >= 0) and np.all(variances >= 0) and \
-                (prob_new > prob_old or random.random() < prob_new / prob_old):
+                (prob_new > prob_old or random.random() < np.exp(prob_new - prob_old)):
             curr_values = np.copy(new_value)
 
     return curr_values
-
 
 # define betas
 # define steps in simulated annealing
 # proposal variance
 # dimensions
-betas = np.append(np.linspace(0,0.1,num=10), \
-        np.append(np.linspace(0.1,1,num=10), np.linspace(1,100,10)))
+betas = np.append(np.linspace(0,0.1,num=10), np.linspace(0.1,1,num=10))
 
 def get_intermediate(prior, posterior, x, data, beta):
     return prior_pdf(x)**(1 - beta) * posterior_pdf(x, data)**beta
 
-def simulated_annealing(sample_prior, prior_pdf, posterior_pdf, data):
+def simulated_annealing(sample_prior, prior_pdf, posterior_pdf, propose, data):
     sum_weights = 0
     weighted_sum = 0
+
+    log_weights = np.array([])
+    log_posteriors = np.array([])
     for i in range(TRIALS):
         values = np.zeros((len(betas), 3 * components))
         likelihoods = np.zeros(TRIALS)
@@ -126,20 +134,28 @@ def simulated_annealing(sample_prior, prior_pdf, posterior_pdf, data):
 
         for j in range(1, len(betas)):
             # Metropolis step
+            #print values[j-1][0]
             values[j,:] = \
                 propose(values[j-1,:],
-                        lambda x:(prior_pdf(x)**(1 - betas[j]) * posterior_pdf(x, data)**betas[j]))
+                        lambda x:(prior_pdf(x)*(1 - betas[j]) + posterior_pdf(x, data)*betas[j]))
 
-        weight = 1
+        log_weight = 0
         for j in range(1, len(betas)):
-            weight *= \
-                prior_pdf(values[j,:])**(betas[j-1] - betas[j]) * \
-                posterior_pdf(values[j,:], data)**(betas[j] - betas[j-1])
+            log_weight += \
+                prior_pdf(values[j,:])*(betas[j-1] - betas[j]) + \
+                    posterior_pdf(values[j,:], data)*(betas[j] - betas[j-1])
 
-        sum_weights += weight
-        weighted_sum += weight * posterior_pdf(values[len(betas)-1,:], data)
+        log_weights = np.append(log_weights, log_weight)
+        log_posteriors = np.append(log_posteriors,
+                                   posterior_pdf(values[len(betas)-1,:], data))
 
-    return weighted_sum / sum_weights
+    log_weights_sub = log_weights - np.max(log_weights)
+    print log_weights_sub
+    weights = np.exp(log_weights_sub)
+    weights /= np.sum(weights)
+
+    est = np.dot(weights, np.exp(log_posteriors))
+    return est
 
 #
 # Constructs a path to the spec file online given plate, mjd, fiber - 
@@ -184,7 +200,8 @@ if __name__=="__main__":
 
     # get actual spectrum 
     simulated_annealing(simple_model_sample_prior,
-                        simple_model_prior_pdf,
-                        simple_model_posterior_pdf,
+                        simple_model_prior_logpdf,
+                        simple_model_posterior_logpdf,
+                        propose,
                         [spec_info])
 
