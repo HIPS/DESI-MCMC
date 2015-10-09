@@ -54,7 +54,7 @@ def normal_double_posterior_logpdf(values, data):
 PROPOSE_SD = 1.
 def propose_normal(values, log_likelihood):
     mu = values[0]
-    trials = 10
+    trials = 1
     for i in range(trials):
         mu_new = norm.rvs(mu, PROPOSE_SD)
         try:
@@ -80,7 +80,7 @@ if __name__ == "__main__":
                                xs);
 
     print "Correct one:", ell1
-
+    """
     ell2 = simulated_annealing(normal_sample_double_prior,
                                normal_double_prior_logpdf,
                                normal_double_posterior_logpdf,
@@ -88,4 +88,4 @@ if __name__ == "__main__":
                                xs);
 
     print "Wrong one:", ell2
-
+"""

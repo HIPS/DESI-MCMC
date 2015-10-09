@@ -14,7 +14,7 @@ import random
 #     \int P(D | M, theta) P(theta | M) dtheta
 # We use importance simulated annealing
 
-TRIALS = 5
+TRIALS = 10000
 
 def uniform_logpdf(x, start, end):
     if x < start or x > end:
@@ -149,12 +149,14 @@ def simulated_annealing(sample_prior, prior_pdf, posterior_pdf, propose, data):
         log_posteriors = np.append(log_posteriors,
                                    posterior_pdf(values[len(betas)-1,:], data))
 
-    log_weights_sub = log_weights - np.max(log_weights)
-    print log_weights_sub
-    weights = np.exp(log_weights_sub)
-    weights /= np.sum(weights)
+        log_weights_sub = log_weights - np.max(log_weights)
+        #print log_weights_sub
+        weights = np.exp(log_weights_sub)
+        weights /= np.sum(weights)
 
-    est = np.dot(weights, np.exp(log_posteriors))
+        est = np.dot(weights, np.exp(log_posteriors))
+        print "marginal likelihood for iteration %d: %g" % (i, est)
+
     return est
 
 #
