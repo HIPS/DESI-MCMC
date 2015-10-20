@@ -145,7 +145,7 @@ def gen_point_source_psf_image(
                         sigs    = image.covars,
                         invsigs = image.invcovars,
                         logdets = image.logdets)
-    return psf_grid.reshape(image.nelec.shape, order='F')
+    return psf_grid.reshape(image.nelec.shape, order='C')
 
     # slow for sanity check
     #for x in range(image.nelec.shape[1]): 

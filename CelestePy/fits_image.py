@@ -153,7 +153,8 @@ class FitsImage():
         """
         y_grid = np.arange(self.nelec.shape[0], dtype=np.float) + 1
         x_grid = np.arange(self.nelec.shape[1], dtype=np.float) + 1
-        yy, xx = np.meshgrid(x_grid, y_grid, indexing='xy')
-        return np.column_stack((xx.ravel(), yy.ravel()))
+        xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
+        # whenever we flatten and reshape use C ordering...
+        return np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
 
 
