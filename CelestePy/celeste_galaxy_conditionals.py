@@ -144,7 +144,7 @@ def gen_galaxy_prof_psf_image(prof_type, R, u, img):
                              ws   = weights,
                              mus  = means,
                              sigs = covars)
-    return psf_grid.reshape(img.nelec.shape).T
+    return psf_grid.reshape(img.nelec.shape, order='F')
 
 def gen_galaxy_psf_image(th, u_s, img, check_overlap = True, unconstrained = True):
     """ generates the profile of a combination of exp/dev images.  

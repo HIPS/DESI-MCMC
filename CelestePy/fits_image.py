@@ -40,19 +40,34 @@ class FitsImage():
                                 pixel, indexed nelec[y, x]
     """
     def __init__(self, band, 
-            fits_file_template = "data/stamps/stamp-%s-130.1765-52.7501.fits",
+            fits_file_template = None,
+            timg = None,
             exposure_num       = 0): 
         self.band      = band
-        self.band_file = fits_file_template%band
-        self.img       = fitsio.FITS(self.band_file)[exposure_num].read()
-        header         = fitsio.read_header(self.band_file, ext=exposure_num)
-        self.header    = header
+        if fits_file_template:
+            self.band_file = fits_file_template%band
+            self.img       = fitsio.FITS(self.band_file)[exposure_num].read()
+            header         = fitsio.read_header(self.band_file, ext=exposure_num)
+        elif timg:
+            self.band_file = None
+            self.img = timg[0].data
+            header = timg[1]['hdr']
+        else:
+            pass
+
+        self.header = header
 
         # Compute the number of electrons, resource: 
         # http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
         # (Neither of these look like integers)
-        self.dn    = self.img / header["CALIB"] + header["SKY"]
-        self.nelec = np.round(self.dn * header["GAIN"])
+        if fits_file_template:
+            self.dn    = self.img / header["CALIB"] + header["SKY"]
+            self.nelec = np.round(self.dn * header["GAIN"])
+        else:
+            # TODO(awu): what are CALIB and GAIN?
+            self.dn    = self.img + timg[0].getSky().val
+            self.nelec = self.dn
+
         self.shape = self.nelec.shape
         self.pixel_grid = self.make_pixel_grid()  # keep pixel grid around
 
@@ -70,14 +85,25 @@ class FitsImage():
         #######################################################################
 
         # set image specific KAPPA and epsilon 
-        self.kappa   = header['GAIN']     # TODO is this right??
-        self.epsilon = header['SKY'] * self.kappa # background rate
-        self.epsilon0 = self.epsilon      # background rate copy (for debuggin)
-        self.darkvar = header['DARKVAR']  # also eventually contributes to mean?
-        self.calib   = header['CALIB']    # dn = nmaggies / calib, calib is NMGY
+        if fits_file_template:
+            self.kappa   = header['GAIN']     # TODO is this right??
+            self.epsilon = header['SKY'] * self.kappa # background rate
+            self.epsilon0 = self.epsilon      # background rate copy (for debuggin)
+            self.darkvar = header['DARKVAR']  # also eventually contributes to mean?
+            self.calib   = header['CALIB']    # dn = nmaggies / calib, calib is NMGY
+        else:
+            self.kappa = 1
+            self.epsilon = timg[0].sky.val * self.kappa
+            self.epsilon0 = self.epsilon
+            self.darkvar = 0
+            self.calib = 1
 
         # point spread function
-        psfvec       = [header['PSF_P%d'%i] for i in range(18)]
+        if fits_file_template:
+            psfvec       = [header['PSF_P%d'%i] for i in range(18)]
+        else:
+            psfvec       = [psf for psf in timg[0].getPsf()]
+
         self.weights = np.array(psfvec[0:3])
         self.means   = np.array(psfvec[3:9]).reshape(3, 2)  # one comp mean per row
         covars       = np.array(psfvec[9:]).reshape(3, 3)   # [var_k(x), var_k(y), cov_k(x,y)] per row
