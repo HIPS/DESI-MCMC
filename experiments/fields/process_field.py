@@ -1,3 +1,4 @@
+import astrometry.util.fits as aufits
 import tractor.sdss as sdss
 from tractor.basics import PointSource
 from tractor.galaxy import ExpGalaxy, DevGalaxy, CompositeGalaxy
@@ -53,11 +54,22 @@ def compare_small_patch():
         print "reading in band %s" % band
         imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
 
+    fn = sdss.DR9().retrieve('photoField', run, camcol, field)
+    F = aufits.fits_table(fn)
+
     # convert to FitsImage's
     imgfits = {}
-    for band in BANDS:
+    for iband,band in enumerate(BANDS):
         print "converting images %s" % band
-        imgfits[band] = FitsImage(band, timg=imgs[band])
+        frame   = sdss.DR9().readFrame(run, camcol, field, band)
+        calib   = np.median(frame.getCalibVec())
+        gain    = F.gain[0][iband]
+        darkvar = F.dark_variance[iband]
+        imgfits[band] = FitsImage(band,
+                                  timg=imgs[band],
+                                  calib=calib,
+                                  gain=gain,
+                                  darkvar=darkvar)
 
     ########################
     # debug               ##
@@ -88,11 +100,23 @@ def main(run, camcol, field):
         print "reading in band %s" % band
         imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
 
+    fn = sdss.DR9().retrieve('photoField', run, camcol, field)
+    F = aufits.fits_table(fn)
+
     # convert to FitsImage's
     imgfits = {}
-    for band in BANDS:
+    for iband,band in enumerate(BANDS):
         print "converting images %s" % band
-        imgfits[band] = FitsImage(band, timg=imgs[band])
+        frame   = sdss.DR9().readFrame(run, camcol, field, band)
+        calib   = np.median(frame.getCalibVec())
+        gain    = F.gain[0][iband]
+        darkvar = F.dark_variance[iband]
+
+        imgfits[band] = FitsImage(band,
+                                  timg=imgs[band],
+                                  calib=calib,
+                                  gain=gain,
+                                  darkvar=darkvar)
 
     # get images
     modelims = {}

@@ -41,8 +41,11 @@ class FitsImage():
     """
     def __init__(self, band, 
             fits_file_template = None,
-            timg = None,
-            exposure_num       = 0): 
+            timg               = None,
+            exposure_num       = 0,
+            calib              = None,
+            gain               = None,
+            darkvar            = None): 
         self.band      = band
         if fits_file_template:
             self.band_file = fits_file_template%band
@@ -65,8 +68,8 @@ class FitsImage():
             self.nelec = np.round(self.dn * header["GAIN"])
         else:
             # TODO(awu): what are CALIB and GAIN?
-            self.dn    = self.img + timg[0].getSky().val
-            self.nelec = self.dn
+            self.dn    = self.img / calib + timg[0].getSky().val
+            self.nelec = np.round(self.dn * gain)
 
         self.shape = self.nelec.shape
         self.pixel_grid = self.make_pixel_grid()  # keep pixel grid around
@@ -86,17 +89,17 @@ class FitsImage():
 
         # set image specific KAPPA and epsilon 
         if fits_file_template:
-            self.kappa   = header['GAIN']     # TODO is this right??
-            self.epsilon = header['SKY'] * self.kappa # background rate
+            self.kappa    = header['GAIN']     # TODO is this right??
+            self.epsilon  = header['SKY'] * self.kappa # background rate
             self.epsilon0 = self.epsilon      # background rate copy (for debuggin)
-            self.darkvar = header['DARKVAR']  # also eventually contributes to mean?
-            self.calib   = header['CALIB']    # dn = nmaggies / calib, calib is NMGY
+            self.darkvar  = header['DARKVAR']  # also eventually contributes to mean?
+            self.calib    = header['CALIB']    # dn = nmaggies / calib, calib is NMGY
         else:
-            self.kappa = 1
+            self.kappa = gain
             self.epsilon = timg[0].sky.val * self.kappa
             self.epsilon0 = self.epsilon
-            self.darkvar = 0
-            self.calib = 1
+            self.darkvar = darkvar
+            self.calib = calib
 
         # point spread function
         if fits_file_template:
