@@ -45,7 +45,8 @@ class FitsImage():
             exposure_num       = 0,
             calib              = None,
             gain               = None,
-            darkvar            = None): 
+            darkvar            = None,
+            sky                = None): 
         self.band      = band
         if fits_file_template:
             self.band_file = fits_file_template%band
@@ -53,7 +54,7 @@ class FitsImage():
             header         = fitsio.read_header(self.band_file, ext=exposure_num)
         elif timg:
             self.band_file = None
-            self.img = timg[0].data
+            self.img = timg[0].getImage()
             header = timg[1]['hdr']
         else:
             pass
@@ -68,7 +69,7 @@ class FitsImage():
             self.nelec = np.round(self.dn * header["GAIN"])
         else:
             # TODO(awu): what are CALIB and GAIN?
-            self.dn    = self.img / calib + timg[0].getSky().val
+            self.dn    = self.img / calib + sky #timg[0].getSky().val
             self.nelec = np.round(self.dn * gain)
 
         self.shape = self.nelec.shape
