@@ -7,9 +7,16 @@ from CelestePy import gen_point_source_psf_image, \
 import numpy as np
 import matplotlib.pyplot as plt
 
-def tsrc_to_src_params(tsrc):
+BANDS = ['u', 'g', 'r', 'i', 'z']
+
+def tractor_src_to_celestepy_src(tsrc):
+    """Conversion between tractor source object and our source object...."""
     pos = tsrc.getPosition()
     u = [p for p in pos]
+
+    # brightnesse are stored in mags (gotta convert to nanomaggies)
+    def mags2nanomaggies(mags):
+        return np.power(10., (mags - 22.5)/-2.5)
     fluxes = tsrc.getBrightnesses()[0]
     fluxes = [mags2nanomaggies(flux) for flux in fluxes]
 
@@ -32,16 +39,53 @@ def tsrc_to_src_params(tsrc):
                          a=1,
                          v=u,
                          theta=theta,
-                         phi=shape[2],
+                         phi = shape[2] * np.pi / 180.,
                          sigma=shape[0],
                          rho=shape[1],
                          fluxes=fluxes)
 
-def mags2nanomaggies(mags): 
-    return np.power(10., (mags - 22.5)/-2.5)
+
+def make_fits_images(run, camcol, field):
+    """gets field files from local cache (or sdss), returns UGRIZ dict of 
+    fits images"""
+    print """==================================================\n\n
+            Grabbing image files from the cache.
+            TODO: turn off the tractor printing... """
+
+    imgs = {}
+    for band in BANDS:
+        print "reading in band %s" % band
+        imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
+
+    fn = sdss.DR9().retrieve('photoField', run, camcol, field)
+    F = aufits.fits_table(fn)
+
+    # convert to FitsImage's
+    imgfits = {}
+    for iband,band in enumerate(BANDS):
+        print "converting images %s" % band
+        frame   = sdss.DR9().readFrame(run, camcol, field, band)
+        calib   = np.median(frame.getCalibVec())
+        gain    = F[0].gain[iband]
+        darkvar = F[0].dark_variance[iband]
+        sky     = np.median(frame.getSky())
+        imgfits[band] = FitsImage(band,
+                                  timg=imgs[band],
+                                  calib=calib,
+                                  gain=gain,
+                                  darkvar=darkvar,
+                                  sky=sky)
+    return imgfits
+
+def gen_point_source_psf_image_with_fluxes(src_params, fits_image):
+    src_img  = gen_point_source_psf_image(src_params.u, fits_image)
+    flux     = src_params.fluxes[BANDS.index(fits_image.band)]
+    src_img *= (flux / fits_image.calib) * fits_image.kappa
+    return src_image
+
 
 def compare_small_patch():
-    """ reads in a known image and source and compares our model 
+    """reads in a known image and source and compares our model 
     generation to the tractor's """
     run = 125
     camcol = 1
@@ -49,76 +93,59 @@ def compare_small_patch():
 
     # read in sources, images
     srcs = sdss.get_tractor_sources_dr9(run, camcol, field)
-    imgs = {}
-    for band in BANDS:
-        print "reading in band %s" % band
-        imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
+    imgfits = make_fits_images(run, camcol, field)
 
-    fn = sdss.DR9().retrieve('photoField', run, camcol, field)
-    F = aufits.fits_table(fn)
+    # track down the brightest sources in this field for sanity checking
+    import seaborn as sns
+    rbrightnesses = np.array([src.getBrightnesses()[0][2] for src in srcs])
+    bright_i      = np.argsort(rbrightnesses)
+    for i in bright_i[:50]:
+        print srcs[i]
 
-    # convert to FitsImage's
-    imgfits = {}
-    for iband,band in enumerate(BANDS):
-        print "converting images %s" % band
-        frame   = sdss.DR9().readFrame(run, camcol, field, band)
-        calib   = np.median(frame.getCalibVec())
-        gain    = F.gain[0][iband]
-        darkvar = F.dark_variance[iband]
-        imgfits[band] = FitsImage(band,
-                                  timg=imgs[band],
-                                  calib=calib,
-                                  gain=gain,
-                                  darkvar=darkvar)
+    i = bright_i[22]
+    src = srcs[i]
+    src_params = tractor_src_to_celestepy_src(src)
+    print src
 
-    ########################
-    # debug               ##
-    ########################
-    # the first source is located within the xpixel=[690,740], ypixel=[150,200]
-    # bounding box
-    src = srcs[0]
-    src_params = tsrc_to_src_params(src)
-    src_img    = gen_point_source_psf_image(src_params.u, imgfits['r'])
+    # plot the CelestePy model image with Tractor Parameters as a sanity check
+    BANDS_TO_PLOT = ['r', 'i']
+    fig, axarr = plt.subplots(len(BANDS_TO_PLOT), 3)
+    for bi, b in enumerate(BANDS_TO_PLOT):
+        if src_params.a == 0:
+            src_image = gen_point_source_psf_image_with_fluxes(src_params, imgfits[b])
+        else:
+            src_img = gen_galaxy_psf_image(src_params, imgfits[b]);
 
-    fig, axarr = plt.subplots(1, 3)
-    dpatch = imgfits['r'].nelec[150:200, 690:740]
-    mpatch = src_img[150:200, 690:740]
-    axarr[0].imshow(dpatch)
-    axarr[1].imshow(mpatch)
-    dim = axarr[2].imshow( (dpatch - mpatch) / mpatch )
-    axarr[0].set_title('data patch')
-    axarr[1].set_title('model patch')
-    axarr[2].set_title('diff (mean = %2.2f)'%np.sum((dpatch-mpatch)))
+        pixel_loc = imgfits[b].equa2pixel(src_params.u)
+        minx, maxx = pixel_loc[0] - 25, pixel_loc[0] + 25
+        miny, maxy = pixel_loc[1] - 25, pixel_loc[1] + 25
+
+        dpatch = imgfits[b].nelec[miny:maxy, minx:maxx]
+        dpatch -= np.median(dpatch)
+        mpatch = src_img[miny:maxy, minx:maxx]
+
+        axarr[bi,0].imshow(dpatch)
+        axarr[bi,1].imshow(mpatch)
+        dim = axarr[bi,2].imshow( (dpatch - mpatch) )
+        axarr[bi,2].set_title('diff (mean = %2.2f)'%np.mean(dpatch-mpatch))
+
+        # remove x/y ticks
+        for c in range(3):
+            axarr[bi,c].get_xaxis().set_visible(False)
+            axarr[bi,c].get_yaxis().set_visible(False)
+
+    axarr[0,0].set_title('data patch')
+    axarr[0,1].set_title('model patch')
+    fig.tight_layout()
     plt.show()
 
-BANDS = ['u', 'g', 'r', 'i', 'z']
+
 def main(run, camcol, field):
     # read in sources, images
     srcs = sdss.get_tractor_sources_dr9(run, camcol, field)
-    imgs = {}
-    for band in BANDS:
-        print "reading in band %s" % band
-        imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
+    imgfits = make_fits_images(run, camcol, field)
 
-    fn = sdss.DR9().retrieve('photoField', run, camcol, field)
-    F = aufits.fits_table(fn)
-
-    # convert to FitsImage's
-    imgfits = {}
-    for iband,band in enumerate(BANDS):
-        print "converting images %s" % band
-        frame   = sdss.DR9().readFrame(run, camcol, field, band)
-        calib   = np.median(frame.getCalibVec())
-        gain    = F.gain[0][iband]
-        darkvar = F.dark_variance[iband]
-
-        imgfits[band] = FitsImage(band,
-                                  timg=imgs[band],
-                                  calib=calib,
-                                  gain=gain,
-                                  darkvar=darkvar)
-
-    # get images
+    # make model images
     modelims = {}
     for i,src in enumerate(srcs[0:50]):
         print "Source %d" % i
@@ -127,7 +154,7 @@ def main(run, camcol, field):
 
         for j,band in enumerate(BANDS):
             if src_params.a == 0:
-                f_s = gen_point_source_psf_image(src_params.u, imgfits[band])
+                f_s = gen_point_source_psf_image_with_fluxes(src_params.u, imgfits[band])
             elif src_params.a == 1:
                 f_s = gen_galaxy_psf_image(src_params, imgfits[band]);
 
@@ -137,6 +164,7 @@ def main(run, camcol, field):
                 modelims[band] = f_s * src_params.fluxes[j]
 
     return modelims
+
 
 if __name__ == '__main__':
     run = 125
