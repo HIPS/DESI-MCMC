@@ -11,35 +11,36 @@ sys.path.append('../../')
 import redshift_utils   as ru
 import GPy
 
+###################
+#  CLI interface  #
+###################
+import argparse
+parser = argparse.ArgumentParser(description="Fit bases with MCEM")
+parser.add_argument('-K', '--num_bases', help='Number of bases to fit',
+                    required=True)
+parser.add_argument('-N', '--num_train', help='Number of training examples to use',
+                    required=True)
+parser.add_argument('-S', '--split_type', help='Split type to use (random, flux, redshift)',
+                    required=True)
+args = vars(parser.parse_args())
+
 
 ###
 ### Experiment Params
 ###
-SPLIT_TYPE        = "redshift"  #split_types = ["random", "flux", "redshift"]
-NUM_TRAIN_EXAMPLE = 5000
-NUM_BASES         = 4
+SPLIT_TYPE        = args['split_type']  #split_types = ["random", "flux", "redshift"]
+NUM_TRAIN_EXAMPLE = int(args['num_train'])
+NUM_BASES         = int(args['num_bases'])
 BETA_VARIANCE     = 1.
 BETA_LENGTHSCALE  = 40.
 BASIS_DIR         = "cache/basis_locked/"
 
 # set up experiment list
-import itertools
-Ks         = [3, 6, 8, 16, 32]
-SPLITS     = ["random", "flux", "redshift"]
-EXP_PARAMS = list(itertools.product(Ks, SPLITS))
-for i,ep in enumerate(EXP_PARAMS):
-    print "task_no %d: "%i, ep
-
-
 if __name__=="__main__":
 
     ##########################################################################
     ## set sampling parameters
     ##########################################################################
-    narg              = len(sys.argv)
-    NUM_BASES  = 4
-    SPLIT_TYPE = "random"
-
     print \
 """
 ==============================================================================
@@ -52,7 +53,8 @@ if __name__=="__main__":
     BETA_LENGTHSCALE  = {beta_ell}
     BASIS_DIR         = {bdir}
 """.format(split = SPLIT_TYPE, ntrain=NUM_TRAIN_EXAMPLE,
-           num_bases = NUM_BASES, beta_var = BETA_VARIANCE, beta_ell = BETA_LENGTHSCALE,
+           num_bases = NUM_BASES,
+           beta_var = BETA_VARIANCE, beta_ell = BETA_LENGTHSCALE,
            bdir = BASIS_DIR)
 
     #########################################################
@@ -84,17 +86,18 @@ if __name__=="__main__":
     # generate som reandom data
     import matplotlib.pyplot as plt
     import seaborn as sns
-    Ks = [4]
     fits = {}
-    for K in Ks:
-        th_train, th_test, train_lls, test_lls = \
-            fit_nmf(train_dict, test_dict, K = K, num_bins=800, max_iter=50)
-        fits[K] = {'th_train'  : th_train, 
-                   'th_test'   : th_test,
-                   'train_lls' : train_lls,
-                   'test_lls'  : test_lls }
-        import cPickle as pickle
-        pickle.dump(fits, open('qso_basis_K_%d_split_%s.pkl'%(K, SPLIT_TYPE), 'wb'))
+    th_train, th_test, train_lls, test_lls, bins, ws_train, Bs = \
+        fit_nmf(train_dict, test_dict, K = NUM_BASES, num_bins=800, max_iter=10)
+    fits[NUM_BASES] = {'th_train'  : th_train,
+                       'th_test'   : th_test,
+                       'train_lls' : train_lls,
+                       'test_lls'  : test_lls,
+                       'bins'      : bins,
+                       'ws_train'  : ws_train,
+                       'Bs'        : Bs }
+    import cPickle as pickle
+    pickle.dump(fits, open('mcem_fits/qso_basis_K_%d_split_%s.pkl'%(NUM_BASES, SPLIT_TYPE), 'wb'))
 
 
 

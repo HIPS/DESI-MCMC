@@ -33,8 +33,16 @@ elif os.path.exists("/Users/acm/Proj/DESIMCMC/"):
     SPECTRA_LOC = "/n/home09/amiller01/Proj/DESIMCMC/experiments/redshift/"
     EIGEN_FILE_LOC = "/Users/acm/Proj/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
 
+elif os.path.exists("/home/acm/Proj/astro/DESIMCMC/experiments/redshift/"):
+    DR10QSO_LOC = "/home/acm/Proj/astro/data/DR10QSO/"
+    TRAIN_TEST_SPLIT_LOC = "/home/acm/Proj/astro/DESIMCMC/experiments/redshift/"
+    SPECTRA_LOC = "/project/projectdirs/cosmo/data/sdss/dr10/boss/spectro/redux/v5_5_12/spectra"
+    EIGEN_FILE_LOC = "/Users/acm/Proj/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
+
 split_types = ["random", "flux", "redshift"]
-def load_DR10QSO_train_test_idx(split_type="random"):
+def load_DR10QSO_train_test_idx(split_type="random",
+                                spectra_loc=SPECTRA_LOC,
+                                in_plate_dir = True):
     if not split_type in split_types:
         raise ValueError('split_type %s not found!'%split_type)
 
@@ -62,8 +70,14 @@ def load_DR10QSO_train_test_idx(split_type="random"):
     # construct NERSC file paths
     print "constructing NERSC file paths to %d quasar spectra"%(qso_z.shape[0])
     qso_ids           = dr10file[1][['PLATE', 'MJD', 'FIBERID']].read()
-    spec_url_template = join(SPECTRA_LOC, "%04d/spec-%04d-%05d-%04d.fits")
-    qso_files         = [spec_url_template%(qid[0], qid[0], qid[1], qid[2]) for qid in qso_ids]
+    if in_plate_dir: 
+        spec_url_template = join(spectra_loc, "%04d/spec-%04d-%05d-%04d.fits")
+        qso_files = [spec_url_template%(qid[0], qid[0], qid[1], qid[2])
+                     for qid in qso_ids]
+    else:
+        spec_url_template = join(spectra_loc, "spec-%04d-%05d-%04d.fits")
+        qso_files = [spec_url_template%(qid[0], qid[1], qid[2])
+                     for qid in qso_ids]
     return qso_psf_flux, qso_psf_flux_ivar, qso_psf_mags, qso_z, \
            qso_files, train_idx, test_idx
 
@@ -249,6 +263,12 @@ def load_specs_from_disk(spec_files):
         # load spec info
         try: 
             sdf = fitsio.FITS(spec_files[i])
+            spec_flux = sdf[1]['flux'].read()
+            spec_ivar = sdf[1]['ivar'].read()
+            spec_lam  = np.power(10., sdf[1]['loglam'].read())
+            spec_mod  = sdf[1]['model'].read()
+            spec_z    = sdf[2]['Z'].read()
+            unique_lams = np.unique(np.concatenate((unique_lams, spec_lam)))
         except:
             print "BAD FILE: %s"%spec_files[i]
             bad_ids.append(i)
@@ -256,12 +276,6 @@ def load_specs_from_disk(spec_files):
                 print "too many bad files - EXITING"
                 sys.exit(1)
             continue
-        spec_flux = sdf[1]['flux'].read()
-        spec_ivar = sdf[1]['ivar'].read()
-        spec_lam  = np.power(10., sdf[1]['loglam'].read())
-        spec_mod  = sdf[1]['model'].read()
-        spec_z    = sdf[2]['Z'].read()
-        unique_lams = np.unique(np.concatenate((unique_lams, spec_lam)))
 
         # store list so we don't have to hit the disk again
         spec_lams.append(spec_lam)
@@ -282,7 +296,7 @@ def load_specs_from_disk(spec_files):
         spec_ivar_grid[i, start_i:end_i] = spec_ivars[i]
         spec_mod_grid[i, start_i:end_i]  = spec_mods[i]
     return spec_grid, spec_ivar_grid, spec_mod_grid, unique_lams, \
-           np.array(spec_zs), spec_ids, bad_ids
+           np.array(spec_zs), np.array(spec_ids), bad_ids
 
 # precomputed 10^((48.6 - 2.5*17 + 22.5)/2.5)
 flux_constant = 275422870333.81744384765625
