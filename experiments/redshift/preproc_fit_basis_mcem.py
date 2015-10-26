@@ -80,6 +80,19 @@ if __name__=="__main__":
     train_dict = setup_data(spec_files_train[:NUM_TRAIN_EXAMPLE])
     test_dict  = setup_data(spec_files_train[NUM_TRAIN_EXAMPLE:(NUM_TRAIN_EXAMPLE+100)])
 
+
+    ##############################
+    # Load params if available   #
+    ##############################
+    import cPickle as pickle
+    model_file = 'mcem_fits/qso_basis_K_%d_split_%s.pkl'%(NUM_BASES, SPLIT_TYPE)
+    if os.path.exists(model_file):
+        print "loading model from cache!"
+        model_dict = pickle.load(open(model_file, 'rb'))
+    else:
+        model_dict = {NUM_BASES:None}  # otherwise init none
+
+
     ########################################################################
     # Train models
     ########################################################################
@@ -88,7 +101,8 @@ if __name__=="__main__":
     import seaborn as sns
     fits = {}
     th_train, th_test, train_lls, test_lls, bins, ws_train, Bs = \
-        fit_nmf(train_dict, test_dict, K = NUM_BASES, num_bins=800, max_iter=10)
+        fit_nmf(train_dict, test_dict, K = NUM_BASES, num_bins=800, 
+                max_iter=10, th_init=model_dict[NUM_BASES]['th_train'])
     fits[NUM_BASES] = {'th_train'  : th_train,
                        'th_test'   : th_test,
                        'train_lls' : train_lls,
@@ -96,7 +110,6 @@ if __name__=="__main__":
                        'bins'      : bins,
                        'ws_train'  : ws_train,
                        'Bs'        : Bs }
-    import cPickle as pickle
     pickle.dump(fits, open('mcem_fits/qso_basis_K_%d_split_%s.pkl'%(NUM_BASES, SPLIT_TYPE), 'wb'))
 
 
