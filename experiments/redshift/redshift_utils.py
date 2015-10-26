@@ -27,11 +27,12 @@ elif os.path.exists("/n/home09/amiller01/Proj/DESIMCMC/experiments/redshift"):
     TRAIN_TEST_SPLIT_LOC = "/n/home09/amiller01/Proj/DESIMCMC/experiments/redshift/"
     EIGEN_FILE_LOC = "/n/home09/amiller01/Proj/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
 
-elif os.path.exists("/Users/acm/Proj/DESIMCMC/"):
-    DR10QSO_LOC = "/Users/acm/Proj/DESIMCMC/data/DR10QSO/"
-    TRAIN_TEST_SPLIT_LOC = "/Users/acm/Proj/DESIMCMC/experiments/redshift/"
-    SPECTRA_LOC = "/n/home09/amiller01/Proj/DESIMCMC/experiments/redshift/"
-    EIGEN_FILE_LOC = "/Users/acm/Proj/DESIMCMC/data/eigen_specs/spEigenQSO-55732.fits"
+elif os.path.exists("/Users/acm/Dropbox/Proj/astro/DESIMCMC/"):
+    basedir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/"
+    DR10QSO_LOC = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/data/DR10QSO/"
+    TRAIN_TEST_SPLIT_LOC = os.path.join(basedir, "experiments/redshift/")
+    SPECTRA_LOC = "experiments/redshift/"
+    EIGEN_FILE_LOC = os.path.join(basedir, "data/eigen_specs/spEigenQSO-55732.fits")
 
 elif os.path.exists("/home/acm/Proj/astro/DESIMCMC/experiments/redshift/"):
     DR10QSO_LOC = "/home/acm/Proj/astro/data/DR10QSO/"
