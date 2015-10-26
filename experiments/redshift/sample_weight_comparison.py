@@ -33,12 +33,6 @@ if __name__=="__main__":
     ##########################################################################
     ### load and curate basis samples
     ##########################################################################
-    #B_mle = qip.load_basis(num_bases     = NUM_BASES,
-    #                       split_type    = SPLIT_TYPE,
-    #                       lam_subsample = LAM_SUBSAMPLE,
-    #                       basis_dir     = BASIS_DIR)
-    #lam0, lam0_delta = ru.get_lam0(lam_subsample=LAM_SUBSAMPLE)
-
     import cPickle as pickle
     mcem_file = "mcem_fits/qso_basis_K_6_split_%s.pkl"%SPLIT_TYPE
     model_dict = pickle.load(open(mcem_file, 'rb'))
@@ -55,7 +49,7 @@ if __name__=="__main__":
         ru.load_DR10QSO_train_test_idx(split_type = SPLIT_TYPE)
 
     ## subselect train/test to match other experiments
-    if NUM_TRAIN_EXAMPLE == "all": 
+    if NUM_TRAIN_EXAMPLE == "all":
         NUM_TRAIN_EXAMPLE = len(train_idx)
     if NUM_TEST_EXAMPLE == "all":
         NUM_TEST_EXAMPLE = len(test_idx)
@@ -74,7 +68,7 @@ if __name__=="__main__":
     print \
 """
 =================== SAMPLING QUASAR qso idx = {qso_idx} ================
-  Quasar Info: 
+  Quasar Info:
     PLATE-MJD-FIBER     = {spec_id}
     qso_idx             = {qso_idx}
     test_idx            = {test_idx}
@@ -98,7 +92,7 @@ if __name__=="__main__":
 """.format(spec_id=spec_id, qso_idx=n, test_idx=test_n,
            z         = z_n,
            z_per     = np.sum(qso_z < z_n) / float(len(qso_z)),
-           r         = y_flux[2], 
+           r         = y_flux[2],
            r_per     = np.sum(qso_psf_flux[:,2] < y_flux[2]) / float(len(qso_psf_flux[:,2])),
            lam_sub   = LAM_SUBSAMPLE,
            num_bases = NUM_BASES,
@@ -115,7 +109,7 @@ if __name__=="__main__":
 
     #### load prior file
     if PRIOR_TYPE != "naive":
-        bfname = qfb.basis_filename(num_bases = NUM_BASES, 
+        bfname = qfb.basis_filename(num_bases = NUM_BASES,
                                     split_type = SPLIT_TYPE,
                                     lam0       = lam0)
         gmm_fname = BASIS_DIR + "/prior_" + bfname
@@ -144,73 +138,106 @@ if __name__=="__main__":
         ll =  qip.pixel_likelihood(z, w, np.exp(mu), y_flux, y_flux_ivar, lam0[1:], B)
         return ll + ll_omega + ll_mu
 
-    #def save_sample(s, chain, chain_ll):
-    #    fname = "redshift_samples_{spec}_K-{num_bases}_lamsamp-{lamsamp}_split-{split}.bin".format(
-    #        spec      = spec_id,
-    #        num_bases = B_mle.shape[0],
-    #        lamsamp   = LAM_SUBSAMPLE,
-    #        split     = SPLIT_TYPE)
-    #    print "   Saving samples to file %s"%os.path.join(SAMPLES_DIR, fname)
-    #    with open(os.path.join(SAMPLES_DIR, fname), 'wb') as handle:
-    #        np.save(handle, chain[-1,:s,:])
-    #        np.save(handle, chain_ll[-1,:s])
 
     ##########################################################################
     ## Draw samples of redshift and weights
     ##########################################################################
-    temps   = np.linspace(.1, 1., Nchains)
-    D       = B_mle.shape[0] + 1  # num(omegas) + m + z
-    x0      = 10 * np.random.randn(len(temps), D)
-    x0[:,0] = 6  * np.random.rand(len(temps))
+    def gen_pt_chain():
+        temps   = np.linspace(.1, 1., Nchains)
+        D       = B_mle.shape[0] + 1  # num(omegas) + m + z
+        x0      = 5 * np.random.randn(len(temps), D)
+        x0[:,0] = 5 * np.random.rand(len(temps))
 
-    def callback(s, chain, chain_lls):
-        if s % 200 == 0 and s>1: 
-            print " ... iteration %d, saving samples"%s
-            sys.stdout.flush()
-            #save_sample(s, chain, chain_lls)
+        def callback(s, chain, chain_lls):
+            if s % 200 == 0 and s>1: 
+                print " ... iteration %d, saving samples"%s
+                sys.stdout.flush()
+                #save_sample(s, chain, chain_lls)
 
-    chain, chain_ll = parallel_temper_slice(
-        lnpdf     = lambda(th): ln_post(th, B_mle),
-        x0        = x0,
-        Nsamps    = Nsamps,
-        Nchains   = len(temps),
-        temps     = temps,
-        callback  = callback,
-        verbose   = True, 
-        printskip = 50,
-        compwise  = True)
+        chain, chain_ll = parallel_temper_slice(
+            lnpdf     = lambda(th): ln_post(th, B_mle),
+            x0        = x0,
+            Nsamps    = 1000,
+            Nchains   = len(temps),
+            temps     = temps,
+            callback  = callback,
+            verbose   = True, 
+            printskip = 50,
+            compwise  = True)
+        return chain[-1, :, :]
 
-    print "z mean: %2.4f"%chain[-1, Nsamps/2:, 0].mean()
-    print "z mode: %2.4f"%chain[-1, chain_ll[-1,:].argmax(), 0]
-    print "z true: %2.2f"%z_n
-
-
-    # plot z's
-    import seaborn as sns
-    plt.hist(chain[-1, Nsamps/2:, 0], bins=25)
-    plt.show()
+    # gen 4 pt chains
+    pt_chains = [gen_pt_chain() for _ in xrange(4)]
 
 
+    ##########################################################################
+    # gen ss samples
+    ##########################################################################
     # NOW SLICE SAMPLE, one chain
-    Nslice = 5000
-    samps = np.zeros((Nslice, len(x0[0])))
-    samps[0] = x0[0]
-    for n in range(1, Nslice):
-        samps[n], ll = slicesample(samps[n-1], logprob = lambda(th): ln_post(th, B_mle))
-        if n % 10 == 0:
-            print "%d of %d, ll = %2.2f (z = %2.2f)"%(n, Nslice, ll, samps[n,0])
+    def gen_ss_chain():
+        Nslice = 1000
+        samps = np.zeros((Nslice, len(x0[0])))
+        samps[0] = 5 * np.random.randn(D); samps[0,0] = 5 * np.random.rand()
+        for n in range(1, Nslice):
+            samps[n], ll = slicesample(samps[n-1], logprob = lambda(th): ln_post(th, B_mle))
+            if n % 100 == 0:
+                print "%d of %d, ll = %2.2f (z = %2.2f)"%(n, Nslice, ll, samps[n,0])
+        return samps
+
+    # gen 4 slice sample chains
+    ss_chains = [gen_ss_chain() for _ in xrange(4)]
 
 
+    ##########################################################################
+    # plot Parallel tempering trace (traces) and slice sample traces
+    ##########################################################################
+    fig, axarr = plt.subplots(2, 1, figsize=(10, 5))
+    for pt, ss in zip(pt_chains, ss_chains):
+        axarr[0].plot(pt[:,0])
+        axarr[1].plot(ss[:,0])
+    axarr[1].set_xlabel("Iteration", fontsize=12)
+    plt.savefig("mcmc_comparison.pdf", bbox_inches='tight')
+    plt.close("all")
 
-    if False:
-        fig, axarr = plt.subplots(2, 1)
-        axarr[0].plot(chain[-1, Nsamps/2:,:])
-        axarr[1].plot(chain_ll[-1, Nsamps/2:])
-        for w in range(4):
-            axarr[0].plot(chain[-1,:,0])
-            axarr[1].plot(chain_ll[-1,:])
-        plt.show()
-        plt.hist(chain[-1, Nsamps/2:, 0], 50); plt.show()
+    # plot the resulting histograms
+    fig, axarr = plt.subplots(1, 2, figsize=(10, 4))
+    for pt, ss in zip(pt_chains, ss_chains):
+        axarr[0].hist(pt[400:,0], bins=25, alpha=.5, normed=True)
+        axarr[1].hist(ss[400:,0], bins=25, alpha=.5, normed=True)
+    axarr[0].set_ylabel("$p(z)$")
+    axarr[0].set_xlabel("$z$")
+    axarr[1].set_xlabel("$z$")
+    axarr[0].set_title("Slice within Parallel-Tempering", fontsize=14)
+    axarr[1].set_title("Slice-sampling", fontsize=14)
+    plt.savefig("mcmc_comparison_hist.pdf", bbox_inches='tight')
+    plt.close("all")
+
+
+    ##########################################################################
+    # create a table that compares pt and slice ESS and Rhat
+    ##########################################################################
+    from CelestePy.util.infer import mcmc_diagnostics as mcd
+    pt_z = np.array([pt[:,0] for pt in pt_chains])
+    ss_z = np.array([ss[:,0] for ss in ss_chains])
+    import pandas as pd
+    table_str = pd.DataFrame({
+        "PT+SS": [mcd.compute_r_hat(pt_z), mcd.compute_n_eff(pt_z), 
+                    np.sum([mcd.compute_n_eff_acf(z) for z in pt_z])],
+        "SS": [mcd.compute_r_hat(ss_z), mcd.compute_n_eff(ss_z), 
+                    np.sum([mcd.compute_n_eff_acf(z) for z in ss_z])]
+                    },
+        index = ["$\hat r$", "$N_{eff}$", "ESS"]).to_latex(
+            escape=False,
+            float_format=lambda(th): "%2.2f"%th)
+
+    print table_str
+    with open("mcmc_comparison_table.tex", "w") as f:
+        f.write(table_str)
+
+    # gen 4 slice chains
+    #print "z mean: %2.4f"%chain[-1, Nsamps/2:, 0].mean()
+    #print "z mode: %2.4f"%chain[-1, chain_ll[-1,:].argmax(), 0]
+    #print "z true: %2.2f"%z_n
 
 
 
