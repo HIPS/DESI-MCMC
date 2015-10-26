@@ -4,7 +4,7 @@ import cPickle as pickle
 import quasar_infer_photometry as qip
 import quasar_fit_basis as qfb
 import redshift_utils as ru
-from CelestePy.util.infer.parallel_tempering import parallel_temper_slice
+from CelestePy.util.infer.parallel_tempering import parallel_temper_slice, slicesample
 from CelestePy.util.like.gmm_like import mog_logmarglike, mog_loglike
 
 ##############################################################################
@@ -114,13 +114,14 @@ if __name__=="__main__":
     sys.stdout.flush()
 
     #### load prior file
-    bfname = qfb.basis_filename(num_bases = NUM_BASES, 
-                                split_type = SPLIT_TYPE,
-                                lam0       = lam0)
-    gmm_fname = BASIS_DIR + "/prior_" + bfname
-    with open(gmm_fname, 'rb') as handle:
-        omega_dict = pickle.load(handle)
-        mu_dict    = pickle.load(handle)
+    if PRIOR_TYPE != "naive":
+        bfname = qfb.basis_filename(num_bases = NUM_BASES, 
+                                    split_type = SPLIT_TYPE,
+                                    lam0       = lam0)
+        gmm_fname = BASIS_DIR + "/prior_" + bfname
+        with open(gmm_fname, 'rb') as handle:
+            omega_dict = pickle.load(handle)
+            mu_dict    = pickle.load(handle)
 
     ##########################################################################
     ## functions to pass into HMC
@@ -140,19 +141,19 @@ if __name__=="__main__":
         else:
             ll_omega = mog_loglike(omega, omega_dict['mean'], omega_dict['icovs'], omega_dict['dets'], omega_dict['pis'])
             ll_mu    = mog_loglike(mu, mu_dict['mean'], mu_dict['icovs'], mu_dict['dets'], mu_dict['pis'])
-        ll =  qip.pixel_likelihood(z, w, np.exp(mu), y_flux, y_flux_ivar, lam0, B)
+        ll =  qip.pixel_likelihood(z, w, np.exp(mu), y_flux, y_flux_ivar, lam0[1:], B)
         return ll + ll_omega + ll_mu
 
-    def save_sample(s, chain, chain_ll):
-        fname = "redshift_samples_{spec}_K-{num_bases}_lamsamp-{lamsamp}_split-{split}.bin".format(
-            spec      = spec_id,
-            num_bases = B_mle.shape[0],
-            lamsamp   = LAM_SUBSAMPLE,
-            split     = SPLIT_TYPE)
-        print "   Saving samples to file %s"%os.path.join(SAMPLES_DIR, fname)
-        with open(os.path.join(SAMPLES_DIR, fname), 'wb') as handle:
-            np.save(handle, chain[-1,:s,:])
-            np.save(handle, chain_ll[-1,:s])
+    #def save_sample(s, chain, chain_ll):
+    #    fname = "redshift_samples_{spec}_K-{num_bases}_lamsamp-{lamsamp}_split-{split}.bin".format(
+    #        spec      = spec_id,
+    #        num_bases = B_mle.shape[0],
+    #        lamsamp   = LAM_SUBSAMPLE,
+    #        split     = SPLIT_TYPE)
+    #    print "   Saving samples to file %s"%os.path.join(SAMPLES_DIR, fname)
+    #    with open(os.path.join(SAMPLES_DIR, fname), 'wb') as handle:
+    #        np.save(handle, chain[-1,:s,:])
+    #        np.save(handle, chain_ll[-1,:s])
 
     ##########################################################################
     ## Draw samples of redshift and weights
@@ -166,7 +167,7 @@ if __name__=="__main__":
         if s % 200 == 0 and s>1: 
             print " ... iteration %d, saving samples"%s
             sys.stdout.flush()
-            save_sample(s, chain, chain_lls)
+            #save_sample(s, chain, chain_lls)
 
     chain, chain_ll = parallel_temper_slice(
         lnpdf     = lambda(th): ln_post(th, B_mle),
@@ -182,6 +183,24 @@ if __name__=="__main__":
     print "z mean: %2.4f"%chain[-1, Nsamps/2:, 0].mean()
     print "z mode: %2.4f"%chain[-1, chain_ll[-1,:].argmax(), 0]
     print "z true: %2.2f"%z_n
+
+
+    # plot z's
+    import seaborn as sns
+    plt.hist(chain[-1, Nsamps/2:, 0], bins=25)
+    plt.show()
+
+
+    # NOW SLICE SAMPLE, one chain
+    Nslice = 5000
+    samps = np.zeros((Nslice, len(x0[0])))
+    samps[0] = x0[0]
+    for n in range(1, Nslice):
+        samps[n], ll = slicesample(samps[n-1], logprob = lambda(th): ln_post(th, B_mle))
+        if n % 10 == 0:
+            print "%d of %d, ll = %2.2f (z = %2.2f)"%(n, Nslice, ll, samps[n,0])
+
+
 
     if False:
         fig, axarr = plt.subplots(2, 1)
