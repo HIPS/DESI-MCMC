@@ -21,7 +21,7 @@ if __name__=="__main__":
     Nsamps         = int(sys.argv[2]) if narg > 2 else 1000
     Nchains        = int(sys.argv[3]) if narg > 3 else 8
     LAM_SUBSAMPLE  = int(sys.argv[4]) if narg > 4 else 10
-    NUM_BASES      = int(sys.argv[5]) if narg > 5 else 4
+    NUM_BASES      = int(sys.argv[5]) if narg > 5 else 6
     SPLIT_TYPE     = sys.argv[6] if narg > 6 else "random" #"random", "flux", "redshift"
     SAMPLES_DIR    = sys.argv[7] if narg > 7 else "cache/photo_z_samps"
     BASIS_DIR      = sys.argv[8] if narg > 8 else "cache/basis_fits"
@@ -121,7 +121,7 @@ if __name__=="__main__":
     def ln_post(q, B):
         z     = q[0]
         omega = q[1:(B.shape[0])]
-        w     = simplex.logit([omega]) #ru.softmax(np.concatenate([omega, [0]]))
+        w     = ru.softmax(np.concatenate([omega, [0]]))
         mu    = q[-1]
         if z < 0. or z > 8.:
             return -np.inf
@@ -155,7 +155,7 @@ if __name__=="__main__":
         chain, chain_ll = parallel_temper_slice(
             lnpdf     = lambda(th): ln_post(th, B_mle),
             x0        = x0,
-            Nsamps    = 1000,
+            Nsamps    = 4000,
             Nchains   = len(temps),
             temps     = temps,
             callback  = callback,
@@ -173,8 +173,9 @@ if __name__=="__main__":
     ##########################################################################
     # NOW SLICE SAMPLE, one chain
     def gen_ss_chain():
-        Nslice = 1000
-        samps = np.zeros((Nslice, len(x0[0])))
+        Nslice = 5000
+        D = B_mle.shape[0] + 1
+        samps = np.zeros((Nslice, D))
         samps[0] = 5 * np.random.randn(D); samps[0,0] = 5 * np.random.rand()
         for n in range(1, Nslice):
             samps[n], ll = slicesample(samps[n-1], logprob = lambda(th): ln_post(th, B_mle))
