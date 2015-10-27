@@ -37,21 +37,6 @@ Harvard University\\
 \texttt{rpa@seas.harvard.edu} \\
 }
 
-%\icmlauthor{Andrew Miller}{acm@seas.harvard.edu}
-%\icmlauthor{Albert Wu}{awu@college.harvard.edu}
-%\icmladdress{School of Engineering and Applied Sciences, Harvard University}
-%\icmlauthor{Jeffrey Regier}{jeff@stat.berkeley.edu}
-%\icmlauthor{Jon McAuliffe}{jon@stat.berkeley.edu}
-%\icmladdress{Department of Statistics, University of California, Berkeley}
-%\icmlauthor{Dustin Lang}{dstn@cmu.edu}
-%\icmladdress{McWilliams Center for Cosmology, Carnegie Mellon University}
-%\icmlauthor{Prabhat}{prabhat@lbl.gov}
-%\icmlauthor{David Schlegel}{djschlegel@lbl.gov}
-%\icmladdress{Lawrence Berkeley National Laboratory, 
-%             1 Cyclotron Road, Berkeley, CA, 94720 USA}
-%\icmlauthor{Ryan Adams}{rpa@seas.harvard.edu}
-%\icmladdress{School of Engineering and Applied Sciences, Harvard University}
-
 % The \author macro works with any number of authors. There are two commands
 % used to separate the names and addresses of multiple authors: \And and \AND.
 %
@@ -63,7 +48,7 @@ Harvard University\\
 \newcommand{\fix}{\marginpar{FIX}}
 \newcommand{\new}{\marginpar{NEW}}
 
-%\nipsfinalcopy % Uncomment for camera-ready version
+\nipsfinalcopy % Uncomment for camera-ready version
 
 \begin{document}
 \maketitle
@@ -75,6 +60,16 @@ We place a flexible, nonparametric prior over the SED of a light source that adm
 We use our model to predict the distribution of the redshift of a quasar from five-band (low spectral resolution) photometric data, the so called ``photo-z'' problem. 
 Our method shows that tools from machine learning and Bayesian statistics allow us to leverage multiple resolutions of information to make accurate predictions with well-characterized uncertainties. 
 \end{abstract} 
+
+\section*{Camera-ready todos}
+\begin{itemize}
+\item ``State major features of the formulation in comparison to existing models''.  That is - update text in comparison section
+\item Validate basis $K$ (details in supp material)
+\item Discuss updated basis fitting procedure - MCEM (in supp mat)
+\item Better describe parameter domains and priors (details in supp mat)
+\end{itemize}
+
+
 
 \section{Introduction}
 Enormous amounts of astronomical data are collected by a range of instruments at multiple spectral resolutions, providing information about billions of sources of light in the observable universe~\cite{alam2015eleventh, martin2005galex}.  
@@ -432,7 +427,7 @@ At each iteration, swaps between chains are proposed and accepted with a standar
 \begin{align}
   \Pr(\text{accept swap } c, c') = \frac{ \pi_c(x_{c'}) \pi_{c'}(x_c) }{ \pi_c(x_c) \pi_{c'}(x_{c'}) } \, .
 \end{align}
-Within each chain, we use component-wise slice sampling \cite{neal2003slice} to generate samples that leave each chain's distribution invariant.  Slice-sampling is a (relatively) tuning-free MCMC method, a convenient property when sampling from thousands of independent posteriors.  
+Within each chain, we use component-wise slice sampling \cite{neal2003slice} to generate samples that leave each chain's distribution invariant.  Slice-sampling is a (relatively) tuning-free MCMC method, a convenient property when sampling from thousands of independent posteriors. MCMC diagnostics and comparisons to single-chain samplers are available in the supplemental material.  
 
 
 %---------------------------------------------------------------------------------
