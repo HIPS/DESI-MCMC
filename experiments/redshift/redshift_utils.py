@@ -396,3 +396,6 @@ def softmax(x):
     x_tilde = np.exp(x-x_max)
     return x_tilde / x_tilde.sum()
 
+
+
+
