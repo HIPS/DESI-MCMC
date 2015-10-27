@@ -9,6 +9,7 @@ import autograd.scipy.signal
 from autograd import grad
 from autograd.util import quick_grad_check
 from six.moves import range
+import gmm_util as gmm_util
 
 convolve = autograd.scipy.signal.convolve
 
@@ -35,36 +36,52 @@ def make_batches(N_total, N_batch):
         start += N_batch
     return batches
 
-def logsumexp(X, axis, keepdims=False):
-    max_X = np.max(X)
-    return max_X + np.log(np.sum(np.exp(X - max_X), axis=axis, keepdims=keepdims))
-
 def make_nn_funs(input_shape, layer_specs, L2_reg):
+    """ constructs network and returns loss function  """
     parser = WeightsParser()
     cur_shape = input_shape
     for layer in layer_specs:
         N_weights, cur_shape = layer.build_weights_dict(cur_shape)
         parser.add_weights(layer, (N_weights,))
 
-    def predictions(W_vect, inputs):
+    def predict_distribution(W_vect, inputs):
         """Outputs normalized log-probabilities.
         shape of inputs : [data, color, y, x]"""
         cur_units = inputs
         for layer in layer_specs:
             cur_weights = parser.get(W_vect, layer)
-            cur_units = layer.forward_pass(cur_units, cur_weights)
+            cur_units   = layer.forward_pass(cur_units, cur_weights)
         return cur_units
 
     def loss(W_vect, X, T):
         log_prior = -L2_reg * np.dot(W_vect, W_vect)
-        log_lik = np.sum(predictions(W_vect, X) * T)
-        return - log_prior - log_lik
+
+        # compute distribution for each input
+        params    = predict_distribution(W_vect, X)
+        means     = params[:, :8]
+        var_prior = - np.sum(params[:, -8:] * params[:, -8:])
+        variances = np.exp(params[:,-8:]) # axis aligned variances
+        ll = 0.
+        for i in xrange(T.shape[0]):
+            ll = ll + np.sum(
+                gmm_util.mog_loglike(
+                    T[i],
+                    means = means[i,:,None].T,
+                    icovs = np.array([ np.diag(1./variances[i]) ]),
+                    dets  = np.array([1.]),
+                    pis   = np.array([1.]))
+                )
+        return - log_prior - ll - var_prior
 
     def frac_err(W_vect, X, T):
         return np.mean(np.argmax(T, axis=1) != np.argmax(pred_fun(W_vect, X), axis=1))
 
-    return parser.N, predictions, loss, frac_err
+    return parser.N, predict_distribution, loss, frac_err
 
+
+#############################################################################
+# Layer classes
+#############################################################################
 class conv_layer(object):
     def __init__(self, kernel_shape, num_filters):
         self.kernel_shape = kernel_shape
@@ -87,10 +104,57 @@ class conv_layer(object):
         self.parser.add_weights('biases', (1, self.num_filters, 1, 1))
         output_shape = (self.num_filters,) + \
                        self.conv_output_shape(input_shape[1:], self.kernel_shape)
+        print "Conv layer: ", input_shape, "=>", output_shape
         return self.parser.N, output_shape
 
     def conv_output_shape(self, A, B):
         return (A[0] - B[0] + 1, A[1] - B[1] + 1)
+
+class fast_conv_layer(object):
+    def __init__(self, kernel_shape, num_filters, img_shape):
+        self.kernel_shape = kernel_shape
+        self.num_filters  = num_filters
+        self.img_shape    = img_shape
+
+    def forward_pass(self, inputs, param_vector):
+        # Input dimensions:  [data, color_in, y, x]
+        # Params dimensions: [color_in, color_out, y, x]
+        # Output dimensions: [data, color_out, y, x]
+        if len(inputs.shape) == 4:
+            inputs = make_img_col(inputs)
+        params = self.parser.get(param_vector, 'params')
+        biases = self.parser.get(param_vector, 'biases')
+        conv = np.zeros((inputs.shape[0], params.shape[0]) + \
+                        self.conv_output_shape(self.img_shape, self.kernel_shape))
+        for k in range(self.num_filters):
+            for i in range(inputs.shape[0]):
+                conv[i, k, :, :] = \
+                    convolve_im2col(inputs[i,:,:],
+                                    params[k,:,:,:],
+                                    block_size = self.kernel_shape,
+                                    skip=1,
+                                    orig_img_shape = self.img_shape)
+
+        # conv out is [num_data, num_filters, y, x]
+        #conv = convolve(inputs, params, axes=([2, 3], [2, 3]), dot_axes = ([1], [0]), mode='valid')
+
+        return conv + biases
+
+    def build_weights_dict(self, input_shape):
+        # Input shape : [color, y, x] (don't need to know number of data yet)
+        self.parser = WeightsParser()
+        self.parser.add_weights('params', (self.num_filters,
+                                           self.kernel_shape[0],
+                                           self.kernel_shape[1],
+                                           input_shape[0]))
+        self.parser.add_weights('biases', (1, self.num_filters, 1, 1))
+        output_shape = (self.num_filters,) + \
+                       self.conv_output_shape(input_shape[1:], self.kernel_shape)
+        return self.parser.N, output_shape
+
+    def conv_output_shape(self, A, B):
+        return (A[0] - B[0] + 1, A[1] - B[1] + 1)
+
 
 class maxpool_layer(object):
     def __init__(self, pool_shape):
@@ -103,6 +167,8 @@ class maxpool_layer(object):
             assert input_shape[i + 1] % self.pool_shape[i] == 0, \
                 "maxpool shape should tile input exactly"
             output_shape[i + 1] = input_shape[i + 1] / self.pool_shape[i]
+
+        print "Max pool layer: ", input_shape, "=>", output_shape
         return 0, output_shape
 
     def forward_pass(self, inputs, param_vector):
@@ -124,6 +190,7 @@ class full_layer(object):
         self.parser = WeightsParser()
         self.parser.add_weights('params', (input_size, self.size))
         self.parser.add_weights('biases', (self.size,))
+        print "full layer: ", input_shape, "=>", (self.size, )
         return self.parser.N, (self.size,)
 
     def forward_pass(self, inputs, param_vector):
@@ -133,6 +200,10 @@ class full_layer(object):
             inputs = inputs.reshape((inputs.shape[0], np.prod(inputs.shape[1:])))
         return self.nonlinearity(np.dot(inputs[:, :], params) + biases)
 
+class linear_layer(full_layer):
+    def nonlinearity(self, x):
+        return x
+
 class tanh_layer(full_layer):
     def nonlinearity(self, x):
         return np.tanh(x)
@@ -141,6 +212,10 @@ class softmax_layer(full_layer):
     def nonlinearity(self, x):
         return x - logsumexp(x, axis=1, keepdims=True)
 
+
+############################################################################
+# Util funcs
+############################################################################
 
 def gauss_filt_2D(shape=(3,3),sigma=0.5):
     """
@@ -157,12 +232,31 @@ def gauss_filt_2D(shape=(3,3),sigma=0.5):
         h /= sumh
     return h
 
+def logsumexp(X, axis, keepdims=False):
+    max_X = np.max(X)
+    return max_X + np.log(np.sum(np.exp(X - max_X), axis=axis, keepdims=keepdims))
+
+
 
 #############################################################################
 # Funcs for fast convolutions: 
 #   - represent image and weights in column format
 #     and use im2col based convolution (matrix multiply)
 #############################################################################
+def make_img_col(imgs, filter_shape=(5,5), verbose=False):
+    """ Takes a stack of images with shape [N, color, y, x]
+        outputs a column stack of images with shape
+        [N, filter_x*filter_y, conv_out_y*conv_out_x]
+    """
+    imgs     = np.rollaxis(imgs, 1, 4)
+    img0     = im2col(imgs[0, :, :, :], filter_shape)
+    col_imgs = np.zeros((imgs.shape[0], img0.shape[0], img0.shape[1]))
+    for i, img in enumerate(imgs):
+        if i % 5000 == 0 and verbose:
+            print "%d of %d"%(i, len(imgs))
+        col_imgs[i,:,:] = im2col(img, filter_shape)
+    return col_imgs
+
 
 def im2col(img, block_size = (5, 5), skip = 1):
     """ stretches block_size size'd patches centered skip distance 
@@ -216,90 +310,81 @@ def convolve_im2col(img_cols, filt, block_size, skip, orig_img_shape):
 
 if __name__ == '__main__':
 
-    skip = 1
-    block_size = (11, 11)
-    img = np.random.randn(227, 227, 3)
-    filt = np.dstack([gauss_filt_2D(shape=block_size,sigma=2) for k in range(3)])
-    img_cols = im2col(img, block_size=block_size, skip=skip)
-    out = convolve_im2col(img_cols, filt, block_size, skip, img.shape)
-
-    # check against scipy convolve
-    from scipy.signal import convolve as sconvolve
-    outc = np.dstack([ sconvolve(img[:,:,k], filt[:,:,k], mode='valid') for k in range(3)])
-    outc = np.sum(outc, axis=2)
-
-    import matplotlib.pyplot as plt   
-    fig, axarr = plt.subplots(1, 3)
-    axarr[0].imshow(out, interpolation='none')
-    axarr[1].imshow(outc, interpolation='none')
-    axarr[2].imshow((outc - out)**2, interpolation='none')
-    plt.show()
+    #skip = 1
+    #block_size = (11, 11)
+    #img = np.random.randn(227, 227, 3)
+    #filt = np.dstack([gauss_filt_2D(shape=block_size,sigma=2) for k in range(3)])
+    #img_cols = im2col(img, block_size=block_size, skip=skip)
+    #out = convolve_im2col(img_cols, filt, block_size, skip, img.shape)
 
     # Network parameters
-    #L2_reg = 1.0
-    #input_shape = (1, 28, 28)
-    #layer_specs = [conv_layer((5, 5), 6),
-    #               maxpool_layer((2, 2)),
-    #               conv_layer((5, 5), 16),
-    #               maxpool_layer((2, 2)),
-    #               tanh_layer(120),
-    #               tanh_layer(84),
-    #               softmax_layer(10)]
+    L2_reg = 1.0
+    input_shape = (1, 28, 28)
+    layer_specs = [fast_conv_layer((5, 5), 6, input_shape[1:]),
+                   #conv_layer((5, 5), 6),
+                   maxpool_layer((2, 2)),
+                   #conv_layer((5, 5), 16),
+                   fast_conv_layer((5, 5), 16, (12, 12)),
+                   maxpool_layer((2, 2)),
+                   tanh_layer(120),
+                   tanh_layer(84),
+                   softmax_layer(10)]
 
-    ## Training parameters
-    #param_scale = 0.1
-    #learning_rate = 1e-3
-    #momentum = 0.9
-    #batch_size = 256
-    #num_epochs = 25
+    # Training parameters
+    param_scale = 0.1
+    learning_rate = 1e-3
+    momentum = 0.9
+    batch_size = 256
+    num_epochs = 25
 
-    ## Load and process MNIST data (borrowing from Kayak)
-    #print("Loading training data...")
-    #import imp, urllib
-    #add_color_channel = lambda x : x.reshape((x.shape[0], 1, x.shape[1], x.shape[2]))
-    #one_hot = lambda x, K : np.array(x[:,None] == np.arange(K)[None, :], dtype=int)
+    # Load and process MNIST data (borrowing from Kayak)
+    print("Loading training data...")
+    import imp, urllib
+    add_color_channel = lambda x : x.reshape((x.shape[0], 1, x.shape[1], x.shape[2]))
+    one_hot = lambda x, K : np.array(x[:,None] == np.arange(K)[None, :], dtype=int)
     #source, _ = urllib.urlretrieve(
     #    'https://raw.githubusercontent.com/HIPS/Kayak/master/examples/data.py')
     #data = imp.load_source('data', source).mnist()
-    #train_images, train_labels, test_images, test_labels = data
-    #train_images = add_color_channel(train_images) / 255.0
-    #test_images  = add_color_channel(test_images)  / 255.0
-    #train_labels = one_hot(train_labels, 10)
-    #test_labels = one_hot(test_labels, 10)
-    #N_data = train_images.shape[0]
+    train_images, train_labels, test_images, test_labels = data
+    train_images = add_color_channel(train_images) / 255.0
+    test_images  = add_color_channel(test_images)  / 255.0
+    train_labels = one_hot(train_labels, 10)
+    test_labels = one_hot(test_labels, 10)
+    N_data = train_images.shape[0]
 
-    ## Make neural net functions
-    #N_weights, pred_fun, loss_fun, frac_err = make_nn_funs(input_shape, layer_specs, L2_reg)
-    #loss_grad = grad(loss_fun)
+    #train_cols = make_img_col(train_images)
+    #test_cols  = make_img_col(test_images)
 
-    ## Initialize weights
-    #rs = npr.RandomState()
-    #W = rs.randn(N_weights) * param_scale
+    # Make neural net functions
+    N_weights, pred_fun, loss_fun, frac_err = make_nn_funs(input_shape, layer_specs, L2_reg)
+    loss_grad = grad(loss_fun)
 
-    ## Check the gradients numerically, just to be safe
-    ## quick_grad_check(loss_fun, W, (train_images[:50], train_labels[:50]))
+    # test loss
+    #loss_fun(W, train_images[:20], train_labels[:20])
+    loss_fun(W, train_cols[:50], train_labels[:50])
+    assert False
 
-    #print("    Epoch      |    Train err  |   Test error  ")
-    #def print_perf(epoch, W):
-    #    test_perf  = frac_err(W, test_images, test_labels)
-    #    train_perf = frac_err(W, train_images, train_labels)
-    #    print("{0:15}|{1:15}|{2:15}".format(epoch, train_perf, test_perf))
+    # Initialize weights
+    rs = npr.RandomState()
+    W = rs.randn(N_weights) * param_scale
 
-    ## Train with sgd
-    #batch_idxs = make_batches(N_data, batch_size)
-    #cur_dir = np.zeros(N_weights)
+    # Check the gradients numerically, just to be safe
+    #quick_grad_check(loss_fun, W, (train_images[:50], train_labels[:50]))
 
-    #for epoch in range(num_epochs):
-    #    print_perf(epoch, W)
-    #    for idxs in batch_idxs:
-    #        grad_W = loss_grad(W, train_images[idxs], train_labels[idxs])
-    #        cur_dir = momentum * cur_dir + (1.0 - momentum) * grad_W
-    #        W -= learning_rate * cur_dir
+    print("    Epoch      |    Train err  |   Test error  ")
+    def print_perf(epoch, W):
+        test_perf  = frac_err(W, test_images, test_labels)
+        train_perf = frac_err(W, train_images, train_labels)
+        print("{0:15}|{1:15}|{2:15}".format(epoch, train_perf, test_perf))
 
+    # Train with sgd
+    batch_idxs = make_batches(N_data, batch_size)
+    cur_dir = np.zeros(N_weights)
 
-
-
-
-
-
+    for epoch in range(num_epochs):
+        print_perf(epoch, W)
+        for idxs in batch_idxs:
+            grad_W = loss_grad(W, train_images[idxs], train_labels[idxs])
+            cur_dir = momentum * cur_dir + (1.0 - momentum) * grad_W
+            W -= learning_rate * cur_dir
 

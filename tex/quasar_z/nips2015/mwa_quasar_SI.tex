@@ -4,6 +4,7 @@
 \usepackage{url}
 \usepackage{amsthm, amsmath, bbm}
 \usepackage{floatrow}
+\usepackage{booktabs}
 \newtheorem{theorem}{Theorem}
 \include{defs}
 
@@ -40,7 +41,7 @@ Cambridge, MA 02138 \\
 \newcommand{\fix}{\marginpar{FIX}}
 \newcommand{\new}{\marginpar{NEW}}
 
-%\nipsfinalcopy % Uncomment for camera-ready version
+\nipsfinalcopy % Uncomment for camera-ready version
 
 \begin{document}
 
@@ -126,6 +127,29 @@ the redshifts of much brighter or much dimmer stars. For the sake of a fair comp
 the out-of-range $i$-magnitudes into the lowest and highest bins appropriately in our experiments.
 
 The method from \cite{brescia2013photometric} employs a neural network with two hidden layers. Given that the number of inputs is $N$, the first hidden layer has $(2N + 1)$ outputs and the second hidden layer has anywhere from 1 to $(N - 1)$ outputs. Tuning the number of hidden nodes through validation, we used a neural network with 5 nodes in the input layer, for each of the five $ugriz$ bands, 11 nodes in the first hidden layer, 2 nodes in the second hidden layer, and a single output node.  We used the implementation from \cite{pybrain2010jmlr} for our neural network experiments.  
+
+
+\section{Validating $K$}
+
+
+
+\section{MCMC Comparison: Parallel-Tempering vs.~Single Chain}
+This section addresses the choice of slice-sampling within parallel-tempering (PT-SS) versus a single chain slice-sampler (SS).  As mentioned in the main paper, our single-chain method of choice is slice-sampling due to it's ease of implementation and relatively hands-off tuning. 
+Conditioned on a map basis, $B_{mle}$, and photometric fluxes, $\{y, \tau^2\}_{ugriz}$, the posterior over basis loadings and redshift is multimodal.  This makes sense from an information standpoint - because the photometric collection process washes away most of the detailed spectral information, multiple SED hypotheses may suitably explain photometric observations. 
+This phenomenon manifested itself when fitting data, the consequences clear when running multiple independent chains from overdispersed location.  
+When assessing convergence, we 
+
+\begin{figure}
+\includegraphics[width=.9\textwidth]{../figs/mcmc_comparison/mcmc_comparison.pdf}
+\includegraphics[width=.8\textwidth]{../figs/mcmc_comparison/mcmc_comparison_hist.pdf}
+\caption{\textbf{Top}: multiple trace plots for the redshift parameter, $z$.  The uppermost graph is the trace of four independent parallel-tempering + slice-sampling (PT-SS) chains.  Second graph depicts four independent slice-sampling (SS) only chains.  These chains have clearly not converged (and are extremely slow to converge). \textbf{Bottom}: resulting histograms from the two methods (each trace is afforded its own color).  It's clear that PT-SS is more consistently recovering posterior structure, whereas SS is getting stuck in small areas of the posterior. Note that the true redshift value is $z=2.39$, located in the middle of the right mode of the well-sampled posterior. }
+\end{figure}
+
+\begin{table}
+\input{../figs/mcmc_comparison/mcmc_comparison_table.tex}	
+\caption{Comparison of MCMC diagnostic statistics.  $\hat r$ refers to the potential scale reduction factor.  $N_{eff}$ is a measure of effective sample size based on between and within chain variance \cite{gelman2014bayesian}.  ESS is a measurement of effectively independent samples based on autocorrelation. Details can be found in \cite{gelman2011inference}.  We found parallel-tempering to consistently outperform a single chain, especially in our ``many-posterior'' tuning-free setting.}
+\end{table}
+
 
 
 

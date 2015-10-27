@@ -101,7 +101,8 @@ if __name__=="__main__":
                 bovy_true  = bovy_true[hi_idx]
 
         # load brescia
-        nn_rand_file = glob("../analysis_brescia_reproduce/brescia_exp_SPLIT-%s_TRAIN-*_*-all_SEED-42_NUM_LAYERS-4_WIDTH-100_UNITS-nanos.pkl"%exp_type)[0]
+        nn_rand_file = glob("../analysis_brescia_reproduce/brescia_exp_SPLIT-%s_TRAIN-*_*-all_SEED-42_NUM_LAYERS-4_WIDTH-100_UNITS-nanos.pkl"%exp_type)[3]
+        print nn_rand_file
         with open(nn_rand_file, 'rb') as handle:
             nn_dict     = pickle.load(handle)
             overlap_sub = np.in1d(nn_dict['test_spec_ids'], mog_specs)
@@ -151,7 +152,7 @@ if __name__=="__main__":
                                row_strings[8]
                               )
     #out_string = out_string.replace("$", "")
-    with open('/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/nips2015/compare_table.tex', 'w') as handle:
+    with open('/Users/acm/Proj/DESIMCMC/tex/quasar_z/nips2015/compare_table.tex', 'w') as handle:
         handle.write(out_string)
 
 

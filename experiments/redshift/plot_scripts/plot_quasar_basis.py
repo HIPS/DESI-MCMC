@@ -2,7 +2,7 @@ import numpy as np
 import numpy.random as npr
 import matplotlib.pyplot as plt
 import seaborn as sns
-from redshift_utils import load_data_clean_split, project_to_bands
+from redshift_utils import load_data_clean_split, project_to_bands, get_lam0
 from quasar_fit_basis import load_basis_fit
 from quasar_sample_basis import load_basis_samples
 npr.seed(42)
@@ -24,24 +24,43 @@ def make_params(th, parser, lam0_delta):
 
 #######################################################################
 out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/figs/"
-V = 2728        #  "1364"  or 2728
-th, lam0, lam0_delta, parser = load_basis_fit('cache/basis_fit_K-4_V-%d.pkl'%2728)
+V = 1364 #2728        #  "1364"  or 2728
+bdir = "/Users/acm/Proj/DESIMCMC/experiments/redshift/cache/basis_locked/"
+bname = "basis_fit_K-4_V-1364_split-random.pkl"
+th, lam0, lam0_delta, parser = load_basis_fit(os.path.join(bdir, bname))
 W_mle, B_mle, M_mle = make_params(th, parser, lam0_delta)
+
+# basis for figure
+#bfile = "/UAsers/acm/Dropbox/Proj/astro/DESIMCMC/experiments/redshift/cache/old/basis_th_K-4_V-%d.npy"%V
+#f = open(bfile, 'rb')
+#lam0, lam0_delta = get_lam0(lam_subsample=5)
+#a = np.load(bfile)
+#W_mle = np.exp(a[:, :400])
+#W_mle = W_mle / np.sum(W_mle, axis=1, keepdims=True)
+#B_mle = np.exp(a[:, 400:])
+#B_mle = B_mle / np.sum(B_mle * lam0_delta, axis=1, keepdims=True)
+#K = B_mle.shape[0]
 
 ######################################################################
 ## PLOT MLE BASIS
 ######################################################################
-fig, axarr = plt.subplots(K, 1, figsize=(16, 8))
-ranges = [[1000, 7000], [800, 2000], [600, 5000], [800, 9500]]
+fig, axarr = plt.subplots(K, 1, figsize=(12, 6))
+ranges = [[800, 8000], [100, 8000], [800, 4000], [800, 2000]]
 for k in range(K):
     axarr[k].plot(lam0, B_mle[k, :], color=sns.color_palette()[k])
     axarr[k].set_xlim(ranges[k])
-plt.xlabel(" wavelength $(\AA)$ ", fontsize=16, labelpad=20)
-plt.text(.05, .5, "$B_k(\lambda)$", transform = fig.transFigure)
-#plt.subplots_adjust(left=.01)
+    axarr[k].tick_params(axis='both', which='major', labelsize=12)
+    axarr[k].tick_params(axis='x', which='major', labelsize=16)
+    max_yticks = 3
+    yloc = plt.MaxNLocator(max_yticks)
+    axarr[k].yaxis.set_major_locator(yloc)
+plt.xlabel(" $\lambda$ (wavelength in $\AA$) ", fontsize=20, labelpad=20)
+plt.text(.02, .5, "$B_k(\lambda)$", transform = fig.transFigure, fontsize=20)
+plt.subplots_adjust(hspace=.6)
 #plt.tight_layout()
 sns.despine(top=True)
-plt.savefig(out_dir + "rank_%d_basis.pdf"%B.shape[0], bbox_inches='tight')
+plt.savefig("/Users/acm/Proj/DESIMCMC/tex/quasar_z/figs/rank_%d_basis-random.pdf"%B.shape[0], 
+            bbox_inches='tight')
 plt.close('all')
 
 ## plot a reconstruction
