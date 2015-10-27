@@ -109,7 +109,8 @@ if __name__=="__main__":
                        'test_lls'  : test_lls,
                        'bins'      : bins,
                        'ws_train'  : ws_train,
-                       'Bs'        : Bs }
+                       'Bs'        : Bs,
+                       'NUM_TRAIN_EXAMPLE' : NUM_TRAIN_EXAMPLE}
     pickle.dump(fits, open('mcem_fits/qso_basis_K_%d_split_%s.pkl'%(NUM_BASES, SPLIT_TYPE), 'wb'))
 
 

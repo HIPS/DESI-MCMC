@@ -109,10 +109,7 @@ if __name__=="__main__":
 
     #### load prior file
     if PRIOR_TYPE != "naive":
-        bfname = qfb.basis_filename(num_bases = NUM_BASES,
-                                    split_type = SPLIT_TYPE,
-                                    lam0       = lam0)
-        gmm_fname = BASIS_DIR + "/prior_" + bfname
+        gmm_fname = "mcem_fits/prior_weight_K_%d_split_%s.pkl"%(NUM_BASES, SPLIT_TYPE)
         with open(gmm_fname, 'rb') as handle:
             omega_dict = pickle.load(handle)
             mu_dict    = pickle.load(handle)
@@ -120,10 +117,11 @@ if __name__=="__main__":
     ##########################################################################
     ## functions to pass into HMC
     ##########################################################################
+    import simplex
     def ln_post(q, B):
         z     = q[0]
         omega = q[1:(B.shape[0])]
-        w     = ru.softmax(np.concatenate([omega, [0]]))
+        w     = simplex.logit([omega]) #ru.softmax(np.concatenate([omega, [0]]))
         mu    = q[-1]
         if z < 0. or z > 8.:
             return -np.inf
