@@ -5,33 +5,98 @@ import quasar_fit_basis as qfb
 import redshift_utils as ru
 from sklearn import mixture
 import cPickle as pickle
+import numpy as np
 
-##############################################################################
-### Start Script
-##############################################################################
+NUM_TRAIN_EXAMPLE=2000
+def load_model(split_type):
+    """pretty slow way to load a fit model"""
+    import sys, os; sys.path.append("experiments/")
+    from qso_experiment import setup_data, setup_model
+
+    # load master qso list
+    qso_psf_flux, qso_psf_flux_ivar, qso_psf_mags, qso_z, spec_files, train_idx, test_idx = \
+        ru.load_DR10QSO_train_test_idx(split_type = split_type)
+
+    # randomly select a subsample to train on
+    np.random.seed(0)
+    spec_files_train = np.array(spec_files)[train_idx]
+    np.random.shuffle(spec_files_train)
+    local_specs = "/home/acm/Proj/astro/data/DR10QSO/specs/"
+    spec_files_train = np.array([os.path.join(local_specs, os.path.basename(s))
+                                 for s in spec_files_train])
+
+    #######################################################################
+    # load spec data!
+    #######################################################################
+    sys.path.append("/home/acm/Proj/astro/SEDModel/SpecExperiments/experiments/")
+    from qso_experiment import setup_data, fit_nmf
+    train_dict = setup_data(spec_files_train[:NUM_TRAIN_EXAMPLE])
+    test_dict  = setup_data(spec_files_train[NUM_TRAIN_EXAMPLE:(NUM_TRAIN_EXAMPLE+2000)])
+  
+    ##############################
+    # Load params if available   #
+    ##############################
+    import cPickle as pickle
+    model_file = 'mcem_fits/qso_basis_K_%d_split_%s.pkl'%(NUM_BASES, SPLIT_TYPE)
+    if os.path.exists(model_file):
+        print "loading model from cache!"
+        model_dict = pickle.load(open(model_file, 'rb'))
+    else:
+        model_dict = {NUM_BASES:None}  # otherwise init none
+
+
+    ######################################
+    # Combine above to create map model  #
+    ######################################
+    nmf_mod, _      = setup_model(test_dict, bins=model_dict['bins'], K=K)
+    nmf_mod_test, _ = setup_model(val_dict, bins=model_dict['bins'], K=K)
+    map_basis = nmf_mod_test.parser.get(model_dict[K]["th_test"], 'basis')
+
+    # set map basis to each mod and test
+    th_marg = np.zeros(nmf_mod.num_params())
+    nmf_mod.parser.set(th_marg, 'basis', map_basis)
+
+    th_test = np.zeros(nmf_mod_test.num_params())
+    nmf_mod_test.parser.set(th_test, 'basis', map_basis)
+    return nmf_mod, th_marg, nmf_mod_test, th_test
+
+
+
 if __name__=="__main__":
 
-    ##########################################################################
-    ## set sampling parameters
-    ##########################################################################
-    narg           = len(sys.argv)
-    LAM_SUBSAMPLE  = int(sys.argv[4]) if narg > 4 else 10
-    NUM_BASES      = int(sys.argv[5]) if narg > 5 else 4
-    SPLIT_TYPE     = sys.argv[6] if narg > 6 else "redshift"  #"random", "flux", "redshift"
-    BASIS_DIR      = sys.argv[9] if narg > 8 else "cache/basis_fits"
-    NUM_TRAIN_EXAMPLE = 2000
-    #NUM_TEST_EXAMPLE = "all"
-    SEED             = 42
 
-    ##########################################################################
-    ### load and curate basis samples
-    ##########################################################################
-    mus, betas, omegas, th, lam0, lam0_delta, parser = \
-        qip.load_fit_params(num_bases     = NUM_BASES,
-                            split_type    = SPLIT_TYPE,
-                            lam_subsample = LAM_SUBSAMPLE,
-                            basis_dir     = BASIS_DIR)
-    omegas_trans = (omegas - omegas[:,-1,np.newaxis])[:,:-1]
+    # load in trained model
+    SPLIT_TYPE = "random"
+    nmf_mod, th_marg, nmf_mod_test, th_test = load_model(SPLIT_TYPE)
+
+    # collect a bunch of weight examples
+    for i in range(len(test_lls)):
+        th_test = nmf_valid.samp_w_marg(th_test)
+        test_lls[i] = nmf_valid.loglike(th_test) / nmf_valid.N
+
+
+    # normalize them, save the magnitude
+
+    # take the logit, and fit an MOG
+
+    # save MoG next to the original model
+
+        # sample out of sample w's conditioned on basis
+        th_test = np.zeros(nmf_valid.num_params())
+        nmf_valid.parser.set(th_test, 'basis', map_basis) # (sets map basis)
+        test_lls = np.zeros(200)
+                #
+        ll_dict[K] = test_lls
+        #print np.percentile(test_lls, [1, 99])
+        print np.percentile(nmf_valid.loglike_data(th_test), [2.5, 50, 97.5])
+
+
+
+
+
+
+
+
 
     ## if necessary, load more omegas that were fit to this basis
 
@@ -82,49 +147,4 @@ if __name__=="__main__":
         pickle.dump(omega_dict, handle)
         pickle.dump(mu_dict, handle)
 
-    ##########################################################################
-    # DEBUG/ANALYSIS
-    ##########################################################################
-    if False:
-        # Load spec_ids from the QSO matrix file for inspection
-        CACHE_TRAIN_FILE = qfb.cache_file_name(SPLIT_TYPE, NUM_TRAIN_EXAMPLE)
-        if not os.path.exists(CACHE_TRAIN_FILE):
-            print "Cache file not there - quitting", CACHE_TRAIN_FILE
-            sys.exit(1)
-        handle    = open(CACHE_TRAIN_FILE, 'rb')
-        train_idx_sub  = np.load(handle)
-        spec_grid      = np.load(handle)
-        spec_ivar_grid = np.load(handle)
-        spec_mod_grid  = np.load(handle)
-        unique_lams    = np.load(handle)
-        spec_zs        = np.load(handle)
-        spec_ids       = np.load(handle)
-        handle.close()
 
-        import seaborn as sns
-        from CelestePy.util.like.gmm_like import mog_logmarglike
-        # plot low redshift qsos
-        zmid = np.percentile(spec_zs, 50)
-        plt.scatter(omegas[:,2], omegas[:,3], c = spec_zs.flatten())
-        plt.show()
-
-        # visualize two scatterplots, dividing into lo-z, hi-z to see if distribution
-        # is invariant to z
-        fig, axarr = plt.subplots(1, 2)
-        spec_zs = spec_zs.flatten()
-        axarr[0].scatter(omegas_trans[spec_zs < zmid,1], omegas_trans[spec_zs < zmid,2])
-        axarr[1].scatter(omegas_trans[spec_zs >= zmid,1], omegas_trans[spec_zs >= zmid,2])
-        plt.show()
-
-        # histogram each marginal
-        fig, axarr = plt.subplots(1, omegas_trans.shape[1])
-        for i in range(len(axarr)):
-            n, bins, patches = axarr[i].hist(omegas_trans[:,i], 35, normed=True)
-            axarr[i].plot(bins, np.exp(mog_logmarglike(bins, means=omega_dict['mean'], covs=omega_dict['covs'], pis=omega_dict['pis'], ind=i)))
-        plt.show()
-
-
-        n, bins, patches = plt.hist(mus, 35, normed=True)
-        plt.plot(bins, np.exp(mog_logmarglike(bins, means=mu_dict['mean'], covs = mu_dict['covs'], pis=mu_dict['pis'])))
-        plt.plot(bins, np.exp(mog_logmarglike(bins, means=np.array([[mus.mean()]]), covs=np.array([[[np.cov(mus.T)]]]), pis=np.array([1]))))
-        plt.show()
