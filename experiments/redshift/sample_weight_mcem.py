@@ -19,6 +19,7 @@ parser.add_argument('-n', '--test_n', help='test quasar index number (0, ...)', 
 parser.add_argument('-m', '--num_samps', help='number of samples to take', default=1000)
 parser.add_argument('-c', '--num_chains', help='number of chains in parallel for PT', default=8)
 parser.add_argument('-S', '--split_type', help='(random, redshift, flux)', default="redshift")
+parser.add_argument('-O', '--out_dir', help='output dir', default="cache")
 args = vars(parser.parse_args())
 
 
@@ -33,7 +34,7 @@ if __name__=="__main__":
     test_n            = int(args['test_n'])
     Nsamps            = int(args['num_samps'])
     Nchains           = int(args['num_chains'])
-    SAMPLES_DIR       = "cache"
+    SAMPLES_DIR       = args['out_dir']
     NUM_BASES         = 6
     SPLIT_TYPE        = args['split_type']
     NUM_TRAIN_EXAMPLE = "all"
