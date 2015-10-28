@@ -31,11 +31,27 @@
   ```
   which will run a few chains of parallel-tempering + slice sampling and then a few chains of just slice sampling. It will then create a few traceplots, histogram comparisons, and a look at convergence diagnostics (r-hat, n_eff, ess). 
   
-4. Fit a big sample of photometric observations
+4. Fit a big sample of photometric observations, the main script is 
   ```
-  python sample_weights_redshift_temper_mcem.py 
+  python sample_weights_redshift_temper_mcem.py \
+    -n ${test_n} \
+    -m ${Nsamps} \
+    -S ${SPLIT_TYPE} \
+    -O ${OUT_DIR} &> ${PBS_O_WORKDIR}/outfiles/samp.${TF_TASKID}.out
   ```
-  which should 
-  TODO: use Joblib to run a bunch of these in parallel from within the same python job. 
-
+  which should run on test example `n`, for `m` samples using split type `-S` and periodically saving samples to `-O`.  
   
+
+  ## On NERSC 
+    to run the random split experiment, run
+    ```
+    $ cd /Proj/DESIMCMC/experiments/redshift/analysis_mcem/random
+    $ qsub sample_all_quasars.pbs
+    ```
+    
+    which will fire off `num_tasks` tasks over `num_nodes` nodes so long as `mppwidth = num_nodes * 24`. 
+    
+    
+  Otherwise, joblib might take a few days ...
+
+    
