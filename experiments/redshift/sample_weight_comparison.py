@@ -173,7 +173,7 @@ if __name__=="__main__":
     ##########################################################################
     # NOW SLICE SAMPLE, one chain
     def gen_ss_chain():
-        Nslice = 5000
+        Nslice = 1000
         D = B_mle.shape[0] + 1
         samps = np.zeros((Nslice, D))
         samps[0] = 5 * np.random.randn(D); samps[0,0] = 5 * np.random.rand()
@@ -190,6 +190,8 @@ if __name__=="__main__":
     ##########################################################################
     # plot Parallel tempering trace (traces) and slice sample traces
     ##########################################################################
+    import matplotlib; matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
     fig, axarr = plt.subplots(2, 1, figsize=(10, 5))
     for pt, ss in zip(pt_chains, ss_chains):
         axarr[0].plot(pt[:,0])
