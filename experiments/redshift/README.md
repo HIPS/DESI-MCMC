@@ -51,7 +51,17 @@
     
     which will fire off `num_tasks` tasks over `num_nodes` nodes so long as `mppwidth = num_nodes * 24`. 
     
+    Once those tasks are completed, it will create a bunch of chain files in the project directory 
+    ```
+    /project/projdectdirs/das/quasar/...
+    ```
+    where the paths are a littel crazy - it will append `/global/u2/a/acmiller/Proj/DESIMCMC/experiments/redshift/analysis_mcem/random/samps` to the path and store the few thousand sample files there. 
     
+    Once that process is complete, we can aggregate statistics from those samples with the `post.py` function in the main directory
+    ```
+    python post.py analysis_mcem/random
+    ```
+    will collect all those samples and take a look at how we did.  
   Otherwise, joblib might take a few days ...
 
     
