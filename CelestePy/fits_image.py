@@ -4,6 +4,7 @@
 # Author: Andrew Miller <acm@seas.harvard.edu>
 import fitsio
 import numpy as np
+import scipy.stats
 
 # autograd array wrapper
 from autograd import grad
@@ -125,6 +126,12 @@ class FitsImage():
             sign, logdet = np.linalg.slogdet(self.covars[i,:,:])
             self.logdets[i] = logdet
 
+        ERROR = 0.01
+        self.R = self.calc_bounding_radius(self.weights,
+                                           self.means,
+                                           self.covars,
+                                           ERROR)
+
     def contains(self, s_equa, pad = 50):
         """ can this source be seen by this image? 
           s_equa : equatorial locations of the point in the sky in question
@@ -161,4 +168,32 @@ class FitsImage():
         # whenever we flatten and reshape use C ordering...
         return np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
 
+    """
+    Based on writeup bounding_box.pdf. Finds and returns a radius R such that a
+    circle with radius R around (0, 0) contains (1 - error) of the probability
+    mass of the mixture of Gaussians defined by weights, means, covars.
+    """
+    def calc_bounding_radius(self, weights, means, covars, error):
+        minbound = -np.inf
+        # get quantile for chi square
+        Rsq = scipy.stats.chi2.ppf(1 - error, 2)
+        for i in range(len(weights)):
+            sigma1 = np.sqrt(covars[i, 0, 0])
+            sigma2 = np.sqrt(covars[i, 1, 1])
+            rho = covars[i, 0, 1] / (sigma1 * sigma2)
+
+            A11 = sigma1
+            A21 = rho * sigma2
+            A22 = sigma2 * np.sqrt(1 - rho**2.)
+
+            An = 1. / Rsq * (1 / A11**2. + A21**2. / A22**2.)
+            Bn = 1. / Rsq * (-2 * A21 / (A11 * A22**2.))
+            Cn = 1. / Rsq * 1. / A22**2.
+
+            majaxis = (0.5 * (An + Cn - np.sqrt(Bn**2. + (An - Cn)**2.)))**(-0.5)
+            dist = np.sqrt(self.means[i, 0]**2. + self.means[i, 1]**2.)
+
+            minbound = max(minbound, majaxis + dist)
+
+        return minbound
 

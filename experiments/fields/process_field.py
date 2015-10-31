@@ -81,8 +81,7 @@ def gen_point_source_psf_image_with_fluxes(src_params, fits_image):
     src_img  = gen_point_source_psf_image(src_params.u, fits_image)
     flux     = src_params.fluxes[BANDS.index(fits_image.band)]
     src_img *= (flux / fits_image.calib) * fits_image.kappa
-    return src_image
-
+    return src_img
 
 def compare_small_patch():
     """reads in a known image and source and compares our model 
@@ -96,13 +95,12 @@ def compare_small_patch():
     imgfits = make_fits_images(run, camcol, field)
 
     # track down the brightest sources in this field for sanity checking
-    import seaborn as sns
     rbrightnesses = np.array([src.getBrightnesses()[0][2] for src in srcs])
     bright_i      = np.argsort(rbrightnesses)
     for i in bright_i[:50]:
         print srcs[i]
 
-    i = bright_i[22]
+    i = bright_i[2]
     src = srcs[i]
     src_params = tractor_src_to_celestepy_src(src)
     print src
@@ -112,7 +110,7 @@ def compare_small_patch():
     fig, axarr = plt.subplots(len(BANDS_TO_PLOT), 3)
     for bi, b in enumerate(BANDS_TO_PLOT):
         if src_params.a == 0:
-            src_image = gen_point_source_psf_image_with_fluxes(src_params, imgfits[b])
+            src_img = gen_point_source_psf_image_with_fluxes(src_params, imgfits[b])
         else:
             src_img = gen_galaxy_psf_image(src_params, imgfits[b]);
 
@@ -123,6 +121,18 @@ def compare_small_patch():
         dpatch = imgfits[b].nelec[miny:maxy, minx:maxx]
         dpatch -= np.median(dpatch)
         mpatch = src_img[miny:maxy, minx:maxx]
+
+        # check how good bounding box is
+        bound = imgfits[b].R
+        minx_b, maxx_b = pixel_loc[0] - bound, pixel_loc[0] + bound
+        miny_b, maxy_b = pixel_loc[1] - bound, pixel_loc[1] + bound
+
+        total_pixels = np.sum(np.sum(src_img))
+        bounded_pixels = np.sum(np.sum(src_img[miny_b:maxy_b, minx_b:maxx_b]))
+        percent_diff = np.abs(total_pixels - bounded_pixels) / total_pixels * 100
+        print "Total pixels:", total_pixels
+        print "Bounded pixels:", bounded_pixels
+        print "% off:", percent_diff
 
         axarr[bi,0].imshow(dpatch)
         axarr[bi,1].imshow(mpatch)
@@ -138,7 +148,6 @@ def compare_small_patch():
     axarr[0,1].set_title('model patch')
     fig.tight_layout()
     plt.show()
-
 
 def main(run, camcol, field):
     # read in sources, images
