@@ -138,14 +138,27 @@ def gen_point_source_psf_image(
     #              invsigs = image.invcovars,
     #              logdets = image.logdets)
 
-    # slow python method
-    psf_grid = gmm_like(x       = image.pixel_grid, 
-                        ws      = image.weights,
-                        mus     = image.means + v_s,
-                        sigs    = image.covars,
-                        invsigs = image.invcovars,
-                        logdets = image.logdets)
-    return psf_grid.reshape(image.nelec.shape, order='C')
+    # create sub-image - make sure it doesn't go outside of field pixels
+    bound = image.R
+    minx_b, maxx_b = max(0, int(v_s[0] - bound)), min(int(v_s[0] + bound + 1), image.nelec.shape[1])
+    miny_b, maxy_b = max(0, int(v_s[1] - bound)), min(int(v_s[1] + bound + 1), image.nelec.shape[0])
+    y_grid = np.arange(miny_b, maxy_b)
+    x_grid = np.arange(minx_b, maxx_b)
+    xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
+    sub_pix_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
+    psf_grid_small = gmm_like(x       = sub_pix_grid,
+                              ws      = image.weights,
+                              mus     = image.means + v_s,
+                              sigs    = image.covars,
+                              invsigs = image.invcovars,
+                              logdets = image.logdets)
+
+    # create full field grid
+    psf_grid = np.zeros(image.nelec.shape)
+    psf_grid[miny_b:maxy_b, minx_b:maxx_b] = \
+        psf_grid_small.reshape(xx.shape, order='C')
+    return psf_grid
+    #return psf_grid.reshape(image.nelec.shape, order='C')
 
     # slow for sanity check
     #for x in range(image.nelec.shape[1]): 
