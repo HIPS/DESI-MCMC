@@ -159,11 +159,11 @@ def main(run, camcol, field):
     for i,src in enumerate(srcs[0:50]):
         print "Source %d" % i
         # convert to Celeste sources
-        src_params = tsrc_to_src_params(src)
+        src_params = tractor_src_to_celestepy_src(src)
 
         for j,band in enumerate(BANDS):
             if src_params.a == 0:
-                f_s = gen_point_source_psf_image_with_fluxes(src_params.u, imgfits[band])
+                f_s = gen_point_source_psf_image_with_fluxes(src_params, imgfits[band])
             elif src_params.a == 1:
                 f_s = gen_galaxy_psf_image(src_params, imgfits[band]);
 
