@@ -179,7 +179,7 @@ if __name__ == '__main__':
     run = 125
     camcol = 1
     field = 17
-    #modelims = main(run, camcol, field)
+    modelims = main(run, camcol, field)
 
-    compare_small_patch()
+    #compare_small_patch()
 

@@ -6,7 +6,10 @@ import CelestePy.mixture_profiles as mp
 from autograd import grad
 from CelestePy.util.like import fast_inv_gamma_lnpdf
 from CelestePy.util.like.gmm_like_fast import gmm_like_2d
+from util.like.gmm_like import gmm_like
 import CelestePy.celeste_fast as celeste_fast
+import scipy.stats
+from util.bound.bounding_box import calc_bounding_radius
 
 BANDS = ['u', 'g', 'r', 'i', 'z']
 def galaxy_source_like(th, Z_s, images, check_overlap=True, unconstrained=True):
@@ -117,7 +120,6 @@ def gen_galaxy_transformation(sig_s, rho_s, phi_s):
 galaxy_profs = [mp.get_exp_mixture(), mp.get_dev_mixture()]
 galaxy_prof_dict = dict(zip(['exp', 'dev'], galaxy_profs))
 
-
 def gen_galaxy_prof_psf_image(prof_type, R, u, img):
     """ generate the profile galaxy psf image given:
             - prof_type : either 'exp' or 'dev'
@@ -127,11 +129,13 @@ def gen_galaxy_prof_psf_image(prof_type, R, u, img):
     """
     assert galaxy_prof_dict.has_key(prof_type), "unknown galaxy profile type"
 
+    v_s = img.equa2pixel(u)
+
     # convolve image PSF and galaxy profile (generate mixture components)
     weights, means, covars = \
         celeste_fast.gen_galaxy_prof_psf_mixture_params(
-           W             = np.dot(R, R.T),        #np.ndarray[FLOAT_t, ndim=2] W,
-           v_s           = img.equa2pixel(u),     #np.ndarray[FLOAT_t, ndim=1] v_s,
+           W             = np.dot(R, R.T),       #np.ndarray[FLOAT_t, ndim=2] W,
+           v_s           = v_s,                  #np.ndarray[FLOAT_t, ndim=1] v_s,
            image_ws      = img.weights,         #np.ndarray[FLOAT_t, ndim=1] image_ws,
            image_means   = img.means,           #np.ndarray[FLOAT_t, ndim=2] image_means,
            image_covars  = img.covars,          #np.ndarray[FLOAT_t, ndim=3] image_covars,
@@ -139,12 +143,26 @@ def gen_galaxy_prof_psf_image(prof_type, R, u, img):
            gal_prof_sigs = galaxy_prof_dict[prof_type].var[:,0,0] #np.ndarray[FLOAT_t, ndim=1] gal_prof_sigs,
     )
 
-    ## evaluate equation 11-13 in jeff's november writeup
-    psf_grid = fast_gmm_like(x    = img.pixel_grid, 
-                             ws   = weights,
-                             mus  = means,
-                             sigs = covars)
-    return psf_grid.reshape(img.nelec.shape, order='C')
+    ERROR = 0.01
+    bound = calc_bounding_radius(weights, means, covars, ERROR)
+    minx_b, maxx_b = max(0, int(v_s[0] - bound)), min(int(v_s[0] + bound + 1), img.nelec.shape[1])
+    miny_b, maxy_b = max(0, int(v_s[1] - bound)), min(int(v_s[1] + bound + 1), img.nelec.shape[0])
+    y_grid = np.arange(miny_b, maxy_b)
+    x_grid = np.arange(minx_b, maxx_b)
+    xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
+    sub_pix_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
+
+    psf_grid_small = fast_gmm_like(x       = sub_pix_grid,
+                                   ws      = weights,
+                                   mus     = means,
+                                   sigs    = covars)
+
+    # create full field grid
+    psf_grid = np.zeros(img.nelec.shape)
+    psf_grid[miny_b:maxy_b, minx_b:maxx_b] = \
+        psf_grid_small.reshape(xx.shape, order='C')
+    return psf_grid
+
 
 def gen_galaxy_psf_image(th, u_s, img, check_overlap = True, unconstrained = True):
     """ generates the profile of a combination of exp/dev images.  
