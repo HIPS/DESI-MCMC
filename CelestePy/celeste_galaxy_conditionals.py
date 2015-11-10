@@ -144,11 +144,11 @@ def gen_galaxy_prof_psf_image(prof_type, R, u, img):
     )
 
     ERROR = 0.01
-    bound = calc_bounding_radius(weights, means, covars, ERROR)
+    bound = calc_bounding_radius(weights, means, covars, ERROR, center=v_s)
     minx_b, maxx_b = max(0, int(v_s[0] - bound)), min(int(v_s[0] + bound + 1), img.nelec.shape[1])
     miny_b, maxy_b = max(0, int(v_s[1] - bound)), min(int(v_s[1] + bound + 1), img.nelec.shape[0])
-    y_grid = np.arange(miny_b, maxy_b)
-    x_grid = np.arange(minx_b, maxx_b)
+    y_grid = np.arange(miny_b, maxy_b, dtype=np.float)
+    x_grid = np.arange(minx_b, maxx_b, dtype=np.float)
     xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
     sub_pix_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
 

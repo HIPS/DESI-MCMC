@@ -101,9 +101,9 @@ def compare_small_patch():
         print srcs[i]
 
     i = bright_i[2]
+    i = 1
     src = srcs[i]
     src_params = tractor_src_to_celestepy_src(src)
-    print src
 
     # plot the CelestePy model image with Tractor Parameters as a sanity check
     BANDS_TO_PLOT = ['r', 'i']
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     run = 125
     camcol = 1
     field = 17
-    modelims = main(run, camcol, field)
+    #modelims = main(run, camcol, field)
 
-    #compare_small_patch()
+    compare_small_patch()
 
