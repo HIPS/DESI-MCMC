@@ -127,7 +127,9 @@ class FitsImage():
             sign, logdet = np.linalg.slogdet(self.covars[i,:,:])
             self.logdets[i] = logdet
 
-        ERROR = 0.01
+        # for a point source in this image, calculate the radius such that 
+        # at least 99% of photons from that source will fall within
+        ERROR = 0.001
         self.R = calc_bounding_radius(self.weights,
                                       self.means,
                                       self.covars,

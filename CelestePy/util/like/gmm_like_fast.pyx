@@ -127,12 +127,11 @@ def multivariate_normal_2d_covinv_logdet_logpdf(
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def gmm_like_2d(
-        np.ndarray[FLOAT_t, ndim=1] probs,      # buffer to place prob values
-        np.ndarray[FLOAT_t, ndim=2] x,          # N x 2 matrix of 2 D points
-        np.ndarray[FLOAT_t, ndim=1] ws,         # mixing weights
-        np.ndarray[FLOAT_t, ndim=2] mus,        # mean of normal, 
-        np.ndarray[FLOAT_t, ndim=3] sigs):      # inverse covariance
+def gmm_like_2d(FLOAT_t[::1]      probs,      # buffer to place prob values
+                FLOAT_t[:,::1]    x,          # N x 2 matrix of 2 D points
+                FLOAT_t[::1]      ws,         # mixing weights
+                FLOAT_t[:,::1]    mus,        # mean of normal, 
+                FLOAT_t[:,:,::1]  sigs):      # inverse covariance
     """ Gaussian Mixture Model likelihood
         Input:
           - x    = N x D array of data (N iid)

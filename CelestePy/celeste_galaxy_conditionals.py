@@ -4,12 +4,11 @@
 import numpy as np
 import CelestePy.mixture_profiles as mp
 from autograd import grad
-from CelestePy.util.like import fast_inv_gamma_lnpdf
-from CelestePy.util.like.gmm_like_fast import gmm_like_2d
-from util.like.gmm_like import gmm_like
+import CelestePy.util.like as like_util
 import CelestePy.celeste_fast as celeste_fast
 import scipy.stats
 from util.bound.bounding_box import calc_bounding_radius
+from util.like import gmm_like_2d
 
 BANDS = ['u', 'g', 'r', 'i', 'z']
 def galaxy_source_like(th, Z_s, images, check_overlap=True, unconstrained=True):
@@ -152,10 +151,10 @@ def gen_galaxy_prof_psf_image(prof_type, R, u, img):
     xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
     sub_pix_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
 
-    psf_grid_small = fast_gmm_like(x       = sub_pix_grid,
-                                   ws      = weights,
-                                   mus     = means,
-                                   sigs    = covars)
+    psf_grid_small = gmm_like_2d(x       = sub_pix_grid,
+                                 ws      = weights,
+                                 mus     = means,
+                                 sigs    = covars)
 
     # create full field grid
     psf_grid = np.zeros(img.nelec.shape)
@@ -200,19 +199,13 @@ def galaxy_shape_prior_constrained(theta, sig, phi, rho):
 ##########################################################################
 # Helper Methods
 ##########################################################################
-def fast_gmm_like(x, ws, mus, sigs): 
-    """ wrapper for Cython call - instantiates probs vector """
-    N_elem = np.atleast_1d(x).shape[0]
-    probs  = np.zeros(N_elem)
-    gmm_like_2d(probs, x, np.array(ws), np.array(mus), np.array(sigs))
-    return probs
-
-def det2d(K):
-    return K[0,0]*K[1,1] - K[1,0]*K[0,1]
-
-def inv2d(K):
-    return 1./det2d(K) * np.array([ [ K[1,1], -K[1,0] ],
-                                    [-K[0,1],  K[0,0] ] ])
+#
+#def det2d(K):
+#    return K[0,0]*K[1,1] - K[1,0]*K[0,1]
+#
+#def inv2d(K):
+#    return 1./det2d(K) * np.array([ [ K[1,1], -K[1,0] ],
+#                                    [-K[0,1],  K[0,0] ] ])
 
 def constrain_params(th):
     """ takes unconstrained parameters, and constrains them to 

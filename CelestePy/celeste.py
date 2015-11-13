@@ -13,12 +13,11 @@
 import numpy as np
 from autograd import grad
 from scipy.misc import logsumexp
-from util.like.gmm_like import gmm_like
-#from gmm_like_fast import gmm_like_2d_covinv_logdet as fast_gmm_like
 import celeste_galaxy_conditionals as gal_funs
 from planck import photons_expected, photons_expected_brightness
 from fits_image import FitsImage
 import mixture_profiles as mp
+from util.like import gmm_like_2d
 
 ## photometric bands we can handle
 BANDS = np.array(['u', 'g', 'r', 'i', 'z'], dtype=object)
@@ -58,8 +57,6 @@ def gen_src_image(src, image):
     f_s = gen_point_source_psf_image(src.u, image)
     return f_s * expected_photons
 
-## cache galaxy profile mixture components
-galaxy_profs = [mp.get_exp_mixture(), mp.get_dev_mixture()]
 
 def gen_galaxy_psf_image(src, image, check_overlap=True):
     """ generates a PSF Image (assigns density values to pixels) for 
@@ -72,48 +69,12 @@ def gen_galaxy_psf_image(src, image, check_overlap=True):
                                          check_overlap = check_overlap,
                                          unconstrained = False)
 
-    #v_s    = image.equa2pixel(src.u)
-    #thetas = [src.theta, 1.-src.theta]
-
-    ## compute spatial covariance matrix
-    #R = np.array([[np.cos(src.phi), -np.sin(src.phi)],
-    #              [np.sin(src.phi), np.cos(src.phi)]])
-    #S = np.diag([src.sigma*src.sigma, src.sigma*src.sigma*src.rho*src.rho])
-    #W = R.T.dot(S).dot(R)
-
-    ### mixture of 40ish (yeesh) gaussians - instantiate parameters
-    #num_components = len(image.weights) * sum([len(gp.amp) for gp in galaxy_profs])
-    #weights = np.zeros(num_components)
-    #means   = np.zeros((num_components, 2))
-    #covars  = np.zeros((num_components, 2, 2))
-    #cnt = 0
-    #for k in range(len(image.weights)):                 # num PSF Componenets
-    #    for i in range(2):                              # two galaxy types
-    #        for j in range(len(galaxy_profs[i].amp)):   # galaxy type components
-    #            weights[cnt] = image.weights[k] * thetas[i] * galaxy_profs[i].amp[j]
-    #            means[cnt, :] = v_s + image.means[k,:]
-    #            covars[cnt, :, :] = image.covars[k,:,:] + \
-    #                galaxy_profs[i].var[j,:,:].dot(W)
-    #            cnt += 1
-
-    ## instantiate a pixel grid if necessary
-    #if pixel_grid is None: 
-    #    y_grid = np.arange(image.nelec.shape[0], dtype=np.float) + 1
-    #    x_grid = np.arange(image.nelec.shape[1], dtype=np.float) + 1
-    #    yy, xx = np.meshgrid(x_grid, y_grid, indexing='xy')
-    #    pixel_grid = np.column_stack((xx.ravel(), yy.ravel()))
-
-    ### evaluate equation 11-13 in jeff's november writeup
-    #psf_grid = gmm_like(x = pixel_grid, 
-    #                    ws = weights,
-    #                    mus = means,
-    #                    sigs = covars)
-    #return psf_grid.reshape(image.nelec.shape).T
 
 def gen_point_source_psf_image(
         u,                         # source location in equatorial coordinates
         image,                     # FitsImage object
         check_overlap = True,      # speedup to check overlap before computing
+        return_patch  = True,      # return the small patch as opposed to large patch (memory/speed purposes)
         psf_grid      = None       # cached PSF grid to be filled out
         ):
     """ generates a PSF image (assigns density values to pixels) """
@@ -126,35 +87,27 @@ def gen_point_source_psf_image(
         (v_s[0] < -50 or v_s[0] > 2*image.nelec.shape[0] or v_s[1] < -50 or v_s[0] > 2*image.nelec.shape[1]):
        return np.zeros(image.nelec.shape)
 
-    # instantiate a PSF grid 
-    if psf_grid is None:
-        psf_grid = np.zeros(image.pixel_grid.shape[0], dtype=np.float)
-
-    # compute the PSF (just a mixture call)
-    #fast_gmm_like(probs  = psf_grid, 
-    #              x      = pixel_grid,
-    #              ws     = image.weights,
-    #              mus    = image.means + v_s,
-    #              invsigs = image.invcovars,
-    #              logdets = image.logdets)
-
     # create sub-image - make sure it doesn't go outside of field pixels
     bound = image.R
     minx_b, maxx_b = max(0, int(v_s[0] - bound)), min(int(v_s[0] + bound + 1), image.nelec.shape[1])
     miny_b, maxy_b = max(0, int(v_s[1] - bound)), min(int(v_s[1] + bound + 1), image.nelec.shape[0])
-    y_grid = np.arange(miny_b, maxy_b)
-    x_grid = np.arange(minx_b, maxx_b)
+    y_grid = np.arange(miny_b, maxy_b, dtype=np.float)
+    x_grid = np.arange(minx_b, maxx_b, dtype=np.float)
     xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
-    sub_pix_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
-    psf_grid_small = gmm_like(x       = sub_pix_grid,
-                              ws      = image.weights,
-                              mus     = image.means + v_s,
-                              sigs    = image.covars,
-                              invsigs = image.invcovars,
-                              logdets = image.logdets)
+    pixel_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
+    psf_grid_small = gmm_like_2d(x       = pixel_grid,
+                                 ws      = image.weights,
+                                 mus     = image.means + v_s,
+                                 sigs    = image.covars)
+
+    if return_patch:
+        return psf_grid_small.reshape(xx.shape, order='C'), (miny_b, maxy_b), (minx_b, maxx_b)
+
+    # instantiate a PSF grid 
+    if psf_grid is None:
+        psf_grid = np.zeros(image.nelec.shape, dtype=np.float)
 
     # create full field grid
-    psf_grid = np.zeros(image.nelec.shape)
     psf_grid[miny_b:maxy_b, minx_b:maxx_b] = \
         psf_grid_small.reshape(xx.shape, order='C')
     return psf_grid
@@ -192,6 +145,7 @@ def gen_model_image(srcs, image):
     # offset image by epsilon
     return image.epsilon + f_s
 
+
 def gen_src_prob_layers(srcs, img):
     """ for a particular image, generate the probability that each source
     produced the count in each pixel
@@ -206,10 +160,12 @@ def gen_src_prob_layers(srcs, img):
         src_probs[s,:,:] = src_patches[s-1,:,:] / src_sum
     return src_probs
 
+
 def celeste_likelihood(srcs, image):
     """ Evaluates the likelihood of a set of hypothesis sources given an image """
     lambdas = gen_model_image(srcs, image)
     return np.sum(image.nelec * np.log(lambdas) - lambdas)  #Poisson Likelihood
+
 
 def celeste_likelihood_multi_image(srcs, images):
     """ Full marginal log likelihood - should never decrease 
