@@ -30,28 +30,18 @@ def calc_bounding_radius(weights, means, covars, error, center=np.array([0, 0]))
 
     return minbound
 
-class BoundingBox:
-    # u is the center of the bounding box (array of size 2)
-    # r is the radius of the bounding box (half of the side length)
-    def __init__(self, u, r):
-        self.u = u
-        self.r = r
-
-    # returns whether loc is inside bounding box
-    def inside_box(self, loc):
-        u = self.u
-        r = self.r
-        return loc[0] >= u[0] - r and loc[0] <= u[0] + r and \
-                loc[1] >= u[1] - r and loc[1] <= u[1] + r
-
 """
-Takes in loc, an array of size 2, and boxes, a list of BoundingBox objects.
-Returns indices of boxes that contain loc.
+Parameters:
+    loc - length-2 np array, [x, y]
+    boxes - M bounding boxes in an M-by-4 np array. Each row is of the form
+            [minx, maxx, miny, maxy] representing a particular bounding box.
 """
 def get_bounding_boxes_idx(loc, boxes):
-    idxs = np.array([])
-    for idx,box in enumerate(boxes):
-        if box.inside_box(loc):
-            idxs = np.append(idxs, idx)
+    inside = \
+        np.logical_and(
+            np.logical_and(
+                np.logical_and(loc[0] >= boxes[:,0], loc[0] <= boxes[:,1]),
+                loc[1] >= boxes[:,2]),
+            loc[1] <= boxes[:,3])
+    return np.nonzero(inside)[0]
 
-    return idxs
