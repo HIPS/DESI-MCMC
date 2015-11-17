@@ -35,6 +35,8 @@ Parameters:
     loc - length-2 np array, [x, y]
     boxes - M bounding boxes in an M-by-4 np array. Each row is of the form
             [minx, maxx, miny, maxy] representing a particular bounding box.
+
+Returns the indices of boxes (corresponding to a row) that contain loc.
 """
 def get_bounding_boxes_idx(loc, boxes):
     inside = \
