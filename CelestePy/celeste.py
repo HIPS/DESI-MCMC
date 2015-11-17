@@ -110,8 +110,7 @@ def gen_point_source_psf_image(
     # create full field grid
     psf_grid[miny_b:maxy_b, minx_b:maxx_b] = \
         psf_grid_small.reshape(xx.shape, order='C')
-    return psf_grid
-    #return psf_grid.reshape(image.nelec.shape, order='C')
+    return psf_grid, (0, psf_grid.shape[0]), (0, psf_grid.shape[1])
 
     # slow for sanity check
     #for x in range(image.nelec.shape[1]): 

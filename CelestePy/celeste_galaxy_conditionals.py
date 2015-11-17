@@ -119,7 +119,7 @@ def gen_galaxy_transformation(sig_s, rho_s, phi_s):
 galaxy_profs = [mp.get_exp_mixture(), mp.get_dev_mixture()]
 galaxy_prof_dict = dict(zip(['exp', 'dev'], galaxy_profs))
 
-def gen_galaxy_prof_psf_image(prof_type, R, u, img):
+def gen_galaxy_prof_psf_image(prof_type, R, u, img, return_patch=True):
     """ generate the profile galaxy psf image given:
             - prof_type : either 'exp' or 'dev'
             - R_s       : the rotation of the ellipse (like a Cholesky
@@ -129,6 +129,7 @@ def gen_galaxy_prof_psf_image(prof_type, R, u, img):
     assert galaxy_prof_dict.has_key(prof_type), "unknown galaxy profile type"
 
     v_s = img.equa2pixel(u)
+    print v_s
 
     # convolve image PSF and galaxy profile (generate mixture components)
     weights, means, covars = \
@@ -156,26 +157,51 @@ def gen_galaxy_prof_psf_image(prof_type, R, u, img):
                                  mus     = means,
                                  sigs    = covars)
 
+    #xlim = (680, 725)
+    #ylim = (120, 170)
+    #return psf_grid_small.reshape(img.nelec.shape, order='C')[ylim[0]:ylim[1], xlim[0]:xlim[1]], \
+    #       ylim, xlim
+
+    if return_patch:
+        return psf_grid_small.reshape(xx.shape, order='C'), (miny_b, maxy_b), (minx_b, maxx_b)
+
     # create full field grid
     psf_grid = np.zeros(img.nelec.shape)
     psf_grid[miny_b:maxy_b, minx_b:maxx_b] = \
         psf_grid_small.reshape(xx.shape, order='C')
-    return psf_grid
+    return psf_grid, (0, psf_grid.shape[0]), (0, psf_grid.shape[1])
 
 
-def gen_galaxy_psf_image(th, u_s, img, check_overlap = True, unconstrained = True):
+def gen_galaxy_psf_image(th, u_s, img, check_overlap = True, unconstrained = True, return_patch=True):
     """ generates the profile of a combination of exp/dev images.  
         Calls the above function twice - once for each profile, and adds them 
         together
     """
     #unpack skew/location
     theta_s, sig_s, phi_s, rho_s = th[0:4]
-    u_s = np.array(u_s, dtype=np.float)
+    u_s       = np.array(u_s, dtype=np.float)
     R_s       = gen_galaxy_transformation(sig_s, rho_s, phi_s)
-    f_nms_exp = gen_galaxy_prof_psf_image('exp', R_s, u_s, img)
-    f_nms_dev = gen_galaxy_prof_psf_image('dev', R_s, u_s, img)
-    f_nms     = theta_s * f_nms_exp + (1. - theta_s) * f_nms_dev
-    return f_nms
+    f_nms_exp, ylime, xlime = gen_galaxy_prof_psf_image('exp', R_s, u_s, img)
+    print "ylim", ylime
+    print "xlim", xlime
+    return f_nms_exp, ylime, xlime
+    #f_nms_dev, ylimd, xlimd = gen_galaxy_prof_psf_image('dev', R_s, u_s, img)
+
+    #take the two patches above, align them, and return a single patch
+    xlim = (np.min([xlime[0], xlimd[0]]), np.max([xlime[1], xlimd[1]]))
+    ylim = (np.min([ylime[0], ylimd[0]]), np.max([ylime[1], ylimd[1]]))
+    fpatch = np.zeros((ylim[1]-ylim[0], xlim[1]-xlim[0]))
+    #exp contribution
+    xe0 = xlime[0] - xlim[0]
+    ye0 = ylime[0] - ylim[0]
+    fpatch[ye0:(ye0 + ylime[1]-ylime[0]), xe0:(xe0 + xlime[1]-xlime[0])] += f_nms_exp * theta_s
+    #dev contribution
+    xd0 = xlimd[0] - xlim[0]
+    yd0 = ylimd[0] - ylim[0]
+    fpatch[yd0:(yd0 + ylimd[1]-ylimd[0]), xd0:(xd0 + xlimd[1]-xlimd[0])] += f_nms_dev * (1 - theta_s)
+    return fpatch, ylim, xlim
+    #f_nms     = theta_s * f_nms_exp + (1. - theta_s) * f_nms_dev
+    #return f_nms, (0, f_nms.shape[0]), (0, f_nms.shape[1])
 
 
 ##########################################################################
