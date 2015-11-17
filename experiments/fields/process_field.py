@@ -74,7 +74,8 @@ def make_fits_images(run, camcol, field):
                                   calib=calib,
                                   gain=gain,
                                   darkvar=darkvar,
-                                  sky=sky)
+                                  sky=sky,
+                                  astrans=frame.getAsTrans())
     return imgfits
 
 def gen_point_source_psf_image_with_fluxes(src_params, fits_image):
