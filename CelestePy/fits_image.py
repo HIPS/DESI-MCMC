@@ -6,6 +6,7 @@ import fitsio
 import numpy as np
 import scipy.stats
 from util.bound.bounding_box import calc_bounding_radius
+import tractor.sdss as sdss
 
 # autograd array wrapper
 from autograd import grad
@@ -51,8 +52,7 @@ class FitsImage():
             calib              = None,
             gain               = None,
             darkvar            = None,
-            sky                = None,
-            astrans            = None): 
+            sky                = None):
         self.band      = band
         if fits_file_template:
             self.band_file = fits_file_template%band
@@ -66,7 +66,6 @@ class FitsImage():
             pass
 
         self.header = header
-        self.astrans = astrans
 
         # Compute the number of electrons, resource: 
         # http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
@@ -150,9 +149,6 @@ class FitsImage():
                (v_s[1] > -pad) and (v_s[1] < self.nelec.shape[1] + pad)
 
     def equa2pixel(self, s_equa):
-        if self.astrans:
-            return np.array(self.astrans.radec_to_pixel(s_equa[0], s_equa[1]))
-
         phi1rad = self.phi_n[1] / 180. * np.pi
         s_iwc = np.array([ (s_equa[0] - self.phi_n[0]) * np.cos(phi1rad),
                                    (s_equa[1] - self.phi_n[1]) ])
@@ -160,12 +156,6 @@ class FitsImage():
         return s_pix
 
     def pixel2equa(self, s_pixel):
-        if self.astrans:
-            c = color[self.band]
-            return np.array(self.astrans.pixel_to_radec(s_pixel[0],
-                                                        s_pixel[1],
-                                                        c))
-
         phi1rad = self.phi_n[1] / 180. * np.pi
         s_iwc   = np.dot(self.Ups_n, s_pixel - self.rho_n) 
         s_equa = np.array([ s_iwc[0]/np.cos(phi1rad) + self.phi_n[0], 

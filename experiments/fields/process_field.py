@@ -70,13 +70,13 @@ def make_fits_images(run, camcol, field):
         gain    = F[0].gain[iband]
         darkvar = F[0].dark_variance[iband]
         sky     = np.median(frame.getSky())
+
         imgfits[band] = FitsImage(band,
                                   timg=imgs[band],
                                   calib=calib,
                                   gain=gain,
                                   darkvar=darkvar,
-                                  sky=sky,
-                                  astrans=frame.getAsTrans())
+                                  sky=sky)
     return imgfits
 
 def gen_point_source_psf_image_with_fluxes(src_params, fits_image, return_patch=True, psf_grid=None):
@@ -88,6 +88,25 @@ def gen_point_source_psf_image_with_fluxes(src_params, fits_image, return_patch=
 def compare_small_patch(src_params, imgfits):
     """reads in a known image and source and compares our model 
     generation to the tractor's """
+    run = 125
+    camcol = 1
+    field = 17
+
+    # read in sources, images
+    srcs = sdss.get_tractor_sources_dr9(run, camcol, field)
+    imgfits = make_fits_images(run, camcol, field)
+
+    # track down the brightest sources in this field for sanity checking
+    rbrightnesses = np.array([src.getBrightnesses()[0][2] for src in srcs])
+    bright_i      = np.argsort(rbrightnesses)
+    for i in bright_i[:50]:
+        print srcs[i]
+
+    i = bright_i[31]
+    src = srcs[i]
+    src_params = tractor_src_to_celestepy_src(src)
+    print "New source:", src_params
+
     # plot the CelestePy model image with Tractor Parameters as a sanity check
     BANDS_TO_PLOT = ['r', 'i']
     fig, axarr = plt.subplots(len(BANDS_TO_PLOT), 3)
