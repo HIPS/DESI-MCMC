@@ -4,7 +4,8 @@ import astrometry.sdss as asdss
 from tractor.basics import PointSource
 from tractor.galaxy import ExpGalaxy, DevGalaxy, CompositeGalaxy
 from CelestePy import gen_point_source_psf_image, \
-                      gen_galaxy_psf_image, FitsImage, SrcParams
+                      gen_galaxy_psf_image, FitsImage, SrcParams, gen_psf_src_image_bound
+from CelestePy.util.bound.bounding_box import get_bounding_boxes_idx
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -180,13 +181,130 @@ def main(imgfits, srcs):
     return modelims
 
 
+def gen_src_image_with_fluxes(src, img):
+    if src.a == 0:
+        f_s, ylim, xlim = gen_point_source_psf_image_with_fluxes(src, img)
+    elif src.a == 1:
+        psf_img, ylim, xlim = gen_galaxy_psf_image(src, img)
+        f_s = src.fluxes[BANDS.index(img.band)]*psf_img
+    return f_s, ylim, xlim
+
+def sample_source_photons_single_image(img, srcs):
+
+    # compute source boxes
+    src_locs  = np.row_stack([img.equa2pixel(s.u) for s in srcs])
+    imgR      = np.array([gen_psf_src_image_bound(s, img) for s in srcs])
+    src_boxes = np.column_stack([
+                    np.floor(src_locs[:,0] - imgR),
+                    np.ceil(src_locs[:,0] + imgR),
+                    np.floor(src_locs[:,1] - imgR),
+                    np.ceil(src_locs[:,1] + imgR)
+                    ])
+
+    # generate model image for each source
+    src_imgs = [gen_src_image_with_fluxes(s, img) for s in srcs]
+
+    # sampled images
+    samp_imgs = [(np.zeros(s.shape), ylim, xlim) for s, ylim, xlim in src_imgs]
+
+    cnt = 0
+    for (y, x), num_photons_xy in np.ndenumerate(img.nelec):
+        possible_srcs = get_bounding_boxes_idx(np.array([x,y]), src_boxes)
+        if len(possible_srcs) == 0:
+            continue
+
+        # if only one possible source, don't sample from multinomial...
+        if len(possible_srcs) == 1:
+            src_photons = np.array([num_photons_xy])
+        else:
+            model_fluxes = np.zeros(len(possible_srcs))
+            for i, pi in enumerate(possible_srcs):
+                imgpatch, ylim, xlim = src_imgs[pi]
+                if (y-ylim[0] >= 0) and (y-ylim[0] < imgpatch.shape[0]) and \
+                        (x-xlim[0] >= 0) and (x-xlim[0] < imgpatch.shape[1]):
+                    model_fluxes[i] = imgpatch[y-ylim[0], x-xlim[0]]
+            if np.all(model_fluxes == 0.):
+                continue
+            p = model_fluxes / model_fluxes.sum()
+            src_photons = np.random.multinomial(int(num_photons_xy), p)
+
+        # store in sampled images
+        for i, pi in enumerate(possible_srcs):
+            simg, ylim, xlim = samp_imgs[pi]
+            if (y-ylim[0] >= 0) and (y-ylim[0] < simg.shape[0]) and \
+                    (x-xlim[0] >= 0) and (x-xlim[0] < simg.shape[1]):
+                simg[y-ylim[0], x-xlim[0]] = src_photons[i]
+
+        cnt += 1
+        if cnt % 10000== 0:
+            print "%d of %d"%(cnt, np.prod(img.nelec.shape))
+
+    return samp_imgs
+
+
 if __name__ == '__main__':
     run = 125
     camcol = 1
     field = 17
-    srcs = sdss.get_tractor_sources_dr9(run, camcol, field)
+    tsrcs = sdss.get_tractor_sources_dr9(run, camcol, field)
     imgfits = make_fits_images(run, camcol, field)
-    #modelims = main(imgfits, srcs) 
+
+    # list of images, list of celeste sources
+    imgs = [imgfits[b] for b in BANDS]
+    srcs = [tractor_src_to_celestepy_src(s) for s in tsrcs]
+
+    ###### GIBBS SAMPLE SOURCE PHOTONS ##########
+    ##
+    ## 1.  for each image, sample the source specific counts (Z_{n,m,s})
+    ##
+
+    img = imgs[0]
+    samp_imgs = sample_source_photons_single_image(img, srcs)
+
+
+
+
+    def sample_source_photons(imgs, srcs):
+
+        #src_boxes = np.array([
+
+        printif("    sampling Z's", verbose)
+        all_src_images = []
+        for img in imgs:
+            src_probs = gen_src_prob_layers(srcs, img)  # S x Npix x Mpix
+            src_image = np.zeros(src_probs.shape)
+            for (i,j), xij in np.ndenumerate(img.nelec):
+
+                # 
+                possible_sources = get_bounding_boxes_idx(pixel_loc, src_boxes)
+
+
+                src_image[:,i,j] = np.random.multinomial(int(xij), src_probs[:,i,j])
+            all_src_images.append(src_image)
+
+            #### debug #####
+            if False:
+                if img.band == 'r':
+                    fig, axarr = plt.subplots(1, src_image.shape[0])
+                    subplot_imshow_colorbar(src_image, fig, axarr)
+                    plt.show()
+            #### end debug ####
+        printif("      .... done", verbose)
+
+        ######## END SAMPLER ############
+
+
+
+    import sys
+    sys.exit()
+
+
+    modelims = main(imgfits, srcs) 
+
+    fig, axarr = plt.subplots(1, 2)
+    axarr[0].imshow(modelims['r'], interpolation='none')
+    axarr[1].imshow(imgfits['r'].nelec, interpolation='none')
+    plt.show()
 
     # read in sources, images
 
