@@ -39,11 +39,8 @@ Parameters:
 Returns the indices of boxes (corresponding to a row) that contain loc.
 """
 def get_bounding_boxes_idx(loc, boxes):
-    inside = \
-        np.logical_and(
-            np.logical_and(
-                np.logical_and(loc[0] >= boxes[:,0], loc[0] <= boxes[:,1]),
-                loc[1] >= boxes[:,2]),
-            loc[1] <= boxes[:,3])
-    return np.nonzero(inside)[0]
+    inside = (loc[0] >= boxes[:,0]) & (loc[0] <= boxes[:,1]) & \
+             (loc[1] >= boxes[:,2]) & (loc[1] <= boxes[:,3])
+    idx = np.where(inside)[0]
+    return idx
 
