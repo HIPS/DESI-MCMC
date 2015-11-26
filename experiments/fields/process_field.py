@@ -260,6 +260,7 @@ def sample_source_photons_single_image(img, srcs):
     return samp_imgs, noise_sum
 
 
+
 if __name__ == '__main__':
     run = 125
     camcol = 1
@@ -277,77 +278,34 @@ if __name__ == '__main__':
     ##
     img = imgs[2]
     img.epsilon = np.median(img.nelec)
-    samp_imgs, noise_sum = sample_source_photons_single_image(img, srcs)
+    raise 'nooo'
+
+    #samp_imgs, noise_sum = \
+    #    sample_source_photons_single_image(img, srcs)
+    from CelestePy.celeste_mcmc import \
+        sample_source_photons_single_image_cython
+    samp_imgs, noise_sum = \
+        sample_source_photons_single_image_cython(img, srcs)
+
+    # time it!
+    #%timeit -r 1 sample_source_photons_single_image_cython(img, srcs)
+    #samp_imgs, noise_sum = sample_source_photons_single_image(img, srcs)
+
+    ###### DEBUG PLOT ##################
+    # plot a few samples
+    src_types     = np.array([type(src) != PointSource for src in tsrcs])
+    rbrightnesses = np.array([src.getBrightnesses()[0][2] for src in tsrcs])
+    bright_i      = np.argsort(rbrightnesses)
+    fig, axarr = plt.subplots(3, 3)
+    src_idxs = bright_i[:9]
+    src_idxs = np.where(src_types)[0][:9]
+    for idx, ax in zip(src_idxs, axarr.flatten()):
+        ax.imshow(np.asarray(samp_imgs[idx].data), interpolation='none')
+    plt.show()
 
 
     ## resample image noise given poisson nums
     # eps ~ noise_count
 
     ## for each source, resample images
-
-
-
-    import sys
-    sys.exit()
-
-
-    modelims = main(imgfits, srcs) 
-
-    fig, axarr = plt.subplots(1, 2)
-    axarr[0].imshow(modelims['r'], interpolation='none')
-    axarr[1].imshow(imgfits['r'].nelec, interpolation='none')
-    plt.show()
-
-    # read in sources, images
-
-    ###################################################
-    # compare small patch on a bright source          #
-    ###################################################
-    # track down the brightest sources in this field for sanity checking
-    rbrightnesses = np.array([src.getBrightnesses()[0][2] for src in tsrcs])
-    bright_i      = np.argsort(rbrightnesses)
-    ##for i in bright_i[:50]:
-    #    print srcs[i]
-    i = bright_i[26]
-    src = srcs[i]
-    src_params = tractor_src_to_celestepy_src(src)
-
-    # plot small patch
-    compare_small_patch(src_params, imgfits)
-
-
-    for bi in bright_i[:30]:
-        print bi, tsrcs[bi]
-
-############################
-# Sample source photons
-############################
-#def sample_source_photons(imgs, srcs):
-#
-#    #src_boxes = np.array([
-#
-#    printif("    sampling Z's", verbose)
-#    all_src_images = []
-#    for img in imgs:
-#        src_probs = gen_src_prob_layers(srcs, img)  # S x Npix x Mpix
-#        src_image = np.zeros(src_probs.shape)
-#        for (i,j), xij in np.ndenumerate(img.nelec):
-#
-#            # 
-#            possible_sources = get_bounding_boxes_idx(pixel_loc, src_boxes)
-#
-#            src_image[:,i,j] = np.random.multinomial(int(xij), src_probs[:,i,j])
-#        all_src_images.append(src_image)
-#
-#        #### debug #####
-#        if False:
-#            if img.band == 'r':
-#                fig, axarr = plt.subplots(1, src_image.shape[0])
-#                subplot_imshow_colorbar(src_image, fig, axarr)
-#                plt.show()
-#        #### end debug ####
-#    printif("      .... done", verbose)
-#
-######### END SAMPLER ############
-
 
