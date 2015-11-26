@@ -53,6 +53,11 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
         src_probs = gen_src_prob_layers(srcs, img)
         src_image = np.zeros(src_probs.shape)
         for (i,j), xij in np.ndenumerate(img.nelec):
+
+            # 
+            possible_sources = get_bounding_boxes_idx(pixel_loc, src_boxes)
+
+
             src_image[:,i,j] = np.random.multinomial(int(xij), src_probs[:,i,j])
         all_src_images.append(src_image)
 
@@ -93,6 +98,53 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
     return None
 
 
+def sample_source_photons_single_image_cython(img, srcs):
+    """Given a single photon-count image and a list of sources, sample
+    source-specific images using the poisson/multinomial representation
+
+    args:
+        img: FitsImage
+        srcs: python list of srcs
+    returns:
+        src_imgs: python list of src images
+        noise_count: sampled noise
+    """
+
+    # compute source boxes
+    src_locs  = np.row_stack([img.equa2pixel(s.u) for s in srcs])
+    imgR      = np.array([gen_psf_src_image_bound(s, img) for s in srcs])
+    src_boxes0 = np.column_stack([
+                    np.floor(src_locs[:,0] - imgR),
+                    np.ceil(src_locs[:,0] + imgR),
+                    np.floor(src_locs[:,1] - imgR),
+                    np.ceil(src_locs[:,1] + imgR)
+                    ])
+
+    import CelestePy.celeste_sample_sources as css
+    # generate model image for each source
+    src_imgs  = [css.NativePatch(*gen_src_image_with_fluxes(s, img))
+                 for s in srcs]
+
+    # create src boxes that are exact to eliminate checking
+    src_boxes = np.zeros((len(src_imgs), 4), np.ulonglong)
+    for s, si in enumerate(src_imgs):
+       src_boxes[s,:] = (si.x0, si.x1, si.y0, si.y1)
+
+    # sampled images
+    samp_imgs = [css.NativePatch(np.zeros(s.data.shape), (s.y0, s.y1), (s.x0, s.x1))
+                 for s in src_imgs]
+
+    samp_imgs, noise_sum = css.sample_source_counts(
+            src_imgs  = src_imgs,
+            samp_imgs = samp_imgs,
+            nelec     = np.array(img.nelec, dtype=np.float),
+            src_boxes = src_boxes,
+            epsilon   = img.epsilon,
+            random_state = np.random.RandomState()
+        )
+    return samp_imgs, noise_sum
+
+
 def sample_source_params(src, src_imgs, imgs, verbose):
     """ In place sampling of source parameters - switches on type and 
     calls source type specific samplers"""
@@ -104,6 +156,7 @@ def sample_source_params(src, src_imgs, imgs, verbose):
         sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=verbose)
     else:
         raise Exception("Must be star or galaxy to sample")
+
 
 p_cached = None
 def sample_galaxy_params(src, src_imgs, imgs, subiter=2, verbose=False):
