@@ -77,14 +77,6 @@ if __name__=="__main__":
         M2 = gen_model_image(pixel_grid, loc=th1[0], shape=th1[1])
         return np.sum(M1 - M2)
 
-        Ms = []
-        for th in [th0, th1]:
-            loc, shape = th
-            print th
-            M = gen_model_image(pixel_grid, loc=loc, shape=shape)
-            Ms.append(M)
-        return np.sum( (Ms[0] - Ms[1])**2 )
-
     # compute loss, compute derivative wrt first param
     print loss([23, 2], [26, 4])
     print grad(loss, argnum=0)(np.array([25., 2.]), np.array([26., 4.]))
