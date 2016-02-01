@@ -17,7 +17,50 @@ from astrometry.util.file import *
 from astrometry.util.plotutils import setRadecAxes, redgreen
 from astrometry.libkd.spherematch import match_radec
 
+from tractor.basics import PointSource
+from tractor.galaxy import ExpGalaxy, DevGalaxy, CompositeGalaxy
+
+from CelestePy.celeste import gen_point_source_psf_image, gen_galaxy_psf_image, FitsImage
+from CelestePy.celeste_src import SrcParams
+
 import pickle
+
+BANDS = ['u', 'g', 'r', 'i', 'z']
+
+def tractor_src_to_celestepy_src(tsrc):
+    """Conversion between tractor source object and our source object...."""
+    pos = tsrc.getPosition()
+    u = [p for p in pos]
+
+    # brightnesse are stored in mags (gotta convert to nanomaggies)
+    def mags2nanomaggies(mags):
+        return np.power(10., (mags - 22.5)/-2.5)
+    fluxes = tsrc.getBrightnesses()[0]
+    fluxes = [mags2nanomaggies(flux) for flux in fluxes]
+
+    if type(tsrc) == PointSource:
+        return SrcParams(u, a=0, fluxes=fluxes)
+    else:
+        if type(tsrc) == ExpGalaxy:
+            shape = tsrc.getShape()
+            theta = 0.
+        elif type(tsrc) == DevGalaxy:
+            shape = tsrc.getShape()
+            theta = 1.
+        elif type(tsrc) == CompositeGalaxy:
+            shape = tsrc.shapeExp
+            theta = 0.5
+        else:
+            pass
+
+        return SrcParams(u,
+                         a=1,
+                         v=u,
+                         theta=theta,
+                         phi = shape[2] * np.pi / 180.,
+                         sigma=shape[0],
+                         rho=shape[1],
+                         fluxes=fluxes)
 
 def loadTractorSingleImage(run=1752, camcol=3, field=164, bands=['r'],
                            roi=[100,600,100,600], dr='dr9', data_dir='data',
@@ -345,4 +388,3 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
     return timg,info
 
-loadTractorSingleImage()

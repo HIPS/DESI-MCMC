@@ -1,51 +1,14 @@
 import astrometry.util.fits as aufits
 import tractor.sdss as sdss
 import astrometry.sdss as asdss
-from tractor.basics import PointSource
-from tractor.galaxy import ExpGalaxy, DevGalaxy, CompositeGalaxy
-from CelestePy import gen_point_source_psf_image, \
-                      gen_galaxy_psf_image, FitsImage, SrcParams, gen_psf_src_image_bound
 from CelestePy.util.bound.bounding_box import get_bounding_boxes_idx
 import numpy as np
 import matplotlib.pyplot as plt
 
+from CelestePy.util.data.get_data import tractor_src_to_celestepy_src
+from CelestePy.celeste import FitsImage
+
 BANDS = ['u', 'g', 'r', 'i', 'z']
-
-def tractor_src_to_celestepy_src(tsrc):
-    """Conversion between tractor source object and our source object...."""
-    pos = tsrc.getPosition()
-    u = [p for p in pos]
-
-    # brightnesse are stored in mags (gotta convert to nanomaggies)
-    def mags2nanomaggies(mags):
-        return np.power(10., (mags - 22.5)/-2.5)
-    fluxes = tsrc.getBrightnesses()[0]
-    fluxes = [mags2nanomaggies(flux) for flux in fluxes]
-
-    if type(tsrc) == PointSource:
-        return SrcParams(u, a=0, fluxes=fluxes)
-    else:
-        if type(tsrc) == ExpGalaxy:
-            shape = tsrc.getShape()
-            theta = 0.
-        elif type(tsrc) == DevGalaxy:
-            shape = tsrc.getShape()
-            theta = 1.
-        elif type(tsrc) == CompositeGalaxy:
-            shape = tsrc.shapeExp
-            theta = 0.5
-        else:
-            pass
-
-        return SrcParams(u,
-                         a=1,
-                         v=u,
-                         theta=theta,
-                         phi = shape[2] * np.pi / 180.,
-                         sigma=shape[0],
-                         rho=shape[1],
-                         fluxes=fluxes)
-
 
 def make_fits_images(run, camcol, field):
     """gets field files from local cache (or sdss), returns UGRIZ dict of 
@@ -86,9 +49,6 @@ def gen_point_source_psf_image_with_fluxes(src_params, fits_image, return_patch=
     src_img *= (flux / fits_image.calib) * fits_image.kappa
     return src_img, ylim, xlim
 
-
-
-
 def compare_small_patch(src_params, imgfits):
     """reads in a known image and source and compares our model 
     generation to the tractor's """
@@ -104,7 +64,7 @@ def compare_small_patch(src_params, imgfits):
     rbrightnesses = np.array([src.getBrightnesses()[0][2] for src in srcs])
     bright_i      = np.argsort(rbrightnesses)
     for i in bright_i[:50]:
-        print srcs[i]
+        print i, srcs[i]
 
     i = bright_i[31]
     src = srcs[i]
@@ -272,13 +232,15 @@ if __name__ == '__main__':
     imgs = [imgfits[b] for b in BANDS]
     srcs = [tractor_src_to_celestepy_src(s) for s in tsrcs]
 
+    compare_small_patch(None, imgs)
+    raise "noooo"
+
     ###### GIBBS SAMPLE SOURCE PHOTONS ##########
     ##
     ## 1.  for each image, sample the source specific counts (Z_{n,m,s})
     ##
     img = imgs[2]
     img.epsilon = np.median(img.nelec)
-    raise 'nooo'
 
     #samp_imgs, noise_sum = \
     #    sample_source_photons_single_image(img, srcs)
