@@ -179,11 +179,24 @@ if __name__=="__main__":
         res = minimize(star_arg_squared_loss, src.fluxes, args=(src, imgs), method='Nelder-Mead')
         print "fluxes:", src.fluxes, res.x
 
+        # show the new star
+        fig, axarr  = plt.subplots(len(BANDS), 2)
+        for bi, b in enumerate(BANDS):
+            final_galaxy_im = celeste.gen_src_image(src, imgs[bi])
 
-"""
-    fig, axarr = plt.subplots(1, 2)
-    axarr[0].contourf(xx, yy, np.exp(M1).reshape(xx.shape))
-    axarr[1].contourf(xx, yy, np.exp(M2).reshape(xx.shape))
-    plt.show()
-"""
+            final_star = SrcParams(src.u, a=0, fluxes=res.x)
+            final_star_im = celeste.gen_src_image(final_star, imgs[bi])
+
+            axarr[bi,0].imshow(final_galaxy_im)
+            axarr[bi,1].imshow(final_star_im)
+
+            for c in range(2):
+                axarr[bi,c].get_xaxis().set_visible(False)
+                axarr[bi,c].get_yaxis().set_visible(False)
+
+        axarr[0,0].set_title('galaxy patch')
+        axarr[0,1].set_title('star patch')
+        fig.tight_layout()
+        plt.show()
+
 
