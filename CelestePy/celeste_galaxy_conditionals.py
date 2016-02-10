@@ -175,8 +175,10 @@ def gen_galaxy_psf_image(th, u_s, img, check_overlap = True, unconstrained = Tru
     theta_s, sig_s, phi_s, rho_s = th[0:4]
     u_s       = np.array(u_s, dtype=np.float)
     R_s       = gen_galaxy_transformation(sig_s, rho_s, phi_s)
-    f_nms_exp, ylime, xlime = gen_galaxy_prof_psf_image('exp', R_s, u_s, img)
-    f_nms_dev, ylimd, xlimd = gen_galaxy_prof_psf_image('dev', R_s, u_s, img)
+    f_nms_exp, ylime, xlime = gen_galaxy_prof_psf_image('exp', R_s, u_s, img,
+                                                        return_patch=return_patch)
+    f_nms_dev, ylimd, xlimd = gen_galaxy_prof_psf_image('dev', R_s, u_s, img,
+                                                        return_patch=return_patch)
     #take the two patches above, align them, and return a single patch
     xlim = (np.min([xlime[0], xlimd[0]]), np.max([xlime[1], xlimd[1]]))
     ylim = (np.min([ylime[0], ylimd[0]]), np.max([ylime[1], ylimd[1]]))

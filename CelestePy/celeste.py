@@ -22,7 +22,7 @@ from util.like import gmm_like_2d
 ## photometric bands we can handle
 BANDS = np.array(['u', 'g', 'r', 'i', 'z'], dtype=object)
 
-def gen_src_image(src, image):
+def gen_src_image(src, image, return_patch=True):
     """ Generates expected photon image for a single point source.  Multiple
         model images (and the 'sky' term) will add together to form an
         expected image for a single observed image.
@@ -34,15 +34,18 @@ def gen_src_image(src, image):
     if src.a == 0:    # star
 
         # compute expected photons in this band
-        expected_photons = photons_expected_brightness(src.t, src.b, image.band)
+        if src.t:
+            expected_photons = photons_expected_brightness(src.t, src.b, image.band)
+        else:
+            expected_photons = image.nmgy2counts(src.fluxes[image.band])
 
         # generate a point source image, and disperse the photons about the image
-        f_s = gen_point_source_psf_image(src.u, image)
+        f_s,_,_ = gen_point_source_psf_image(src.u, image, return_patch=return_patch)
         return f_s * expected_photons
 
     elif src.a == 1:  # galaxy
         # expected number of photons in this band is given by the flux value
-        f_s = gen_galaxy_psf_image(src, image)
+        f_s,_,_ = gen_galaxy_psf_image(src, image, return_patch=return_patch)
         return f_s * image.nmgy2counts(src.fluxes[image.band])
 
     elif src.a is None and src.fluxes is not None:
@@ -54,11 +57,11 @@ def gen_src_image(src, image):
         raise Exception("No way to compute expected photons without at least fluxes or brightness")
 
     # compute pixel space location of source
-    f_s = gen_point_source_psf_image(src.u, image)
+    f_s,_,_ = gen_point_source_psf_image(src.u, image, return_patch=return_patch)
     return f_s * expected_photons
 
 
-def gen_galaxy_psf_image(src, image, check_overlap=True):
+def gen_galaxy_psf_image(src, image, return_patch=True, check_overlap=True):
     """ generates a PSF Image (assigns density values to pixels) for 
     a galaxy source (computes MoG resulting from convolving an MoG with 
     another MoG)
@@ -67,7 +70,8 @@ def gen_galaxy_psf_image(src, image, check_overlap=True):
     th = np.array([src.theta, src.sigma, src.phi, src.rho])
     return gal_funs.gen_galaxy_psf_image(th, src.u, image,
                                          check_overlap = check_overlap,
-                                         unconstrained = False)
+                                         unconstrained = False,
+                                         return_patch = return_patch)
 
 
 def gen_point_source_psf_image(
@@ -140,7 +144,7 @@ def gen_model_image(srcs, image):
     """
     f_s = np.zeros((image.nelec.shape))
     for s, src in enumerate(srcs):
-        f_s += gen_src_image(src, image)
+        f_s += gen_src_image(src, image, return_patch=False)
     # offset image by epsilon
     return image.epsilon + f_s
 
@@ -149,7 +153,7 @@ def gen_src_prob_layers(srcs, img):
     """ for a particular image, generate the probability that each source
     produced the count in each pixel
     """
-    src_patches = np.array([gen_src_image(src, img) for src in srcs])
+    src_patches = np.array([gen_src_image(src, img, False) for src in srcs])
     src_sum     = src_patches.sum(axis=0) + img.epsilon # * img.kappa
     src_probs   = np.zeros((src_patches.shape[0]+1, 
                             src_patches.shape[1], 
