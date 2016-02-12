@@ -1,0 +1,149 @@
+importing matplotlib
+done importing matplotlib
+read in images and sources
+Looking for file photoObj-000125-1-0017.fits
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Skipping object with Lstar = 0, Ldev = -0, Lexp = 0 (fracdev=-9999)
+Created 102 deV, 124 exp, 80 composite (total 306) galaxies and 201 stars
+==================================================
+
+
+            Grabbing image files from the cache.
+            TODO: turn off the tractor printing... 
+reading in band u
+Checking for file psField-000125-1-0017.fit
+Checking for file fpM-000125-u1-0017.fit
+Checking for file frame-u-000125-1-0017.fits.bz2
+command: TMPFILE=$(mktemp /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpGKXFhM.tmp.XXXXXX) && bunzip2 -cd frame-u-000125-1-0017.fits.bz2 > $TMPFILE && mv $TMPFILE /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpGKXFhM
+
+
+Frame filename /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpGKXFhM
+Warning: PsField status[band=0] = 66
+reading in band g
+Checking for file psField-000125-1-0017.fit
+Checking for file fpM-000125-g1-0017.fit
+Checking for file frame-g-000125-1-0017.fits.bz2
+command: TMPFILE=$(mktemp /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpwgRzpW.tmp.XXXXXX) && bunzip2 -cd frame-g-000125-1-0017.fits.bz2 > $TMPFILE && mv $TMPFILE /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpwgRzpW
+
+
+Frame filename /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpwgRzpW
+Warning: PsField status[band=1] = 32
+reading in band r
+Checking for file psField-000125-1-0017.fit
+Checking for file fpM-000125-r1-0017.fit
+Checking for file frame-r-000125-1-0017.fits.bz2
+command: TMPFILE=$(mktemp /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmphsNbZr.tmp.XXXXXX) && bunzip2 -cd frame-r-000125-1-0017.fits.bz2 > $TMPFILE && mv $TMPFILE /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmphsNbZr
+
+
+Frame filename /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmphsNbZr
+reading in band i
+Checking for file psField-000125-1-0017.fit
+Checking for file fpM-000125-i1-0017.fit
+Checking for file frame-i-000125-1-0017.fits.bz2
+command: TMPFILE=$(mktemp /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpykx1yk.tmp.XXXXXX) && bunzip2 -cd frame-i-000125-1-0017.fits.bz2 > $TMPFILE && mv $TMPFILE /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpykx1yk
+
+
+Frame filename /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpykx1yk
+reading in band z
+Checking for file psField-000125-1-0017.fit
+Checking for file fpM-000125-z1-0017.fit
+Checking for file frame-z-000125-1-0017.fits.bz2
+command: TMPFILE=$(mktemp /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpY4pYsN.tmp.XXXXXX) && bunzip2 -cd frame-z-000125-1-0017.fits.bz2 > $TMPFILE && mv $TMPFILE /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpY4pYsN
+
+
+Frame filename /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpY4pYsN
+Checking for file photoField-000125-1.fits
+converting images u
+command: TMPFILE=$(mktemp /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpgekLGt.tmp.XXXXXX) && bunzip2 -cd frame-u-000125-1-0017.fits.bz2 > $TMPFILE && mv $TMPFILE /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpgekLGt
+
+
+Frame filename /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpgekLGt
+converting images g
+command: TMPFILE=$(mktemp /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmp_YSmFm.tmp.XXXXXX) && bunzip2 -cd frame-g-000125-1-0017.fits.bz2 > $TMPFILE && mv $TMPFILE /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmp_YSmFm
+
+
+Frame filename /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmp_YSmFm
+converting images r
+command: TMPFILE=$(mktemp /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpappGmP.tmp.XXXXXX) && bunzip2 -cd frame-r-000125-1-0017.fits.bz2 > $TMPFILE && mv $TMPFILE /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpappGmP
+
+
+Frame filename /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmpappGmP
+converting images i
+command: TMPFILE=$(mktemp /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmp5Rh1VU.tmp.XXXXXX) && bunzip2 -cd frame-i-000125-1-0017.fits.bz2 > $TMPFILE && mv $TMPFILE /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmp5Rh1VU
+
+
+Frame filename /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmp5Rh1VU
+converting images z
+command: TMPFILE=$(mktemp /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmp_eYHdT.tmp.XXXXXX) && bunzip2 -cd frame-z-000125-1-0017.fits.bz2 > $TMPFILE && mv $TMPFILE /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmp_eYHdT
+
+
+Frame filename /var/folders/7q/btn545594kdg1vml9jd9_3840000gn/T/tmp_eYHdT
+loss, galaxy with itself: 0.0
+loss, galaxy with star: 0.147709786378
+original result: 8.28135587578e-06
+opt result for band 0 :   status: 2
+    nfev: 22
+ success: False
+     fun: 5.8563222244057968e-06
+       x: array([-2.88176694, -2.38526229, -2.38526229, -0.6492939 ,  1.7205979 ])
+ message: 'Maximum number of iterations has been exceeded.'
+     nit: 10
+original result: 0.00180528354489
+opt result for band 1 :   status: 2
+    nfev: 22
+ success: False
+     fun: 0.0012890392586963582
+       x: array([-2.98357167, -2.30474377, -2.38504642, -0.64923514,  1.72041984])
+ message: 'Maximum number of iterations has been exceeded.'
+     nit: 10
+original result: 0.00186430355557
+opt result for band 2 :   status: 2
+    nfev: 22
+ success: False
+     fun: 0.0013198406549951615
+       x: array([-2.98357167, -2.38504642, -2.30474377, -0.64923514,  1.72041984])
+ message: 'Maximum number of iterations has been exceeded.'
+     nit: 10
+original result: 0.0226319668964
+opt result for band 3 :   status: 2
+    nfev: 21
+ success: False
+     fun: 0.016025369483761917
+       x: array([-3.01450014, -2.24858947, -2.29924634, -0.62832392,  1.86009044])
+ message: 'Maximum number of iterations has been exceeded.'
+     nit: 10
+original result: 0.121399951025
+opt result for band 4 :   status: 2
+    nfev: 22
+ success: False
+     fun: 0.085218526996311342
+       x: array([-2.98465182, -2.38590989, -2.38590989, -0.56798771,  1.89753062])
+ message: 'Maximum number of iterations has been exceeded.'
+     nit: 10
+fluxes: [0.056111373988578052, 0.10000000000000001, 0.10000000000000001, 0.53430508406796795, 6.6812909146821315] [ 0.05603566  0.09978437  0.09978437  0.53348522  6.66940476]
+galaxy likelihoods: [ -42.20565198  -87.97982321 -107.81357402  131.95702004  985.62713692]
+orig star likelihoods: [ -42.2036059   -87.93951619 -107.81329502  131.86181808  985.56915949]
+final star likelihoods: [ -42.19745286  -87.88547252 -107.78286755  131.8701515   985.65483007]
