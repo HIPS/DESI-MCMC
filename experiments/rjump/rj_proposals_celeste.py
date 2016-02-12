@@ -154,13 +154,18 @@ if __name__=="__main__":
     NUM_BANDS = 5
     NUM_LOC = 2
     NUM_SHAPE = 4
+
+    def squared_loss_single_im(galaxy_src, point_src, image):
+        galaxy_im = celeste.gen_src_image(galaxy_src, image, return_patch=False)
+        point_src_im = celeste.gen_src_image(point_src, image, return_patch=False)
+        loss = np.sum(np.sum((galaxy_im - point_src_im)**2))
+
+        return loss
+
     def squared_loss(galaxy_src, point_src, images):
         loss = 0
         for image in images:
-            galaxy_im = celeste.gen_src_image(galaxy_src, image, return_patch=False)
-            point_src_im = celeste.gen_src_image(point_src, image, return_patch=False)
-            loss += np.sum(np.sum((galaxy_im - point_src_im)**2))
-
+            loss += squared_loss_single_im(galaxy_src, point_src, image)
         return loss
 
     # read in image and corresponding source
@@ -180,9 +185,14 @@ if __name__=="__main__":
     rfluxes[src_types == 0] = -1
     brightest_i = np.argmax(rfluxes)
 
+    def star_arg_squared_loss_single_im(fluxes, galaxy_src, image):
+        star = SrcParams(src.u, a=0, fluxes=np.exp(fluxes))
+        return squared_loss_single_im(galaxy_src, star, image)
+
     def star_arg_squared_loss(fluxes, galaxy_src, images):
         star = SrcParams(src.u, a=0, fluxes=np.exp(fluxes))
         return squared_loss(galaxy_src, star, images)
+
 
     # do gradient descent
     # 1, 9, 10 galaxies
@@ -194,16 +204,27 @@ if __name__=="__main__":
         print "loss, galaxy with itself:", squared_loss(src, src, imgs)
         print "loss, galaxy with star:", squared_loss(src, star, imgs)
 
-        res = minimize(star_arg_squared_loss, np.log(src.fluxes), args=(src, imgs), method='Nelder-Mead', options={'maxiter':100})
-        print "fluxes:", src.fluxes, res.x
-        print " opt result: ", res
+        final_fluxes = np.zeros(len(BANDS))
+        for bi,b in enumerate(BANDS):
+            res = minimize(star_arg_squared_loss_single_im,
+                           np.log(src.fluxes),
+                           args=(src, imgs[bi]),
+                           method='Nelder-Mead',
+                           options={'maxiter':100})
+
+            print "original result:", squared_loss_single_im(src, star, imgs[bi])
+            print "opt result for band", bi, ":",  res
+
+            final_fluxes[bi] = np.exp(res.x[bi])
+
+        print "fluxes:", src.fluxes, final_fluxes
 
         # show the new star
         fig, axarr  = plt.subplots(len(BANDS), 2)
         for bi, b in enumerate(BANDS):
             final_galaxy_im = celeste.gen_src_image(src, imgs[bi])
 
-            final_star = SrcParams(src.u, a=0, fluxes=np.exp(res.x))
+            final_star = SrcParams(src.u, a=0, fluxes=final_fluxes)
             final_star_im = celeste.gen_src_image(final_star, imgs[bi])
 
             gim = axarr[bi,0].imshow(final_galaxy_im)
