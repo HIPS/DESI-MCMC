@@ -59,6 +59,19 @@ def make_fits_images(run, camcol, field):
                                           sky=sky)
     return imgfits
 
+
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.pyplot as plt
+
+def add_colorbar_to_axis(ax, cim):
+    """ pretty generic helper function to throw a colorbar onto an axis """
+    divider = make_axes_locatable(ax)
+    cax     = divider.append_axes("right", size="10%", pad=0.05)
+    cbar    = plt.colorbar(cim, cax=cax)
+    # Manually set ticklabels (not ticklocations, they remain unchanged)
+    #ax4.set_yticklabels([0, 50, 30, 'foo', 'bar', 'baz'])
+
+
 if __name__=="__main__":
 
     # galaxy parameters: loc, shape, etc in arg here
@@ -162,13 +175,18 @@ if __name__=="__main__":
     imgs = [imgfits[b] for b in BANDS]
     srcs = [tractor_src_to_celestepy_src(s) for s in tsrcs]
 
+    src_types = np.array([src.a for src in srcs])
+    rfluxes = np.array([src.fluxes[2] for src in srcs])
+    rfluxes[src_types == 0] = -1
+    brightest_i = np.argmax(rfluxes)
+
     def star_arg_squared_loss(fluxes, galaxy_src, images):
-        star = SrcParams(src.u, a=0, fluxes=fluxes)
+        star = SrcParams(src.u, a=0, fluxes=np.exp(fluxes))
         return squared_loss(galaxy_src, star, images)
 
     # do gradient descent
     # 1, 9, 10 galaxies
-    for src in [srcs[10]]:
+    for src in [srcs[46]]:
         if src.a == 0:
             continue
 
@@ -176,19 +194,22 @@ if __name__=="__main__":
         print "loss, galaxy with itself:", squared_loss(src, src, imgs)
         print "loss, galaxy with star:", squared_loss(src, star, imgs)
 
-        res = minimize(star_arg_squared_loss, src.fluxes, args=(src, imgs), method='Nelder-Mead')
+        res = minimize(star_arg_squared_loss, np.log(src.fluxes), args=(src, imgs), method='Nelder-Mead', options={'maxiter':100})
         print "fluxes:", src.fluxes, res.x
+        print " opt result: ", res
 
         # show the new star
         fig, axarr  = plt.subplots(len(BANDS), 2)
         for bi, b in enumerate(BANDS):
             final_galaxy_im = celeste.gen_src_image(src, imgs[bi])
 
-            final_star = SrcParams(src.u, a=0, fluxes=res.x)
+            final_star = SrcParams(src.u, a=0, fluxes=np.exp(res.x))
             final_star_im = celeste.gen_src_image(final_star, imgs[bi])
 
-            axarr[bi,0].imshow(final_galaxy_im)
-            axarr[bi,1].imshow(final_star_im)
+            gim = axarr[bi,0].imshow(final_galaxy_im)
+            sim = axarr[bi,1].imshow(final_star_im)
+            add_colorbar_to_axis(axarr[bi,0], gim)
+            add_colorbar_to_axis(axarr[bi,1], sim)
 
             for c in range(2):
                 axarr[bi,c].get_xaxis().set_visible(False)
