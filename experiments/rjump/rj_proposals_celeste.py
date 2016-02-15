@@ -185,6 +185,9 @@ if __name__=="__main__":
     rfluxes[src_types == 0] = -1
     brightest_i = np.argmax(rfluxes)
 
+    # dim 10
+    # bright 46
+    # medium 1
     def star_arg_squared_loss_single_im(fluxes, galaxy_src, image):
         star = SrcParams(src.u, a=0, fluxes=np.exp(fluxes))
         return squared_loss_single_im(galaxy_src, star, image)
@@ -195,8 +198,7 @@ if __name__=="__main__":
 
 
     # do gradient descent
-    # 1, 9, 10 galaxies
-    for src in [srcs[46]]:
+    for src in [srcs[10]]:
         if src.a == 0:
             continue
 
@@ -210,7 +212,7 @@ if __name__=="__main__":
                            np.log(src.fluxes),
                            args=(src, imgs[bi]),
                            method='Nelder-Mead',
-                           options={'maxiter':100})
+                           options={'maxiter':10})
 
             print "original result:", squared_loss_single_im(src, star, imgs[bi])
             print "opt result for band", bi, ":",  res
@@ -218,13 +220,36 @@ if __name__=="__main__":
             final_fluxes[bi] = np.exp(res.x[bi])
 
         print "fluxes:", src.fluxes, final_fluxes
+        final_star = SrcParams(src.u, a=0, fluxes=final_fluxes)
+
+        # add noise and calculate per-band likelihoods
+        ZERO_CONST = 0.1
+        gal_likelihoods = np.zeros(len(BANDS))
+        orig_star_likelihoods = np.zeros(len(BANDS))
+        final_star_likelihoods = np.zeros(len(BANDS))
+        for bi, b in enumerate(BANDS):
+            galaxy_im = celeste.gen_src_image(src, imgs[bi], return_patch=False)
+            galaxy_im_noise = np.zeros(galaxy_im.shape)
+            for (i,j),value in np.ndenumerate(galaxy_im):
+                galaxy_im_noise[i,j] = np.random.poisson(galaxy_im[i,j])
+
+            # calculate galaxy likelihood
+            gal_likelihoods[bi] = np.sum(np.sum(galaxy_im_noise * np.log(galaxy_im + ZERO_CONST) - galaxy_im))
+
+            # calculate star likelihood
+            orig_star_im = celeste.gen_src_image(star, imgs[bi], return_patch=False)
+            final_star_im = celeste.gen_src_image(final_star, imgs[bi], return_patch=False)
+            orig_star_likelihoods[bi] = np.sum(np.sum(galaxy_im_noise * np.log(orig_star_im + ZERO_CONST) - orig_star_im))
+            final_star_likelihoods[bi] = np.sum(np.sum(galaxy_im_noise * np.log(final_star_im + ZERO_CONST) - final_star_im))
+
+        print "galaxy likelihoods:", gal_likelihoods
+        print "orig star likelihoods:", orig_star_likelihoods
+        print "final star likelihoods:", final_star_likelihoods
 
         # show the new star
         fig, axarr  = plt.subplots(len(BANDS), 2)
         for bi, b in enumerate(BANDS):
             final_galaxy_im = celeste.gen_src_image(src, imgs[bi])
-
-            final_star = SrcParams(src.u, a=0, fluxes=final_fluxes)
             final_star_im = celeste.gen_src_image(final_star, imgs[bi])
 
             gim = axarr[bi,0].imshow(final_galaxy_im)
@@ -238,7 +263,6 @@ if __name__=="__main__":
 
         axarr[0,0].set_title('galaxy patch')
         axarr[0,1].set_title('star patch')
-        fig.tight_layout()
-        plt.show()
+        plt.savefig('dim_galaxy.png')
 
 
