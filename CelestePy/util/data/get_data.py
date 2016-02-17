@@ -19,6 +19,9 @@ from astrometry.libkd.spherematch import match_radec
 
 from tractor.basics import PointSource
 from tractor.galaxy import ExpGalaxy, DevGalaxy, CompositeGalaxy
+import tractor.sdss as sdss
+import astrometry.sdss as asdss
+import astrometry.util.fits as aufits
 
 from CelestePy.celeste import gen_point_source_psf_image, gen_galaxy_psf_image, FitsImage
 from CelestePy.celeste_src import SrcParams
@@ -26,6 +29,41 @@ from CelestePy.celeste_src import SrcParams
 import pickle
 
 BANDS = ['u', 'g', 'r', 'i', 'z']
+
+
+def make_fits_images(run, camcol, field):
+    """gets field files from local cache (or sdss), returns UGRIZ dict of 
+    fits images"""
+    print """==================================================\n\n
+            Grabbing image files from the cache.
+            TODO: turn off the tractor printing... """
+
+    imgs = {}
+    for band in BANDS:
+        print "reading in band %s" % band
+        imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
+
+    fn = asdss.DR9().retrieve('photoField', run, camcol, field)
+    F = aufits.fits_table(fn)
+
+    # convert to FitsImage's
+    imgfits = {}
+    for iband,band in enumerate(BANDS):
+        print "converting images %s" % band
+        frame   = asdss.DR9().readFrame(run, camcol, field, band)
+        calib   = np.median(frame.getCalibVec())
+        gain    = F[0].gain[iband]
+        darkvar = F[0].dark_variance[iband]
+        sky     = np.median(frame.getSky())
+
+        imgfits[band] = FitsImage(band,
+                                  timg=imgs[band],
+                                  calib=calib,
+                                  gain=gain,
+                                  darkvar=darkvar,
+                                  sky=sky)
+    return imgfits
+
 
 def tractor_src_to_celestepy_src(tsrc):
     """Conversion between tractor source object and our source object...."""

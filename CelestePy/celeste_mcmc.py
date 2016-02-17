@@ -1,10 +1,7 @@
 # Authors: Andrew Miller acm@seas.harvard.edu
 import planck
 import numpy as np
-from CelestePy import gen_src_prob_layers, \
-                      gen_point_source_psf_image, \
-                      gen_src_image, \
-                      gen_galaxy_psf_image
+import CelestePy.celeste as celeste
 import CelestePy.celeste_galaxy_conditionals as gal
 from CelestePy import BANDS
 from util.misc.plot_util import compare_to_model, subplot_imshow_colorbar
@@ -50,7 +47,7 @@ def celeste_gibbs_sample(srcs, imgs, subiter=2, debug=False, verbose=True):
     printif("    sampling Z's", verbose)
     all_src_images = []
     for img in imgs:
-        src_probs = gen_src_prob_layers(srcs, img)
+        src_probs = celeste.gen_src_prob_layers(srcs, img)
         src_image = np.zeros(src_probs.shape)
         for (i,j), xij in np.ndenumerate(img.nelec):
 
@@ -110,9 +107,17 @@ def sample_source_photons_single_image_cython(img, srcs):
         noise_count: sampled noise
     """
 
+    def src_image_bound(src, img):
+        """ get radius for this source/image pair that encompasses 1-epsilon 
+        of photons generated"""
+        if src.a == 0:
+            return img.R
+        else:
+            return gal.gen_galaxy_psf_image_bound(src, img)
+
     # compute source boxes
     src_locs  = np.row_stack([img.equa2pixel(s.u) for s in srcs])
-    imgR      = np.array([gen_psf_src_image_bound(s, img) for s in srcs])
+    imgR      = np.array([src_image_bound(s, img) for s in srcs])
     src_boxes0 = np.column_stack([
                     np.floor(src_locs[:,0] - imgR),
                     np.ceil(src_locs[:,0] + imgR),
@@ -122,7 +127,7 @@ def sample_source_photons_single_image_cython(img, srcs):
 
     import CelestePy.celeste_sample_sources as css
     # generate model image for each source
-    src_imgs  = [css.NativePatch(*gen_src_image_with_fluxes(s, img))
+    src_imgs  = [css.NativePatch(*celeste.gen_src_image_with_fluxes(s, img))
                  for s in srcs]
 
     # create src boxes that are exact to eliminate checking

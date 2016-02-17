@@ -5,6 +5,13 @@ import sys
 import os.path
 from CelestePy import gen_model_image
 
+def add_colorbar_to_axis(ax, cim):
+    """ generic helper function to throw a colorbar onto an axis """
+    divider = make_axes_locatable(ax)
+    cax     = divider.append_axes("right", size="10%", pad=0.05)
+    cbar    = plt.colorbar(cim, cax=cax)
+
+
 def plot_comparison(band, file_ra_dec, model_image):   
     ## 0. Create an image
     fits_file_template = "../data/blobs/stamp-%s-%s.fits"%("%s", file_ra_dec)
