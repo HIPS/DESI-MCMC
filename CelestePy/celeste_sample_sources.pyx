@@ -118,8 +118,8 @@ def sample_source_counts(list src_imgs,
 
             # verbose??
             cnt += 1
-            if cnt % 100000 == 0:
-                print "%d of %d"%(cnt, dim0*dim1)
+            #if cnt % 100000 == 0:
+            #    print "%d of %d"%(cnt, dim0*dim1)
     return samp_imgs, noise_sum
 
 

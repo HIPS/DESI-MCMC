@@ -6,6 +6,8 @@ Andrew Miller <acm@seas.harvard.edu>
 
 import autograd.numpy as np
 import CelestePy.celeste_mcmc as cel_mcmc
+from  CelestePy import celeste
+import pyprind
 
 class Celeste:
     """ Main model class - interface to user.  Holds a list of
@@ -15,6 +17,7 @@ class Celeste:
         #TODO incorporate priors over fluxes
         # model keeps track of a field list
         self.field_list = []
+        self.bands = ['u', 'g', 'r', 'i', 'z']
 
     def initialize_sources(self, init_srcs=None, init_src_params=None):
         """ initialize sources after adding fields """
@@ -34,14 +37,18 @@ class Celeste:
                 img_dict  = fits image keyed by 'ugriz' band
                 init_srcs = sources (tractor or celeste) initialized in this field
         """
+        for k in img_dict.keys():
+            assert k in self.bands, "Celeste model doesn't support band %s"%k
         self.field_list.append(Field(img_dict))
 
     def resample_model(self):
         """ resample each field """
-        for field in self.field_list:
+        for field in pyprind.prog_bar(self.field_list):
             field.resample_photons(self.srcs)
+        self.resample_sources()
 
-        for src in self.srcs:
+    def resample_sources(self):
+        for src in pyprind.prog_bar(self.srcs):
             src.resample()
 
     def render_model_image(self):
@@ -72,6 +79,7 @@ class Field:
         # this field.  keep track of photons due to noise
         noise_sums = {}
         for band, img in self.img_dict.iteritems():
+            print " ... resampling band %s " % band
             samp_imgs, noise_sum = \
                 cel_mcmc.sample_source_photons_single_image_cython(img, [s.params for s in srcs])
 
@@ -146,15 +154,14 @@ class Source:
         band_counts = {b: 0 for b in bands}
         psf_sums    = {b: 0 for b in bands}
         for src_img, fits_img in self.sample_image_list:
-            band_counts[fits_img.band] += np.sum(src_img)
-            psf_ns, ylim, xlim = self.compute_scatter_on_pixels(fits_image)
-            psf_sums[fits_img.band] += np.sum(psf_ns) # * fits_img.kappa/fits_img.calib
+            band_counts[fits_img.band] += np.sum(np.array(src_img.data))
+            psf_ns, ylim, xlim = self.compute_scatter_on_pixels(fits_img)
+            psf_sums[fits_img.band] += np.sum(psf_ns) * fits_img.kappa/fits_img.calib
 
         # resample fluxes
         a_n    = a_0 + np.array([band_counts[b] for b in bands])
         b_n    = b_0 + np.array([psf_sums[b] for b in bands])
-        fluxes = np.random.gamma(a_n, 1./b_n)
-        self.params.fluxes = dict(zip(bands, fluxes))
+        self.params.fluxes = np.random.gamma(a_n, 1./b_n)
 
     def compute_scatter_on_pixels(self, fits_image, epsilon=.0001):
         """ compute how photons will be scattered spatially on fits_image, 
@@ -174,3 +181,23 @@ class Source:
             return patch, ylim, xlim
         else:
             raise NotImplementedError, "only stars and galaxies have photon scattering images"
+
+    def compute_model_patch(self, fits_image):
+        patch, ylim, xlim = self.compute_scatter_on_pixels(fits_image)
+        band_flux = (self.params.flux_dict[fits_image.band] / fits_image.calib) * \
+                    fits_image.kappa
+        return band_flux * patch, ylim, xlim
+
+    def plot(self, fits_image, ax, data_ax=None):
+        import matplotlib.pyplot as plt; import seaborn as sns;
+        from CelestePy.util.misc import plot_util
+        patch, ylim, xlim = self.compute_model_patch(fits_image)
+        cim = ax.imshow(patch, extent=(xlim[0], xlim[1], ylim[0], ylim[1]))
+        plot_util.add_colorbar_to_axis(ax, cim)
+
+        if data_ax is not None:
+            dpatch = fits_image.nelec[ylim[0]:ylim[1], xlim[0]:xlim[1]]
+            dpatch -= np.median(dpatch)
+            dim = data_ax.imshow(dpatch, extent=(xlim[0], xlim[1], ylim[0], ylim[1]))
+            plot_util.add_colorbar_to_axis(data_ax, dim)
+
