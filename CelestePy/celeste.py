@@ -60,9 +60,40 @@ def gen_src_image(src, image, return_patch=True):
     f_s,_,_ = gen_point_source_psf_image(src.u, image, return_patch=return_patch)
     return f_s * expected_photons
 
+def gen_src_psf_image(src, image):
+    if src.a == 0:
+        return gen_point_source_psf_image(src, image)
+    elif src.a == 1:
+        return gen_galaxy_psf_image(src, image)
+    else:
+        raise "not implemented!"
+
+def gen_point_source_psf_image_with_fluxes(src_params, fits_image, return_patch=True, psf_grid=None):
+    """create point source psf image, using flux values instead of a star model """
+    src_img, ylim, xlim  = gen_point_source_psf_image(src_params.u, fits_image, return_patch=True, psf_grid=psf_grid)
+    flux     = src_params.fluxes[BANDS.tolist().index(fits_image.band)]
+    src_img *= (flux / fits_image.calib) * fits_image.kappa
+    return src_img, ylim, xlim
+
+def gen_src_image_with_fluxes(src, img):
+    """ generic src image with fluxes (as opposed to other appearance
+    models e.g. temperature/lum, embedding, etc) """
+    if src.a == 0:
+        f_s, ylim, xlim = gen_point_source_psf_image_with_fluxes(src, img)
+    elif src.a == 1:
+        psf_img, ylim, xlim = gal_funs.gen_galaxy_psf_image(
+                th  = [src.theta, src.sigma, src.phi, src.rho],
+                u_s = src.u,
+                img = img)
+        gal_flux = (src.fluxes[BANDS.tolist().index(img.band)] / img.calib ) * img.kappa
+        f_s      = gal_flux * psf_img
+    return f_s, ylim, xlim
+
 
 def gen_galaxy_psf_image(src, image, return_patch=True, check_overlap=True):
-    """ generates a PSF Image (assigns density values to pixels) for 
+    """
+    TODO: incorporate proper flux scaling
+    generates a PSF Image (assigns density values to pixels) for 
     a galaxy source (computes MoG resulting from convolving an MoG with 
     another MoG)
     """
@@ -104,6 +135,7 @@ def gen_point_source_psf_image(
                                  mus     = image.means + v_s,
                                  sigs    = image.covars)
 
+    # 
     if return_patch:
         return psf_grid_small.reshape(xx.shape, order='C'), (miny_b, maxy_b), (minx_b, maxx_b)
 
@@ -129,6 +161,17 @@ def gen_point_source_psf_image(
     # mass will fall off the image, and you're neighboring image will probably 
     # have some unexplained boosting of their counts
     #return f_s
+
+
+def gen_psf_src_image_bound(src, img):
+    """ get radius for this source/image pair that encompasses 1-epsilon 
+    of photons generated"""
+    if src.a == 0:
+        return img.R
+    else:
+        return gal_funs.gen_galaxy_psf_image_bound(src, img)
+
+
 
 def gen_model_image(srcs, image):
     """ gen_model_image: computes pixel-wise mean count values from only point sources
