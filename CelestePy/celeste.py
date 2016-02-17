@@ -70,6 +70,9 @@ def gen_src_psf_image(src, image):
 
 def gen_point_source_psf_image_with_fluxes(src_params, fits_image, return_patch=True, psf_grid=None):
     """create point source psf image, using flux values instead of a star model """
+    #TODO resolve the src_params.fluxes order vs dict!
+    # Re-write these image functions with more precise parameterization... 
+    # let the Source/Field/Celeste model classes handle the bookkeeping
     src_img, ylim, xlim  = gen_point_source_psf_image(src_params.u, fits_image, return_patch=True, psf_grid=psf_grid)
     flux     = src_params.fluxes[BANDS.tolist().index(fits_image.band)]
     src_img *= (flux / fits_image.calib) * fits_image.kappa

@@ -125,3 +125,7 @@ class SrcParams():
             fluxes = dict(zip(['u', 'g', 'r', 'i', 'z'], src_array['fluxes']))
             )
 
+    @property
+    def flux_dict(self):
+        return {c:v for c, v in zip(['u', 'g', 'r', 'i', 'z'], self.fluxes)}
+
