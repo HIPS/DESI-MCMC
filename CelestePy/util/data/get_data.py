@@ -70,9 +70,10 @@ def tractor_src_to_celestepy_src(tsrc):
     pos = tsrc.getPosition()
     u = [p for p in pos]
 
-    # brightnesse are stored in mags (gotta convert to nanomaggies)
+    # brightnesses are stored in mags (gotta convert to nanomaggies)
     def mags2nanomaggies(mags):
         return np.power(10., (mags - 22.5)/-2.5)
+
     fluxes = tsrc.getBrightnesses()[0]
     fluxes = [mags2nanomaggies(flux) for flux in fluxes]
 
