@@ -172,6 +172,6 @@ if __name__=="__main__":
         else:
             break
 
-    print "to-galaxy proposals: %d, transitions: %d" % (to_gal_propose. to_gal_trans)
-    print "to-star proposals: %d, transitions: %d" % (to_star_propose. to_star_trans)
+    print "to-galaxy proposals: %d, transitions: %d" % (to_gal_propose, to_gal_trans)
+    print "to-star proposals: %d, transitions: %d" % (to_star_propose, to_star_trans)
 
