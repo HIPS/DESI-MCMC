@@ -103,7 +103,7 @@ def calc_transition_probs(star, galaxy,
              - gal_fluxes_prior.score([galaxy.fluxes])[0] \
              - gal_shape_prior[0].score([np.log(galaxy.sigma)])[0] \
              - gal_shape_prior[1].score([np.log(galaxy.rho / (1 - galaxy.rho))])[0] \
-             - gal_shape_prior[2].score([np.log(galaxy.phi / (180 - galaxy.phi))])[0]
+             - gal_shape_prior[2].score([np.log(galaxy.phi / (np.pi - galaxy.phi))])[0]
 
     if mult * (star_ell - gal_ell + prior) > 0:
         return 1
