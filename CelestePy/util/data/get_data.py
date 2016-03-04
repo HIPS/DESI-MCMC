@@ -30,41 +30,6 @@ import pickle
 
 BANDS = ['u', 'g', 'r', 'i', 'z']
 
-
-def make_fits_images(run, camcol, field):
-    """gets field files from local cache (or sdss), returns UGRIZ dict of 
-    fits images"""
-    print """==================================================\n\n
-            Grabbing image files from the cache.
-            TODO: turn off the tractor printing... """
-
-    imgs = {}
-    for band in BANDS:
-        print "reading in band %s" % band
-        imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
-
-    fn = asdss.DR9().retrieve('photoField', run, camcol, field)
-    F = aufits.fits_table(fn)
-
-    # convert to FitsImage's
-    imgfits = {}
-    for iband,band in enumerate(BANDS):
-        print "converting images %s" % band
-        frame   = asdss.DR9().readFrame(run, camcol, field, band)
-        calib   = np.median(frame.getCalibVec())
-        gain    = F[0].gain[iband]
-        darkvar = F[0].dark_variance[iband]
-        sky     = np.median(frame.getSky())
-
-        imgfits[band] = FitsImage(band,
-                                  timg=imgs[band],
-                                  calib=calib,
-                                  gain=gain,
-                                  darkvar=darkvar,
-                                  sky=sky)
-    return imgfits
-
-
 def tractor_src_to_celestepy_src(tsrc):
     """Conversion between tractor source object and our source object...."""
     pos = tsrc.getPosition()
@@ -96,7 +61,7 @@ def tractor_src_to_celestepy_src(tsrc):
                          a=1,
                          v=u,
                          theta=theta,
-                         phi = shape[2] * np.pi / 180.,
+                         phi = (shape[2] + 180) * np.pi / 180,
                          sigma=shape[0],
                          rho=shape[1],
                          fluxes=fluxes)
