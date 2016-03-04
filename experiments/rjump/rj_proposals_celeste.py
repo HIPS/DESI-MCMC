@@ -158,8 +158,7 @@ if __name__=="__main__":
     def squared_loss_single_im(galaxy_src, point_src, image):
         galaxy_im = celeste.gen_src_image(galaxy_src, image, return_patch=False)
         point_src_im = celeste.gen_src_image(point_src, image, return_patch=False)
-        loss = np.sum(np.sum((galaxy_im - point_src_im)**2))
-
+        loss = np.sum((galaxy_im - point_src_im)**2)
         return loss
 
     def squared_loss(galaxy_src, point_src, images):
@@ -234,13 +233,12 @@ if __name__=="__main__":
                 galaxy_im_noise[i,j] = np.random.poisson(galaxy_im[i,j])
 
             # calculate galaxy likelihood
-            gal_likelihoods[bi] = np.sum(np.sum(galaxy_im_noise * np.log(galaxy_im + ZERO_CONST) - galaxy_im))
+            gal_likelihoods[bi] = np.sum(galaxy_im_noise * np.log(galaxy_im + ZERO_CONST) - galaxy_im)
 
             # calculate star likelihood
             orig_star_im = celeste.gen_src_image(star, imgs[bi], return_patch=False)
             final_star_im = celeste.gen_src_image(final_star, imgs[bi], return_patch=False)
-            orig_star_likelihoods[bi] = np.sum(np.sum(galaxy_im_noise * np.log(orig_star_im + ZERO_CONST) - orig_star_im))
-            final_star_likelihoods[bi] = np.sum(np.sum(galaxy_im_noise * np.log(final_star_im + ZERO_CONST) - final_star_im))
+            orig_star_likelihoods[bi] = np.sum(np.sum(galaxy_im_noise * np.log(orig_star_im + ZERO_CONST) - orig_star_im)) + ZERO_CONST) - final_star_im))
 
         print "galaxy likelihoods:", gal_likelihoods
         print "orig star likelihoods:", orig_star_likelihoods

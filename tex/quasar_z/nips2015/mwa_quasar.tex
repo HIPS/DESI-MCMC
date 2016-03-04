@@ -1,8 +1,9 @@
 \documentclass{article} % For LaTeX2e
 \usepackage{nips15submit_e,times}
+\usepackage[T1]{fontenc}
 \usepackage{hyperref}
 \usepackage{url}
-\usepackage{amsthm, amsmath, bbm}
+\usepackage{amsthm, amsmath, amsfonts}
 \usepackage{floatrow}
 \newtheorem{theorem}{Theorem}
 \include{defs}
@@ -53,33 +54,26 @@ Harvard University\\
 \begin{document}
 \maketitle
 \begin{abstract} 
-We propose a method for combining two sources of astronomical data, spectroscopy and photometry, which carry information about sources of light (e.g., stars, galaxies, and quasars) at extremely different spectral resolutions. 
-Our model treats the spectral energy distribution (SED) of the radiation from a source as a latent variable, hierarchically generating both photometric and spectroscopic observations.  
+We propose a method for combining two sources of astronomical data, spectroscopy and photometry, that carry information about sources of light (e.g., stars, galaxies, and quasars) at extremely different spectral resolutions. 
+Our model treats the spectral energy distribution (SED) of the radiation from a source as a latent variable that jointly explains both photometric and spectroscopic observations.  
 %Furthermore, we view the problem of SED inference as a density estimation problem, placing a flexible nonparametric prior over the SED of a light source that admits a physically interpretable decomposition and allows us to tractably perform Bayesian inference using Markov chain Monte Carlo (MCMC).  
 We place a flexible, nonparametric prior over the SED of a light source that admits a physically interpretable decomposition, and allows us to tractably perform inference.  
 We use our model to predict the distribution of the redshift of a quasar from five-band (low spectral resolution) photometric data, the so called ``photo-z'' problem. 
 Our method shows that tools from machine learning and Bayesian statistics allow us to leverage multiple resolutions of information to make accurate predictions with well-characterized uncertainties. 
 \end{abstract} 
 
-\section*{Camera-ready todos}
-\begin{itemize}
-\item ``State major features of the formulation in comparison to existing models''.  That is - update text in comparison section
-\item Validate basis $K$ (details in supp material)
-\item Discuss updated basis fitting procedure - MCEM (in supp mat)
-\item Better describe parameter domains and priors (details in supp mat)
-\end{itemize}
-
-
 
 \section{Introduction}
 Enormous amounts of astronomical data are collected by a range of instruments at multiple spectral resolutions, providing information about billions of sources of light in the observable universe~\cite{alam2015eleventh, martin2005galex}.  
-Among these data are measurements of the spectral energy distribution (SED) of a source.  
+Among these data are measurements of the spectral energy distributions (SEDs) of sources of light (e.g.~ stars, galaxies, and quasars).  
 The SED describes the distribution of energy radiated by a source over the spectrum of wavelengths or photon energy levels.
-The SED of a light source is of interest because it conveys information about its physical properties, including type, distance to the earth, and redshift, which will be an estimand of interest in this work. 
-For intuition, the SED of a star at around 5,800 $K$ (e.g.,~the sun) radiates most of its energy in the 4,000 $\angstrom$ to 7,000 $\angstrom$ range, which corresponds roughly to the range of visible light.  
-However, stars tend to have simple distributions (well-modeled by Planck's law), whereas other objects, such as galaxies and quasars, can have much more complicated SEDs.  
+SEDs are of interesting because they convey information about a source's physical properties, including type, chemical composition, and redshift, which will be an estimand of interest in this work. 
 
-The SED can be thought of as a latent function for which we can only obtain noisy measurements.  Measurements of SEDs, however, are produced by instruments at widely varying spectral resolutions -- some instruments measure many wavelengths simultaneously (spectroscopy), while others average over large swaths of the energy spectrum and report a low dimensional summary (photometry). 
+% cut
+%For intuition, the SED of a star at around 5,800 $K$ (e.g.,~the sun) radiates most of its energy in the 4,000 $\angstrom$ to 7,000 $\angstrom$ range, which corresponds roughly to the range of visible light.  
+%However, stars tend to have simple distributions (well-modeled by Planck's law), whereas other objects, such as galaxies and quasars, can have much more complicated SEDs.  
+
+The SED can be thought of as a latent function of which we can only obtain noisy measurements.  Measurements of SEDs, however, are produced by instruments at widely varying spectral resolutions -- some instruments measure many wavelengths simultaneously (spectroscopy), while others average over large swaths of the energy spectrum and report a low dimensional summary (photometry). 
 Spectroscopic data describe a source's SED in finer detail than broadband photometric data.  For example, the Baryonic Oscillation Spectroscopic Survey \cite{dawson2013baryon} measures SED samples at over four thousand wavelengths between 3,500 and 10,500 $\angstrom$.
 In contrast, the Sloan Digital Sky Survey (SDSS)~\cite{alam2015eleventh} collects spectral information in only 5 broad spectral bins by using broadband filters (called $u,g,r,i,$ and $z$), but at a much higher \emph{spatial} resolution.  
 Photometric preprocessing models can then aggregate pixel information into five band-specific fluxes and their uncertainties \cite{stoughton2002sloan}, reflecting the weighted average response over a large range of the wavelength spectrum. 
@@ -103,7 +97,7 @@ The two methods of spectral information collection are graphically compared in F
 %--------------------------------------------------------------------------
 
 Despite carrying less spectral information, broadband photometry is more widely available and exists for a larger number of sources than spectroscopic measurements. 
-This work develops a method for extracting information from observations of light sources by jointly modeling spectroscopic and photometric data.  
+This work develops a method for inferring physical properties sources by jointly modeling spectroscopic and photometric data.  
 One use of our model is to measure the redshift of quasars for which we only have photometric observations.  
 Redshift is a phenomenon in which the observed SED of a source of light is stretched toward longer (redder) wavelengths.
 This effect is due to a combination of radial velocity with respect to the observer and the expansion of the universe (termed \emph{cosmological redshift})~\cite{hogg1999distance, harrison1993redshift}.  
@@ -111,7 +105,7 @@ Quasars, or quasi-stellar radio sources, are extremely distant and energetic sou
 Accurate estimates and uncertainties of redshift measurements from photometry have the potential to guide the use of higher spectral resolution instruments to study sources of interest.  
 Furthermore, accurate photometric models can aid the automation of identifying source types and estimating physical characteristics of faintly observed sources in large photometric surveys \cite{regier2015}.  
 
-Our model jointly describes high-resolution spectroscopic data and low-resolution photometric observations of quasars in terms of their latent SEDs, apparent brightnesses, and redshifts. 
+To jointly describe both resolutions of data, we directly model a quasar's latent SED and the process by which it generates spectroscopic and photometric observations. 
 Representing a quasar's SED as a latent random measure, we describe a Bayesian inference procedure to compute the marginal probability distribution of a quasar's redshift given observed photometric fluxes and their uncertainties.  
 The following section provides relevant application and statistical background.  
 Section~\ref{sec:model} describes our probabilistic model of SEDs and broadband photometric measurements.
@@ -124,11 +118,11 @@ We conclude with a discussion of directions for future work.
 %The SED of a source describes the distribution of the energy it radiates as a function of wavelength.  
 %For example, most stars are well-modeled as ideal black-body radiators, as their SED is well-described by a parametric form given by Planck's law. 
 %The SEDs of most stars are approximately represented by Planck's law for black body radiators, and are well-described in detail by stellar atmosphere models \cite{gray2001physical}.  
-The SEDs of most stars are approximately represented by Planck's law for black body radiators and stellar atmosphere models \cite{gray2001physical}. 
+The SEDs of most stars are roughly approximated by Planck's law for black body radiators and stellar atmosphere models \cite{gray2001physical}. 
 Quasars, on the other hand, have complicated SEDs characterized by some salient features, such as the Lyman-$\alpha$ forest, which is the absorption of light at many wavelengths from neutral hydrogen gas between the earth and the quasar~\cite{weinberg2003lymanalpha}.  
-One of the most interesting properties of quasars (and galaxies) conveyed by the SED is redshift. 
-Redshift affects our observation of SEDs by ``stretching'' the wavelengths, ${\lambda \in \Lambda}$, of the quasar's \emph{rest-frame} SED, skewing toward longer (redder) wavelengths.
-Denoting the \emph{rest-frame} SED of a quasar~$n$ as a function,~${f_n^{(\text{rest})} : \Lambda \rightarrow \R_+}$, the effect of redshift with value $z_n$ (typically between 0 and 7) on the \emph{observation-frame} SED is described by the relationship 
+One of the most interesting properties of quasars (and galaxies) conveyed by the SED is redshift, which gives us insight into an object's distance and age.
+Redshift affects our observation of SEDs by ``stretching'' the wavelengths, ${\lambda \in \Lambda}$, of the quasar's \emph{rest frame} SED, skewing toward longer (redder) wavelengths.
+Denoting the \emph{rest frame} SED of a quasar~$n$ as a function,~${f_n^{(\text{rest})} : \Lambda \rightarrow \mathbb{R}_+}$, the effect of redshift with value $z_n$ (typically between 0 and 7) on the \emph{observation-frame} SED is described by the relationship 
 \begin{align}
   f_n^{(\text{obs})}(\lambda) &= f_n^{(\text{rest})}\left(\frac{\lambda}{1 + z_n}\right) \, .
 \end{align}
@@ -136,14 +130,13 @@ Some observed quasar spectra and their ``de-redshifted'' rest frame spectra are 
 
 %------ example of obs vs rest frame data --------------------------------------
 \begin{figure*}[t]
-\vskip -.16in
 \begin{center}
-\centerline{\includegraphics[width=.9\textwidth]{../figs/quasar_redshift_example}}
+\centerline{\includegraphics[width=.9\textwidth]{../figs/quasar_redshift_example.png}}
 \vskip -.16in
 \caption{%
 Spectroscopic measurements of multiple quasars at different redshifts, $z$.
 The upper graph depicts the sample spectrograph in the observation frame, intuitively thought of as ``stretched'' by a factor $(1+z)$.
-The lower figure depicts the ``de-redshifted'' (rest-frame) version of the same quasar spectra, 
+The lower figure depicts the ``de-redshifted'' (rest frame) version of the same quasar spectra, 
 %This effectively squashes observations, and reconstructs each quasar spectrum as it would be seen in the quasar's rest frame.  
 The two lines show the corresponding locations of the characteristic peak in each reference frame.  
 Note that the $x$-axis has been changed to ease the visualization - the transformation is much more dramatic.  The appearance of translation is due to missing data; we don't observe SED samples outside the range 3,500-10,500 $\angstrom$.   
@@ -183,14 +176,12 @@ Note that the $x$-axis has been changed to ease the visualization - the transfor
 This section describes our probabilistic model of spectroscopic and photometric observations.  
 
 \paragraph{Spectroscopic flux model}
-The SED of a quasar is a non-negative function~${f : \Lambda \rightarrow \R^+}$, where~$\Lambda$ denotes the range of wavelengths and~$\R^+$ are non-negative real numbers representing flux density.
-Our model specifies a quasar's \emph{rest-frame} SED as a latent random function. 
+The SED of a quasar is a non-negative function~${f : \Lambda \rightarrow \mathbb{R}_+}$, where~$\Lambda$ denotes the range of wavelengths and~$\mathbb{R}_+$ are non-negative real numbers representing flux density.
+Our model specifies a quasar's \emph{rest frame} SED as a latent random function. 
 Quasar SEDs are highly structured, and we model this structure by imposing the assumption that each SED is a convex mixture of~$K$ latent, positive basis functions. 
-The model assumes there are a small number of latent features or characteristics and that each quasar can be described by a short vector of mixing weights over these features.  
-Following \cite{budavari2001photometric} we set ${K = 4}$, and note that this is also the number of PCA components that have been shown to carry over 90\% of the variation of quasar spectroscopy~\cite{suzuki2006quasar}.  
-This value could also be fit using model-checking methods for latent factorization models, which we do not address for computational reasons.
+The model assumes there are a small number ($K$) of latent features or characteristics and that each quasar can be described by a short vector of mixing weights over these features.  
 
-We place a normalized log-Gaussian process prior (supplementary material) on each of these basis functions.  
+We place a normalized log-Gaussian process prior on each of these basis functions (described in supplementary material).  
 The generative procedure for quasar spectra begins with a shared basis
 \begin{align}
   \beta_k(\cdot) &\stackrel{\text{iid}}{\sim} \mathcal{GP}(0, K_\theta),\; k=1, \dots, K,&
@@ -216,15 +207,15 @@ For each quasar with spectroscopic data, we observe noisy samples of the redshif
 For quasar $n$, our \emph{observation frame} samples are conditionally distributed as
 \begin{align}
   x_{n, \lambda} | z_n, \mathbf{w}_n, \{ B_k \} 
-    &\stackrel{\textrm{ind}}{\sim} \mathcal{N}\left( \frac{1}{1 + z_n} \tilde f_n^{(\text{rest})}\left( \frac{\lambda}{1 + z_n} \right), \sigma_{n,\lambda}^2 \right)
+    &\stackrel{\textrm{ind}}{\sim} \mathcal{N}\left(\tilde f_n^{(\text{rest})}\left( \frac{\lambda}{1 + z_n} \right), \sigma_{n,\lambda}^2 \right)
     \label{eq:spec} 
 \end{align}
-where $\sigma_{n, \lambda}^2$ is known measurement variance from the instruments used to make the observations, and the $1/(1+z_n)$ is a factor to preserve the overall volume of the rest-frame unnormalized SED. 
-The BOSS spectra (and our rest-frame basis) are stored in units ${10^{-17} \cdot \text{erg} \cdot \text{cm}^{-2} \cdot \text{s}^{-1} \cdot \angstrom^{-1}}$.  
+where $\sigma_{n, \lambda}^2$ is known measurement variance from the instruments used to make the observations. %, and the $1/(1+z_n)$ is a factor to preserve the overall volume of the rest frame unnormalized SED. 
+The BOSS spectra (and our rest frame basis) are stored in units ${10^{-17} \cdot \text{erg} \cdot \text{cm}^{-2} \cdot \text{s}^{-1} \cdot \angstrom^{-1}}$.  
 
-\paragraph{Gaussian process priors} 
-\label{sec:gps}
-Due to the complicated shape of quasar SEDs, we use a Gaussian process (GP) prior to flexibly encode our prior beliefs about their structure and shape.  A brief review of GPs is in the supplementary material.  
+%\paragraph{Gaussian process priors} 
+%\label{sec:gps}
+%Due to the complicated shape of quasar SEDs, we use a Gaussian process (GP) prior to flexibly encode our prior beliefs about their structure and shape.  A brief review of GPs is in the supplementary material.  
 %
 %A GP is a stochastic process,~${f: \mathcal{X} \rightarrow \R}$, such that any finite collection of random variables,~${f(x_1),\dots, f(x_N) \in \R}$, is distributed according to a multivariate normal distribution.  
 %GPs are frequently used as priors over unknown functions, $f$, where the random variables $f(x_1), \dots, f(x_N)$ correspond to evaluations of the function at inputs ${x_1, \dots, x_N \in \mcX}$.  
@@ -243,9 +234,8 @@ Due to the complicated shape of quasar SEDs, we use a Gaussian process (GP) prio
 
 \paragraph{Photometric flux model }
 Photometric data summarize the amount of energy observed over a large swath of the wavelength spectrum. 
-Roughly, a photometric flux measures (proportionally) the number of photons hitting the instrument's lens over the duration of an exposure, filtered by a band-specific sensitivity curve. 
+Roughly, a photometric flux measures (proportionally) the number of photons recorded by the instrument over the duration of an exposure, filtered by a band-specific sensitivity curve. 
 We express flux in nanomaggies~\cite{sdssnanomaggies}. 
-
 Photometric fluxes and measurement error derived from broadband imagery have been computed directly from pixels \cite{stoughton2002sloan}.  
 For each quasar $n$, SDSS photometric data are measured in five bands, ${b \in \{u,g,r,i,z\}}$, yielding a vector of five flux values and their variances,~$\mathbf{y}_n$ and~$\tau^2_{n, b}$.  
 Each band, $b$, measures photon observations at each wavelength in proportion to a known filter sensitivity, $S_{b}(\lambda)$. 
@@ -254,17 +244,13 @@ The actual measured fluxes can be computed by integrating the full object's spec
 For a band~${b \in \{u, g, r, i, z \}}$
 \begin{align}
   \mu_b(f_n^{(\text{rest})}, z_n) &= \int f^{(\text{obs})}_n(\lambda) \,S_b(\lambda)\, C(\lambda) \,d \lambda \,,
-  & C(\lambda) = \frac{1}{\int S_b(\lambda) d\lambda} \frac{\lambda^2}{c} 10^{(48.6-2.5\cdot 17+22.5)/2.5} \,
+  %& C(\lambda) = \frac{1}{\int S_b(\lambda) d\lambda} \frac{\lambda^2}{c} 10^{(48.6-2.5\cdot 17+22.5)/2.5} \,
 \end{align}
-where $C(\lambda)$ is a conversion factor to go from the units of~$f_n(\lambda)$ to nanomaggies
-%\begin{equation*}
-%C(\lambda) = \frac{1}{\int S_b(\lambda) d\lambda} \frac{\lambda^2}{c} 10^{(48.6-2.5\times 17+22.5)/2.5} \, .
-%\end{equation*}
-%\todo{Why doesn't the right hand side have a $\lambda$?}
-The values in the expression above correspond to arbitrary zero-points and constants used in astronomical units: $48.6$ is a zero-point for an astronomical measurement called AB magnitude, $17$ is used to match fluxes which are in units of $10^{-17}$ ergs, $22.5$ and $2.5$ are constants used to convert from logarithmic to linear units of brightness, and $c$ is the speed of light in $\angstrom/s$.  
-
- We use $\mu_b$ to represent the full function from a rest spectrum and red shift to a band-specific flux.
- The results of this projection onto SDSS bands are modeled as independent Gaussian random variables with known variance
+where $C(\lambda)$ is a conversion factor to go from the units of~$f_n(\lambda)$ to nanomaggies (details of this conversion are available in the supplementary material).
+%The values in the expression above correspond to arbitrary zero-points and constants used in astronomical units: $48.6$ is a zero-point for an astronomical measurement called AB magnitude, $17$ is used to match fluxes which are in units of $10^{-17}$ ergs, $22.5$ and $2.5$ are constants used to convert from logarithmic to linear units of brightness, and $c$ is the speed of light in $\angstrom/s$.  
+%where $\mu_b$ to represent the full function from a rest spectrum and red shift to a band-specific flux.
+The function $\mu_b$ takes in a rest frame SED, a redshift ($z$) and maps it to the observed $b$-band specific flux.  
+The results of this projection onto SDSS bands are modeled as independent Gaussian random variables with known variance
 \begin{align}
   y_{n,b}\, |\, f_n^{(\text{rest})}, z_n 
     &\stackrel{\textrm{ind}}{\sim} 
@@ -277,7 +263,7 @@ We overload notation, and re-write the conditional likelihood of photometric obs
     y_{n,b} \,|\, \mathbf{w}_n, z_n, m_n, B &\sim \mathcal{N}( \mu_b(\mathbf{w}_n, z_n, m_n, B), \tau^2_{n,b} ) \, .
    \label{eq:phot}
 \end{align}
-Intuitively, what gives us statistical traction in inferring the posterior distribution over $z_n$ is the structure learned in the latent basis $B$, i.e., the features that correspond to distinguishing bumps and dips in the SED.
+Intuitively, what gives us statistical traction in inferring the posterior distribution over $z_n$ is the structure learned in the latent basis, $B$, and weights $w$, i.e., the features that correspond to distinguishing bumps and dips in the SED.
 
 %--- Graphical Model ------------------------------------------
 %\begin{figure}
@@ -323,22 +309,7 @@ Note that ${\Nspec + \Nphoto}$ replicates of $\mathbf{w}_n, m_n$ and $z_n$ are i
 %The joint distribution is depicted as a graphical model in Figure~\ref{fig:graphical}.
 
 \paragraph{Note on priors}
-For photometric weight and redshift inference, we use a flat prior on $z_n$, and empirically derived priors for $m_n$ and $w_n$, from the sample of spectroscopically measured sources.  
-We fit a mixture of Gaussians to the logit-space variables, $\omega$, defined 
-\begin{align}
-  \omega_k &\sim \mathcal{N}(0, 1), \, k = 1, \dots, K-1 &
-  w_k &= \frac{\exp(\omega_k)}{1 + \sum_{k'} \exp(\omega_{k'})} \, .
-\end{align}
-We fit this prior on the $\omega$ weights derived from the full spectroscopically measured dataset.  We determine the number of components by comparing likelihoods on a held-out validation set.  
-
-% and a log-Gaussian process prior over each basis  o
-%We express the joint prior distribution over weights $\mathbf{w}_n$, $\mathbf{w}_m$, and %basis $\{B_k\}$ as:
-%\begin{align}
-%  p( \{ \mathbf{w}_m, z_m \}, &\{ B_k \}, \{ \mathbf{w}_n, z_n \} )  \\
-%    = & p(\{ B_k \}) p( \{ \mathbf{w}_m, z_m \} )  \\
-%      & p( \{ \mathbf{w}_n, z_n \} | \{ \mathbf{w}_m, z_m \} ) 
-%\end{align}
-%where we condition the photometric weights on the spectroscopically fit weights.  
+For photometric weight and redshift inference, we use a flat prior on $z_n \in [0, 8]$, and empirically derived priors for $m_n$ and $w_n$, from the sample of spectroscopically measured sources.  Choice of priors is described in the supplementary material. 
 
 %---- TABLE, coverage --------------------------------------
 %\begin{table*}[t]
@@ -381,8 +352,8 @@ Using the spectroscopic data, $\{x_{n, \lambda}, \sigma_{n, \lambda}^2, z_n\}$, 
 	p\left(\{\mathbf{w}_n, m_n\}, \{ B_k \} | \{x_{n, \lambda}, \sigma_{n, \lambda}^2, z_n\} \right) 
 	&\propto \prod_{n=1}^N p(x_{n, \lambda} | z_n, \mathbf{w}_n, m_n, \{B_k\}) p(\{B_k\}) p(\mathbf{w}_n) p(m_n) \, .
 \end{align}
-We use gradient descent with momentum and LBFGS \cite{nocedal1980updating} directly on the parameters $\beta_k, \omega_{n,k}$, and $\log(m_n)$ for the $N_{spec}$ spectroscopically measured quasars.  
-Following \cite{walcher2011fitting}, we first resample the observed spectra into a common rest-frame grid, ${\lambda_0 = (\lambda_{0,1}, \dots, \lambda_{0,V})}$, easing computation of the likelihood.  
+We use gradient descent with momentum and LBFGS \cite{nocedal1980updating} directly on the parameters $\beta_k, \omega_{n,k}$, and $\log(m_n)$ for the $N_{spec}$ spectroscopically measured quasars.  Gradients were automatically computed using \texttt{autograd} \cite{maclaurin2015autograd}.  
+Following \cite{walcher2011fitting}, we first resample the observed spectra into a common rest frame grid, ${\lambda_0 = (\lambda_{0,1}, \dots, \lambda_{0,V})}$, easing computation of the likelihood.  
 We note that although our model places a full distribution over~$B_k$, efficiently integrating out those parameters is left for future work.
 
 %The following section outlines our MCMC procedure to compute posterior samples of $\mathbf{w}_n, z_n$, and $m_n$ given the sample of spectra, $\mathbf{X}$, photometric fluxes $\mathbf{y}_{ugriz}$, and $B_{\text{map}}$.
@@ -403,7 +374,7 @@ We note that although our model places a full distribution over~$B_k$, efficient
 
 \paragraph{Sampling $\mathbf{w}_n, m_n$, and $z_n$}
 The Bayesian ``photo-z'' task requires that we compute posterior marginal distributions of $z$, integrating out $\mathbf{w}$, and $m$.  
-To compute these distributions, we construct a Markov chain over the state space including $z$, $\mathbf{w}$, and $\mathbf{m}$ that leaves the target posterior distribution invariant.
+To compute these distributions, we construct a Markov chain over the state space including $z$, $\mathbf{w}$, and $m$ that leaves the target posterior distribution invariant.
 %and condition similar to Monte Carlo EM~\cite{wei1990monte}
 We treat the inference problem for each photometrically measured quasar, $\mathbf{y}_n$, independently.
 Conditioned on a basis~${B_k, k=1,\dots, K}$, our goal is to draw posterior samples of $\mathbf{w}_n$, $m_n$ and $z_n$ for each $n$.  
@@ -412,12 +383,12 @@ The unnormalized posterior can be expressed
   p(\mathbf{w}_n, m_n, z_n | \mathbf{y}_n, B)
   &\propto p(\mathbf{y}_n | \mathbf{w}_n, m_n, z_n, B) p(\mathbf{w}_n, m_n, z_n) \end{align}
 where the left likelihood term is defined in Equation~\ref{eq:phot}. 
-Note that due to analytic intractability, we numerically integrate expressions involving $\int_\Lambda f_n^{(obs)}(\lambda) d\lambda$.
+Note that due to analytic intractability, we numerically integrate expressions involving $\int_\Lambda f_n^{(obs)}(\lambda) d\lambda$ and $S_b(\lambda)$.
 Because the observation $\mathbf{y}_n$ can often be well explained by various redshifts and weight settings, the resulting marginal posterior, $p(z_n | \mathbf{X}, \mathbf{y}_n, B)$, is often multi-modal, with regions of near zero probability between modes.
 Intuitively, this is due to the information loss in the SED-to-photometric flux integration step.
 
 This multi-modal property is problematic for many standard MCMC techniques. 
-Naive Metropolis-Hastings would have to jump between modes or travel through a region of near-zero probability, resulting in slow mixing.  
+Single chain MCMC methods have to jump between modes or travel through a region of near-zero probability, resulting in slow mixing.  
 To combat this effect, we use parallel tempering \cite{brooks2011handbook}, a method that is well-suited to constructing Markov chains on multi-modal distributions.
 Parallel tempering instantiates~$C$ independent chains, each sampling from the target distribution raised to an inverse temperature.
 Given a target distribution, $\pi(x)$, the constructed chains sample 
@@ -427,7 +398,7 @@ At each iteration, swaps between chains are proposed and accepted with a standar
 \begin{align}
   \Pr(\text{accept swap } c, c') = \frac{ \pi_c(x_{c'}) \pi_{c'}(x_c) }{ \pi_c(x_c) \pi_{c'}(x_{c'}) } \, .
 \end{align}
-Within each chain, we use component-wise slice sampling \cite{neal2003slice} to generate samples that leave each chain's distribution invariant.  Slice-sampling is a (relatively) tuning-free MCMC method, a convenient property when sampling from thousands of independent posteriors. MCMC diagnostics and comparisons to single-chain samplers are available in the supplemental material.  
+Within each chain, we use component-wise slice sampling \cite{neal2003slice} to generate samples that leave each chain's distribution invariant.  Slice-sampling is a (relatively) tuning-free MCMC method, a convenient property when sampling from thousands of independent posteriors. We found parallel tempering to be essential for convincing posterior simulations. MCMC diagnostics and comparisons to single-chain samplers are available in the supplemental material.  
 
 
 %---------------------------------------------------------------------------------
@@ -471,27 +442,31 @@ Within each chain, we use component-wise slice sampling \cite{neal2003slice} to 
 %----------------------------------------------------------------------------------
 \section{Experiments and Results}
 \label{sec:experiments}
-We fit our model to three training sets composed of spectroscopically measured quasars from the DR10QSO dataset \cite{paris2014sloan} with confirmed redshifts in the range ${z \in (.01,  5.85)}$.  
-Our experiments split the data in three ways: (i) randomly, (ii) by $r$-band fluxes, (iii) by redshift values.  In split (ii), we train on the brightest 90\% of quasars, and test on a subset of the remaining.  Split (iii) takes the lowest 85\% of quasars as training data, and a subset of the brightest 15\% as test cases.  Splits (ii) and (iii) are intended to test the method's robustness to different training and testing distributions, mimicking the discovery of fainter and farther sources.  
+We conduct three experiments to test our model, where each experiment measures redshift predictive accuracy for a different train/test split of spectroscopically measured quasars from the DR10QSO dataset \cite{paris2014sloan} with confirmed redshifts in the range ${z \in (.01,  5.85)}$.  Our experiments split train/test in the following ways: (i) randomly, (ii) by $r$-band fluxes, (iii) by redshift values.  In split (ii), we train on the brightest 90\% of quasars, and test on a subset of the remaining.  Split (iii) takes the lowest 85\% of quasars as training data, and a subset of the brightest 15\% as test cases.  Splits (ii) and (iii) are intended to test the method's robustness to different training and testing distributions, mimicking the discovery of fainter and farther sources.  
 For each split, we find a MAP estimate of the basis, $B_1, \dots, B_K$, and weights, $\mathbf{w}_n$ to use as a prior for photometric inference.  For computational purposes, we limit our training sample to a random subsample of 2,000 quasars.   
 The following sections outline the resulting model fit and inferred SEDs and redshifts. 
 
+\paragraph{Basis validation} We examined multiple choices of $K$ using out of sample likelihood on a validation set.  In the following experiments we set $K=4$, which balances generalizability and computational tradeoffs.  Discussion of this validation is provided in the supplementary material. 
+%Following \cite{budavari2001photometric} we set ${K = 4}$, and note that this is also the number of PCA components that have been shown to carry over 90\% of the variation of quasar spectroscopy~\cite{suzuki2006quasar}.  
+%This value could also be fit using model-checking methods for latent factorization models, which we do not address for computational reasons.
+
+
+
 %----- -------------------------------------------------
 \begin{figure}[t]
-\vskip -.1in
 \floatbox[{\capbeside\thisfloatsetup{capbesideposition={right,top},capbesidewidth=5.5cm}}]{figure}[\FBwidth]
 { 
   \caption{%
 Top: MAP estimate of the latent bases ${B = \{B_k\}_{k=1}^K}$.
 Note the different ranges of the $x$-axis (wavelength).
-Each basis function distributes its mass across different regions of the spectrum to explain different salient features of quasar spectra in the rest-frame.
+Each basis function distributes its mass across different regions of the spectrum to explain different salient features of quasar spectra in the rest frame.
 Bottom: model reconstruction of a training-sample SED. }
   \label{fig:basis}
 }
 {
-  \hskip -.2in \includegraphics[width=.55\textwidth]{../figs/rank_4_basis-random}
+  \hskip -.2in \includegraphics[width=.55\textwidth]{../figs/rank_4_basis-random.png}
 }
-\includegraphics[width=.99\textwidth]{../figs/idx_4_rank_4_reconstruction.pdf}
+\includegraphics[width=.99\textwidth]{../figs/idx_4_rank_4_reconstruction.png}
 \vskip -.2in
 \end{figure}
 
@@ -501,7 +476,8 @@ Bottom: model reconstruction of a training-sample SED. }
 We depict a MAP estimate of $B_1, \dots, B_K$ in Figure~\ref{fig:basis}.
 Our basis decomposition enjoys the benefit of physical interpretability due to our density-estimate formulation of the problem.
 Basis $B_4$ places mass on the Lyman-$\alpha$ peak around 1,216~$\angstrom$, allowing the model to capture the co-occurrence of more peaked SEDs with a bump around 1,550~$\angstrom$.  
-Furthermore, because of the flexible nonparametric priors on $B_k$ our model automatically learned this feature from the data.
+Basis $B_1$ captures the H-$\alpha$ emission line at around 6,500~$\angstrom$.  
+Because of the flexible nonparametric priors on $B_k$ our model is able to automatically learn these features from data. 
 The positivity of the basis and weights distinguishes our model from PCA-based methods, which sacrifice physical interpretability.   
 
 \paragraph{Photometric measurements}
@@ -509,43 +485,39 @@ For each test quasar, we construct an 8-chain parallel tempering sampler and run
 %Given posterior samples of~$z_n$, we formulate two point estimates: the posterior mean and the location with highest posterior mode.
 %To determine this location, we choose the sample with highest probability under a kernel density estimate of the samples with a fixed bandwidth, ${\beta = .08}$.  
 Given posterior samples of~$z_n$, we take the posterior mean as a point estimate.  
-Figure~\ref{fig:vs} compares the posterior mean to spectroscopic measurements (for three different data-split experiments), where the gray lines denote posterior sample quantiles. 
-
-We see that in general there is a strong correspondence between spectroscopically measured redshift and our posterior estimate.
+Figure~\ref{fig:vs} compares the posterior mean to spectroscopic measurements (for three different data-split experiments), where the gray lines denote posterior sample quantiles.  
+In general there is a strong correspondence between spectroscopically measured redshift and our posterior estimate.
 In cases where the posterior mean is off, our distribution often covers the spectroscopically confirmed value with probability mass.
 This is clear upon inspection of posterior marginal distributions that exhibit extreme multi-modal behavior.  
-To combat this multi-modality, it is necessary to inject the model with more information to eliminate plausible hypotheses; this information could come from another measurement (e.g., a new photometric band), or from structured prior knowledge over the relationship between $z_n, \mathbf{w}_n$, and $m_n$.  Our method simply fits independent mixtures of Gaussians to spectroscopically confirmed data to formulate a prior distribution.  However, incorporating dependencies between $z_n$, $\mathbf{w}_n$ and $m_n$, similarly to the XDQSOz technique, will be incorporated in future work. 
-
+To combat this multi-modality, it is necessary to inject the model with more information to eliminate plausible hypotheses; this information could come from another measurement (e.g., a new photometric band), or from structured prior knowledge over the relationship between $z_n, \mathbf{w}_n$, and $m_n$.  Our method simply fits a mixture of Gaussians to the spectroscopically measured $\mathbf{w}_n, m_n$ sample to formulate a prior distribution.  However, incorporating dependencies between $z_n$, $\mathbf{w}_n$ and $m_n$, similar to the XDQSOz technique, will be incorporated in future work. 
 
 
 %----- Red Shift, spec vs photo -------------------------------------------------
 \begin{figure}[t]
-\vskip -.16in
 \begin{center}
-  \includegraphics[height=.34\textwidth]{{scatter_exp-random}.pdf}
-  \includegraphics[height=.34\textwidth]{{scatter_exp-flux}.pdf}
-  \includegraphics[height=.34\textwidth]{{scatter_exp-redshift}.pdf}
+  \includegraphics[height=.34\textwidth]{{scatter_exp-random}.png}
+  \includegraphics[height=.34\textwidth]{{scatter_exp-flux}.png}
+  \includegraphics[height=.34\textwidth]{{scatter_exp-redshift}.png}
 \end{center}
 \vskip -.16in
 \caption{%
-Comparison of spectroscopically ($x$-axis) and photometrically ($y$-axis) measured redshifts from the SED model for three different data splits.  The left reflects a random selection of 4,000 quasars from the DR10QSO dataset.  The right graph reflects a selection tof 4,000 test quasars from the upper 15\% ($z_{cutoff} \approx 2.7$), where all training was done on lower redshifts.  The red estimates are posterior means. 
+Comparison of spectroscopically ($x$-axis) and photometrically ($y$-axis) measured redshifts from the SED model for three different data splits.  The left reflects a random selection of 4,000 quasars from the DR10QSO dataset.  The right graph reflects a selection of 4,000 test quasars from the upper 15\% ($z_{cutoff} \approx 2.7$), where all training was done on lower redshifts.  The red estimates are posterior means. 
 }
 \label{fig:vs}
 \end{figure}
 %-------------------------------------------------------
 %-----  -------------------------------------------------
 \begin{figure*}[t]
-\vskip -.16in
 \centerline{
-\includegraphics[height=.22\textwidth]{../figs/quasar_plots/quasar_490_mcmc_recon.pdf}
-\includegraphics[height=.22\textwidth]{../figs/quasar_plots/quasar_490_posterior_z}
+\includegraphics[height=.21\textwidth]{../figs/quasar_plots/quasar_490_mcmc_recon.png}
+\includegraphics[height=.21\textwidth]{../figs/quasar_plots/quasar_490_posterior_z.png}
 } 
 \centerline{
-\includegraphics[height=.22\textwidth]{../figs/quasar_plots/quasar_214_mcmc_recon.pdf}
-\includegraphics[height=.22\textwidth]{../figs/quasar_plots/quasar_214_posterior_z}
+\includegraphics[height=.21\textwidth]{../figs/quasar_plots/quasar_214_mcmc_recon.png}
+\includegraphics[height=.21\textwidth]{../figs/quasar_plots/quasar_214_posterior_z.png}
 }
 \caption{Left: inferred SEDs from photometric data.  
-The black line is a PCA-based model fit to the full spectral data.  
+The black line is a smoothed approximation to the ``true'' SED using information from the full spectral data.  
 The red line is a sample from the posterior, $f^{(obs)}_n(\lambda) | \mathbf{X}, \mathbf{y}_n, B$, which imputes the entire SED from only five flux measurements.  
 Note that the bottom sample is from the left mode, which under-predicts redshift.   
 Right: corresponding posterior predictive distributions, $p(z_n | \mathbf{X}, \mathbf{y}_n, B)$.  The black line marks the spectroscopically confirmed redshift; the red line marks the posterior mean. Note the difference in scale of the $x$-axis.}
@@ -557,9 +529,9 @@ Right: corresponding posterior predictive distributions, $p(z_n | \mathbf{X}, \m
 \subsection{Comparisons}
 We compare the performance of our redshift estimator with two recent photometric redshift estimators, XDQSOz \cite{bovy2012photometric} and a neural network \cite{brescia2013photometric}.
 The method in \cite{bovy2012photometric} is a conditional density estimator that discretizes the range of one flux band (the $i$-band) and fits a mixture of Gaussians to the joint distribution over the remaining fluxes and redshifts. 
-One disadvantage to this approach is there there is no physical significance to the mixture of Gaussians. 
+One disadvantage to this approach is there there is no physical significance to the mixture of Gaussians, and no model of the latent SED.  
 Furthermore, the original method trains and tests the model on a pre-specified range of $i$-magnitudes, which is problematic when predicting redshifts on much brighter or dimmer stars. 
-The method from \cite{brescia2013photometric} employs a neural network with two hidden layers, and the SDSS fluxes as inputs
+The regression approach from \cite{brescia2013photometric} employs a neural network with two hidden layers, and the SDSS fluxes as inputs. 
 More features (e.g., more photometric bands) can be incorporated into all models, but we limit our experiments to the five SDSS bands for the sake of comparison.  
 Further detail on these two methods and a broader review of ``photo-z'' approaches are available in the supplementary material.  
 
@@ -568,8 +540,7 @@ We compute mean absolute error (MAE), mean absolute percentage error (MAPE), and
 Table~\ref{tab:error} compares prediction errors for the three different approaches (XD, NN, Spec). %We also quantify average prediction error and posterior quantile interval coverage for sets of quasars with increasing redshift.  
 Our experiments show that accurate redshift measurements are attainable even when the distribution of training set is different from test set by directly modeling the SED itself. Our method dramatically outperforms \cite{bovy2012photometric} and \cite{brescia2013photometric} in split (iii), particularly for very high redshift fluxes.  
 We also note that our training set is derived from only 2,000 examples, whereas the training set for XDQSOz and the neural network were $\approx$ 80,000 quasars and 50,000 quasars, respectively.  This shortcoming can be overcome with more sophisticated inference techniques for the non-negative basis.  Despite this, the SED-based predictions are comparable.
-  
-Furthermore, because we are directly modeling the latent SED, our method admits a posterior estimate of the entire SED.
+Additionally, because we are directly modeling the latent SED, our method admits a posterior estimate of the entire SED.
 Figure~\ref{fig:recon} displays posterior SED samples and their corresponding redshift marginals for test-set quasars inferred from only SDSS photometric measurements.  
 %Our experiments suggest that the SED-based model using a physical generative process will make better predictions for quasars with very different properties from the training set.
 
@@ -590,10 +561,9 @@ Figure~\ref{fig:recon} displays posterior SED samples and their corresponding re
 %----------------------------------------------------------------------------------
 %----------------------------------------------------------------------------------
 \section{Discussion}
-We have presented a generative model to combine two sources of information at very different spectral resolutions to form an estimate of the latent spectral energy distribution of quasars.
-We described the details of the model, its implied structure, and a computationally tractable MCMC-based inference algorithm. 
+We have presented a generative model of two sources of information at very different spectral resolutions to form an estimate of the latent spectral energy distribution of quasars.
+We also described an efficient MCMC-based inference algorithm for computing posterior statistics given photometric observations. 
 Our model accurately predicts and characterizes uncertainty about redshifts from only photometric observations and a small number of separate spectroscopic examples. 
-%Our experiments showed the utility of our model for the task of inferring quasar redshift from photometric data, showing that we can accurately predict and characterize uncertainty about redshift values with a small number of spectroscopic examples.  
 Moreover, we showed that we can make reasonable estimates of the unobserved SED itself, from which we can make inferences about other physical properties informed by the full SED.  
  
 We see multiple avenues of future work.
@@ -614,9 +584,9 @@ The combination of SED and spatial appearance modeling and computationally effic
 % Acknowledgements should only appear in the accepted version. 
 %\textbf{Do not} include acknowledgements in the initial version of
 %the paper submitted for blind review.
-%\section*{Acknowledgments} 
-%This work is supported by the Applied Mathematics Program within the Office of Science Advanced Scientific Computing Research of the U.S. Department of Energy under contract No. DE-AC02-05CH11231. This work used resources of the National Energy Research Scientific Computing Center (NERSC). We would like to thank Tina Butler, Tina Declerck and Yushu Yao for their assistance.
-
+\section*{Acknowledgments} 
+The authors would like to thank Matthew Hoffman and members of the HIPS lab for helpful discussions.  
+This work is supported by the Applied Mathematics Program within the Office of Science Advanced Scientific Computing Research of the U.S. Department of Energy under contract No. DE-AC02-05CH11231. This work used resources of the National Energy Research Scientific Computing Center (NERSC). We would like to thank Tina Butler, Tina Declerck and Yushu Yao for their assistance.  
 % ACM: thank dougal and scott for code
 %If a paper is accepted, the final camera-ready version can (and
 %probably should) include acknowledgements. In this case, please

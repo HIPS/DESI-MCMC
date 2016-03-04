@@ -1,7 +1,7 @@
 """
   Galaxy (single source) conditional distributions and gradients 
 """
-import numpy as np
+import autograd.numpy as np
 import CelestePy.mixture_profiles as mp
 from autograd import grad
 import CelestePy.util.like as like_util
@@ -119,7 +119,7 @@ def gen_galaxy_transformation(sig_s, rho_s, phi_s):
 galaxy_profs = [mp.get_exp_mixture(), mp.get_dev_mixture()]
 galaxy_prof_dict = dict(zip(['exp', 'dev'], galaxy_profs))
 
-def gen_galaxy_prof_psf_image(prof_type, R, u, img, return_patch=True):
+def gen_galaxy_prof_psf_image(prof_type, R, u, img, return_patch=True, xlim=None, ylim=None):
     """ generate the profile galaxy psf image given:
             - prof_type : either 'exp' or 'dev'
             - R_s       : the rotation of the ellipse (like a Cholesky
@@ -142,10 +142,14 @@ def gen_galaxy_prof_psf_image(prof_type, R, u, img, return_patch=True):
            gal_prof_sigs = galaxy_prof_dict[prof_type].var[:,0,0] #np.ndarray[FLOAT_t, ndim=1] gal_prof_sigs,
     )
 
-    ERROR = 0.01
+    ERROR = 0.00001
     bound = calc_bounding_radius(weights, means, covars, ERROR, center=v_s)
-    minx_b, maxx_b = max(0, int(v_s[0] - bound)), min(int(v_s[0] + bound + 1), img.nelec.shape[1])
-    miny_b, maxy_b = max(0, int(v_s[1] - bound)), min(int(v_s[1] + bound + 1), img.nelec.shape[0])
+    if xlim is not None and ylim is not None:
+        minx_b, maxx_b = xlim
+        miny_b, maxy_b = ylim
+    else:
+        minx_b, maxx_b = max(0, int(v_s[0] - bound)), min(int(v_s[0] + bound + 1), img.nelec.shape[1])
+        miny_b, maxy_b = max(0, int(v_s[1] - bound)), min(int(v_s[1] + bound + 1), img.nelec.shape[0])
     y_grid = np.arange(miny_b, maxy_b, dtype=np.float)
     x_grid = np.arange(minx_b, maxx_b, dtype=np.float)
     xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
@@ -166,19 +170,24 @@ def gen_galaxy_prof_psf_image(prof_type, R, u, img, return_patch=True):
     return psf_grid, (0, psf_grid.shape[0]), (0, psf_grid.shape[1])
 
 
-def gen_galaxy_psf_image(th, u_s, img, check_overlap = True, unconstrained = True, return_patch=True):
-    """ generates the profile of a combination of exp/dev images.  
-        Calls the above function twice - once for each profile, and adds them 
+def gen_galaxy_psf_image(th, u_s, img, xlim=None, ylim=None,
+                                       check_overlap = True,
+                                       unconstrained = True,
+                                       return_patch=True):
+    """ generates the profile of a combination of exp/dev images.
+        Calls the above function twice - once for each profile, and adds them
         together
     """
     #unpack skew/location
     theta_s, sig_s, phi_s, rho_s = th[0:4]
     u_s       = np.array(u_s, dtype=np.float)
     R_s       = gen_galaxy_transformation(sig_s, rho_s, phi_s)
-    f_nms_exp, ylime, xlime = gen_galaxy_prof_psf_image('exp', R_s, u_s, img,
-                                                        return_patch=return_patch)
-    f_nms_dev, ylimd, xlimd = gen_galaxy_prof_psf_image('dev', R_s, u_s, img,
-                                                        return_patch=return_patch)
+    f_nms_exp, ylime, xlime = \
+        gen_galaxy_prof_psf_image('exp', R_s, u_s, img,
+                                  return_patch=return_patch, xlim=xlim, ylim=ylim)
+    f_nms_dev, ylimd, xlimd = \
+        gen_galaxy_prof_psf_image('dev', R_s, u_s, img,
+                                  return_patch=return_patch, xlim=xlim, ylim=ylim)
     #take the two patches above, align them, and return a single patch
     xlim = (np.min([xlime[0], xlimd[0]]), np.max([xlime[1], xlimd[1]]))
     ylim = (np.min([ylime[0], ylimd[0]]), np.max([ylime[1], ylimd[1]]))

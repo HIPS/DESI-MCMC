@@ -2,110 +2,66 @@ import astrometry.util.fits as aufits
 import tractor.sdss as sdss
 import astrometry.sdss as asdss
 from CelestePy.util.bound.bounding_box import get_bounding_boxes_idx
+from CelestePy.util.data import make_fits_images, tractor_src_to_celestepy_src
 import numpy as np
 import matplotlib.pyplot as plt
 
-from CelestePy.util.data.get_data import tractor_src_to_celestepy_src
 from CelestePy.celeste import FitsImage
+from CelestePy.celeste_galaxy_conditionals import gen_galaxy_psf_image
 
 BANDS = ['u', 'g', 'r', 'i', 'z']
 
-def make_fits_images(run, camcol, field):
-    """gets field files from local cache (or sdss), returns UGRIZ dict of 
-    fits images"""
-    print """==================================================\n\n
-            Grabbing image files from the cache.
-            TODO: turn off the tractor printing... """
+############################################
+# TODO: factor this out into celeste.py -  #
+############################################
+#def gen_point_source_psf_image_with_fluxes(src_params, fits_image, return_patch=True, psf_grid=None):
+#    src_img, ylim, xlim  = gen_point_source_psf_image(src_params.u, fits_image, return_patch=True, psf_grid=psf_grid)
+#    flux     = src_params.fluxes[BANDS.index(fits_image.band)]
+#    src_img *= (flux / fits_image.calib) * fits_image.kappa
+#    return src_img, ylim, xlim
+#
+#def gen_celeste_image(src_params, fits_image):
+#    if src_params.a == 0:
+#        src_img, ylim, xlim = gen_point_source_psf_image_with_fluxes(src_params, fits_image)
+#    else:
+#        src_img, ylim, xlim = gen_galaxy_psf_image(
+#            th = [src_params.theta, src_params.sigma, src_params.phi, src_params.rho],
+#            u_s = src_params.u,
+#            img = fits_image)
+#    return src_img, ylim, xlim
 
-    imgs = {}
-    for band in BANDS:
-        print "reading in band %s" % band
-        imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
 
-    fn = asdss.DR9().retrieve('photoField', run, camcol, field)
-    F = aufits.fits_table(fn)
-
-    # convert to FitsImage's
-    imgfits = {}
-    for iband,band in enumerate(BANDS):
-        print "converting images %s" % band
-        frame   = asdss.DR9().readFrame(run, camcol, field, band)
-        calib   = np.median(frame.getCalibVec())
-        gain    = F[0].gain[iband]
-        darkvar = F[0].dark_variance[iband]
-        sky     = np.median(frame.getSky())
-
-        imgfits[band] = FitsImage(band,
-                                  timg=imgs[band],
-                                  calib=calib,
-                                  gain=gain,
-                                  darkvar=darkvar,
-                                  sky=sky)
-    return imgfits
-
-def gen_point_source_psf_image_with_fluxes(src_params, fits_image, return_patch=True, psf_grid=None):
-    src_img, ylim, xlim  = gen_point_source_psf_image(src_params.u, fits_image, return_patch=True, psf_grid=psf_grid)
-    flux     = src_params.fluxes[BANDS.index(fits_image.band)]
-    src_img *= (flux / fits_image.calib) * fits_image.kappa
-    return src_img, ylim, xlim
-
-def compare_small_patch(src_params, imgfits):
+def compare_small_patch(tractor_srcs, imgfits):
     """reads in a known image and source and compares our model 
     generation to the tractor's """
-    run = 125
-    camcol = 1
-    field = 17
 
-    # read in sources, images
-    srcs = sdss.get_tractor_sources_dr9(run, camcol, field)
-    imgfits = make_fits_images(run, camcol, field)
-
-    # track down the brightest sources in this field for sanity checking
-    rbrightnesses = np.array([src.getBrightnesses()[0][2] for src in srcs])
+    # determine brightest sources - look at those first
+    rbrightnesses = np.array([src.getBrightnesses()[0][2] for src in tractor_srcs])
     bright_i      = np.argsort(rbrightnesses)
-    for i in bright_i[:50]:
-        print i, srcs[i]
 
-    i = bright_i[31]
-    src = srcs[i]
-    src_params = tractor_src_to_celestepy_src(src)
-    print "New source:", src_params
+    # grab one of the sources, plot celeste rendering of it and some statistics
+    i           = bright_i[10]
+    src         = tractor_srcs[i]
+    celeste_src = tractor_src_to_celestepy_src(src)
+    print "    visualizing source %d : "%i
+    print "      tractor params      : ", src
+    print "      celeste params      : ", src_params
 
     # plot the CelestePy model image with Tractor Parameters as a sanity check
     BANDS_TO_PLOT = ['r', 'i']
-    fig, axarr = plt.subplots(len(BANDS_TO_PLOT), 3)
+    fig, axarr = plt.subplots(len(BANDS_TO_PLOT), 4)
     for bi, b in enumerate(BANDS_TO_PLOT):
-        if src_params.a == 0:
-            src_img, ylim, xlim = gen_point_source_psf_image_with_fluxes(src_params, imgfits[b])
-        else:
-            src_img, ylim, xlim = gen_galaxy_psf_image(src_params, imgfits[b]);
 
-        # grab patches
+        # generate a celeste image patch
+        src_img, ylim, xlim = gen_celeste_image(celeste_src, imgfits[b])
+
+        # grab corresponding data patch - subtract out sky noise
         dpatch = imgfits[b].nelec[ylim[0]:ylim[1], xlim[0]:xlim[1]]
         dpatch -= np.median(dpatch)
-        mpatch = src_img
 
-        #pixel_loc = imgfits[b].equa2pixel(src_params.u)
-        #minx, maxx = pixel_loc[0] - 25, pixel_loc[0] + 25
-        #miny, maxy = pixel_loc[1] - 25, pixel_loc[1] + 25
-
-        #dpatch = imgfits[b].nelec[miny:maxy, minx:maxx]
-        #dpatch -= np.median(dpatch)
-        #mpatch = src_img[miny:maxy, minx:maxx]
-
-        # check how good bounding box is
-        #bound = imgfits[b].R
-        #minx_b, maxx_b = pixel_loc[0] - bound, pixel_loc[0] + bound
-        #miny_b, maxy_b = pixel_loc[1] - bound, pixel_loc[1] + bound
-
-        #total_pixels = np.sum(np.sum(src_img))
-        #bounded_pixels = np.sum(np.sum(src_img[miny_b:maxy_b, minx_b:maxx_b]))
-        #percent_diff = np.abs(total_pixels - bounded_pixels) / total_pixels * 100
-        #print "Total pixels:", total_pixels
-        #print "Bounded pixels:", bounded_pixels
-        #print "% off:", percent_diff
-
+        # plot the image
         axarr[bi,0].imshow(dpatch)
+        axarr[bi,0].set_title("%s band (data)")
         axarr[bi,1].imshow(mpatch)
         dim = axarr[bi,2].imshow( (dpatch - mpatch) )
         axarr[bi,2].set_title('diff (mean = %2.2f)'%np.mean(dpatch-mpatch))
@@ -118,7 +74,8 @@ def compare_small_patch(src_params, imgfits):
     axarr[0,0].set_title('data patch')
     axarr[0,1].set_title('model patch')
     fig.tight_layout()
-    plt.show()
+    plt.savefigure("patch_comparison.pdf", bbox_inches='tight')
+    plt.close("all")
 
 
 #####################
@@ -137,21 +94,14 @@ def main(imgfits, srcs):
             if src_params.a == 0:
                 f_s, ylim, xlim = gen_point_source_psf_image_with_fluxes(src_params, imgfits[band], return_patch=True)
             elif src_params.a == 1:
-                f_s, ylim, xlim = gen_galaxy_psf_image(src_params, imgfits[band]);
+                f_s, ylim, xlim = gen_galaxy_psf_image(
+                th = [src_params.theta, src_params.sigma, src_params.phi, src_params.rho],
+                u_s = src_params.u,
+                img = imgfits[b])
 
             modelims[band][ylim[0]:ylim[1], xlim[0]:xlim[1]] += f_s * src_params.fluxes[j]
 
     return modelims
-
-
-def gen_src_image_with_fluxes(src, img):
-    if src.a == 0:
-        f_s, ylim, xlim = gen_point_source_psf_image_with_fluxes(src, img)
-    elif src.a == 1:
-        psf_img, ylim, xlim = gen_galaxy_psf_image(src, img)
-        gal_flux = (src.fluxes[BANDS.index(img.band)] / img.calib ) * img.kappa
-        f_s      = gal_flux * psf_img
-    return f_s, ylim, xlim
 
 
 def sample_source_photons_single_image(img, srcs):
@@ -222,20 +172,49 @@ def sample_source_photons_single_image(img, srcs):
 
 
 if __name__ == '__main__':
-    run = 125
-    camcol = 1
-    field = 17
-    tsrcs = sdss.get_tractor_sources_dr9(run, camcol, field)
-    imgfits = make_fits_images(run, camcol, field)
 
-    # list of images, list of celeste sources
-    imgs = [imgfits[b] for b in BANDS]
-    srcs = [tractor_src_to_celestepy_src(s) for s in tsrcs]
+    ##############################################
+    # load in a full field and tractor sources   #
+    #############################################
+    run, camcol, field = 125, 1, 17
+    tsrcs              = sdss.get_tractor_sources_dr9(run, camcol, field)
+    imgfits            = make_fits_images(run, camcol, field)
+    imgs               = [imgfits[b] for b in BANDS]
+    srcs               = [tractor_src_to_celestepy_src(s) for s in tsrcs]
 
-    compare_small_patch(None, imgs)
-    raise "noooo"
+    # stack into array - for comparison
+    bands = ['u', 'g', 'r', 'i', 'z']
+    flux_array = np.array([s.fluxes for s in srcs])
+    tractor_fluxes = pd.DataFrame(flux_array, columns=bands)
 
-    ###### GIBBS SAMPLE SOURCE PHOTONS ##########
+    #############################################
+    # initialize celeste model
+    #############################################
+    import CelestePy.models as models
+    reload(models)
+    model = models.Celeste(
+            star_flux_prior_distn = None,
+            gal_flux_prior_distn  = None,
+            # patch epsilon options 
+            )
+
+    # for each run/camcol/field, add a data
+    model.add_field(img_dict = imgfits)
+    model.initialize_sources(init_src_params=srcs)
+
+    # do a gibbs step
+    model.field_list[0].resample_photons(model.srcs)
+    model.srcs[0].resample()
+    model.resample_model()
+
+
+
+    # debug plot code
+    #compare_small_patch(None, imgs)
+    #raise "noooo"
+
+
+        ###### GIBBS SAMPLE SOURCE PHOTONS ##########
     ##
     ## 1.  for each image, sample the source specific counts (Z_{n,m,s})
     ##

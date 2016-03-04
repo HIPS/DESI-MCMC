@@ -62,7 +62,9 @@ Cambridge, MA 02138 \\
 %\end{align}
 %Some observed quasar spectra and their ``de-redshifted'' rest frame spectra are depicted in Figure~\ref{fig:frames}.
 
-\section{Gaussian process priors}
+\section{Prior Specification}
+
+\subsection{Gaussian process priors}
 We use a Gaussian process prior to model the complicated shape of quasar SEDs.  GPs allow us to flexibly encode our prior beliefs about the structure and shape of a function. 
 A Gaussian process (GP) is a stochastic process, ${f: \mathcal{X} \rightarrow \R}$, such that any finite collection of random variables, ${f(x_1),\dots, f(x_N) \in \R}$, is distributed according to a multivariate normal distribution.  
 GPs are frequently used as priors over unknown functions, $f$, where the random variables $f(x_1), \dots, f(x_N)$ correspond to evaluations of the function at inputs ${x_1, \dots, x_N \in \mcX}$.  
@@ -79,6 +81,44 @@ where ${r = |x_1 - x_2|}$, and $K_\nu$ is a modified Bessel function.  The param
 We choose the Mat\'{e}rn covariance function for its ability to trade off between smooth and flexible sample paths.  
 Because this covariance is strictly a function of the distance between two points in the space $\mcX$, it is said to be stationary. 
 See \cite{rasmussen2006gaussian} for a thorough treatment of Gaussian processes in machine learning. 
+
+Our prior over basis $B_k$ is a normalized log-Gaussian process, which is distributed
+\begin{align}
+	\beta_k &\sim \mathcal{GP}(0, K_\theta) \\
+	B_k &= \frac{\exp(\beta_k)}{ \int \exp(\beta_k(\lambda)) d\lambda} \, .
+\end{align}
+We use the above construction and resort to numerical integration to normalize the one-dimensional basis functions in our implementation. 
+
+\subsection{Weight and Redshift Priors}
+In the photometric inference task, we define priors over $\mbw$, $m$, and $z$ before computing posterior samples.  We place a flat prior over $z \in [0, 8]$.  For the vector of weights, $\mbw_k$, we use the statistics of the spectroscopic sample to determine a prior.  That is, we fit the non-negative basis and loadings model to $N_{spec} \approx 2,000$ full BOSS spectra, which gives us basis loadings for each spectroscopically measured quasar, $\mathbf{w}_n$ for $n = 1, \dots, N_{spec}$.  
+We use this sample as a prior distribution over weights.  Specifically, we fit a mixture of Gaussians to the logit-space variables, $\omega_1, \dots, \omega_{K-1}$, defined 
+\begin{align}
+  \omega_k &= \log(w_k) - \log(w_K) \, & 
+  w_k &= \frac{\exp(\omega_k)}{1 + \sum_{k'} \exp(\omega_{k'})} \, .
+\end{align}
+We determine the number of mixture components by comparing likelihoods on a held-out validation set.  
+We then use this prior on the $\omega$ weights for simulating posterior samples in the photometric model.  
+
+\section{SED to Photometric Band Conversion}
+Given a spectral energy distribution, $f(\lambda)$, expressed in units ${10^{-17} \cdot \text{erg} \cdot \text{cm}^{-2} \cdot \text{s}^{-1} \cdot \angstrom^{-1}}$, we can compute the expected flux observation corresponding to an SDSS photometric band $b$.  
+This flux can be computed by computed by integrating the full object's spectrum,~${m_n \cdot f_n^{(\text{obs})}(\lambda)}$ against the filters.
+For a band~${b \in \{u, g, r, i, z \}}$
+\begin{align}
+  \mu_b(f_n^{(\text{rest})}, z_n) &= \int f^{(\text{obs})}_n(\lambda) \,S_b(\lambda)\, C(\lambda) \,d \lambda \,,
+  & C(\lambda) = \frac{1}{\int S_b(\lambda) d\lambda} \frac{\lambda^2}{c} 10^{(48.6-2.5\cdot 17+22.5)/2.5} \,
+\end{align}
+where $C(\lambda)$ is a conversion factor to go from the units of~$f_n(\lambda)$ to nanomaggies. The values in the expression above correspond to arbitrary zero-points and constants used in astronomical units: $48.6$ is a zero-point for an astronomical measurement called AB magnitude, $17$ is used to match fluxes which are in units of $10^{-17}$ ergs, $22.5$ and $2.5$ are constants used to convert from logarithmic to linear units of brightness, and $c$ is the speed of light in $\angstrom/s$.  
+
+
+
+% and a log-Gaussian process prior over each basis  o
+%We express the joint prior distribution over weights $\mathbf{w}_n$, $\mathbf{w}_m$, and %basis $\{B_k\}$ as:
+%\begin{align}
+%  p( \{ \mathbf{w}_m, z_m \}, &\{ B_k \}, \{ \mathbf{w}_n, z_n \} )  \\
+%    = & p(\{ B_k \}) p( \{ \mathbf{w}_m, z_m \} )  \\
+%      & p( \{ \mathbf{w}_n, z_n \} | \{ \mathbf{w}_m, z_m \} ) 
+%\end{align}
+%where we condition the photometric weights on the spectroscopically fit weights.  
 
 
 
@@ -130,28 +170,38 @@ The method from \cite{brescia2013photometric} employs a neural network with two 
 
 
 \section{Validating $K$}
+\begin{figure}[t]
+\includegraphics[width=.7\textwidth]{../figs/qso_spec_K_validation.pdf}
+\caption{Distribution of predictive likelihoods for held-out spectroscopy data.  We trained a basis model on values $K = 2, 4, 6, 8, 10, 15$, and test out of sample predictive likelihood.  We see that extra bases improve predictive performance for spectroscopy data, however this does not directly translate to predictive performance for photometry data.}
+\label{fig:pred}
+\end{figure}
 
+To validate $K$, we examined the predictive likelihood of the SED model on a set of held-out spectroscopy data.  We fit models for $K = 2, 4, 6, 8, 10, 15$ on 2,000 training quasar spectra and computed the predictive likelihood on a set of 2,000 out of sample quasar spectra.  We found that increasing $K$ improved generalization all the way up to $K = 15$, where it becomes computationally burdensome to compute maximum likelihood estimates without more sophisticated optimization techniques.  The distribution of test likelihoods are depicted in Figure~\ref{fig:pred}.  
+
+However, better generalization for spectroscopy data does not immediately translate into better generalization for photometry data.  We also examined two $K$ values for photometric redshift prediction, $K=4$ and $K=6$.  When inferring redshift and weights from a quasar's photometric data (i.e.~5 real valued flux measurements and their uncertainties), we found that $K=6$ yielded less accurate predictions in terms of mean absolute error and mean absolute percentage error.  
+Our hypothesis is that without a structured prior that relates $z$ and $\mbw$ (similar to XDQSOz), higher values of $K$ make MCMC integration more difficult and underdetermined.  In future work we will specify a model for the interactions between $\mbw$, $z$ and $m$, including potential low-rank structure among the population $\mbw$ matrix.  With more functional bases, it seems necessary to enforce more structure on the weights to yield reasonable estimates in the low-information photometric regime.  
 
 
 \section{MCMC Comparison: Parallel-Tempering vs.~Single Chain}
-This section addresses the choice of slice-sampling within parallel-tempering (PT-SS) versus a single chain slice-sampler (SS).  As mentioned in the main paper, our single-chain method of choice is slice-sampling due to it's ease of implementation and relatively hands-off tuning. 
-Conditioned on a map basis, $B_{mle}$, and photometric fluxes, $\{y, \tau^2\}_{ugriz}$, the posterior over basis loadings and redshift is multimodal.  This makes sense from an information standpoint - because the photometric collection process washes away most of the detailed spectral information, multiple SED hypotheses may suitably explain photometric observations. 
-This phenomenon manifested itself when fitting data, the consequences clear when running multiple independent chains from overdispersed location.  
-When assessing convergence, we 
+This section addresses the choice of slice-sampling within parallel-tempering (PT-SS) versus a single chain slice-sampler (SS).  As mentioned in the main paper, our single-chain method of choice is slice-sampling due to its ease of implementation and relatively hands-off tuning. 
+Conditioned on a map basis, $B_{mle}$, and photometric fluxes, $\{y, \tau^2\}_{ugriz}$, the posterior over basis loadings and redshift is often multimodal.  This intuitively makes sense - because the photometric collection process washes away most of the detailed spectral information, multiple SED hypotheses may suitably explain photometric observations. 
+
+This phenomenon was observed when simulating posterior samples.  Figure~\ref{fig:mcmc_comparison} compares the paths of four single-chain slice samplers to four parallel tempering slice samplers (with 8 temperature levels each).  Single-chain methods seem to struggle with the multimodal structure of the posterior.  The advantage of using parallel tempering is clear.  Table~\ref{fig:mcmc_table} compares three MCMC diagnostic statistics that indicate that the parallel-tempering sampler outperforms the single-chain algorithm. 
 
 \begin{figure}
 \includegraphics[width=.9\textwidth]{../figs/mcmc_comparison/mcmc_comparison.pdf}
 \includegraphics[width=.8\textwidth]{../figs/mcmc_comparison/mcmc_comparison_hist.pdf}
 \caption{\textbf{Top}: multiple trace plots for the redshift parameter, $z$.  The uppermost graph is the trace of four independent parallel-tempering + slice-sampling (PT-SS) chains.  Second graph depicts four independent slice-sampling (SS) only chains.  These chains have clearly not converged (and are extremely slow to converge). \textbf{Bottom}: resulting histograms from the two methods (each trace is afforded its own color).  It's clear that PT-SS is more consistently recovering posterior structure, whereas SS is getting stuck in small areas of the posterior. Note that the true redshift value is $z=2.39$, located in the middle of the right mode of the well-sampled posterior. }
+\label{fig:mcmc_comparison}
 \end{figure}
 
 \begin{table}
 \input{../figs/mcmc_comparison/mcmc_comparison_table.tex}	
-\caption{Comparison of MCMC diagnostic statistics.  $\hat r$ refers to the potential scale reduction factor.  $N_{eff}$ is a measure of effective sample size based on between and within chain variance \cite{gelman2014bayesian}.  ESS is a measurement of effectively independent samples based on autocorrelation. Details can be found in \cite{gelman2011inference}.  We found parallel-tempering to consistently outperform a single chain, especially in our ``many-posterior'' tuning-free setting.}
+\caption{Comparison of MCMC diagnostic statistics.  $\hat r$ refers to the potential scale reduction factor \cite{gelman2011inference}.  $N_{eff}$ is a measure of effective sample size based on between and within-chain variance \cite{gelman2014bayesian}.  ESS is a measurement of effectively independent samples based on autocorrelation.  We found parallel-tempering to consistently outperform a single chain, especially in our ``many-posterior'' tuning-free setting.}
+\label{fig:mcmc_table}
 \end{table}
 
-
-
+\clearpage
 
 \bibliographystyle{plain}
 \bibliography{../refs}

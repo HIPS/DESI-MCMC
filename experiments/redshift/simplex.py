@@ -16,7 +16,7 @@ def logit(p):
     Note: this is the inverse transformation of logistic
     """
     x = np.log(p) - np.log(p[:,-1,np.newaxis])
-    x -= x[:,-1,np.newaxis]
+    #x -= x[:,-1,np.newaxis]
     return x[:,:-1]
 
 

@@ -45,7 +45,8 @@ class FitsImage():
           - nelec = NxM array : number of electrons corresponding to each 
                                 pixel, indexed nelec[y, x]
     """
-    def __init__(self, band, 
+    def __init__(self, band,
+            filename           = None,
             fits_file_template = None,
             timg               = None,
             exposure_num       = 0,
@@ -56,6 +57,10 @@ class FitsImage():
         self.band      = band
         if fits_file_template:
             self.band_file = fits_file_template%band
+            self.img       = fitsio.FITS(self.band_file)[exposure_num].read()
+            header         = fitsio.read_header(self.band_file, ext=exposure_num)
+        elif filename is not None:
+            self.band_file = filename
             self.img       = fitsio.FITS(self.band_file)[exposure_num].read()
             header         = fitsio.read_header(self.band_file, ext=exposure_num)
         elif timg:
@@ -70,7 +75,7 @@ class FitsImage():
         # Compute the number of electrons, resource: 
         # http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
         # (Neither of these look like integers)
-        if fits_file_template:
+        if fits_file_template or filename:
             self.dn    = self.img / header["CALIB"] + header["SKY"]
             self.nelec = np.round(self.dn * header["GAIN"])
         else:
@@ -83,9 +88,9 @@ class FitsImage():
 
         # reference points
         # TODO: Does CRPIX1 refer to the first axis of self.img ?? 
-        self.rho_n = np.array([header['CRPIX1'], header['CRPIX2']])  # PIXEL REFERENCE POINT
-        self.phi_n = np.array([header['CRVAL1'], header['CRVAL2']])  # EQUA REFERENCE POINT
-        self.Ups_n = np.array([[header['CD1_1'], header['CD1_2']],   # MATRIX takes you into EQUA TANGENT PLANE
+        self.rho_n = np.array([header['CRPIX1'], header['CRPIX2']]) -1  # PIXEL REFERENCE POINT (fits stores it 1-based indexing)
+        self.phi_n = np.array([header['CRVAL1'], header['CRVAL2']])     # EQUA REFERENCE POINT
+        self.Ups_n = np.array([[header['CD1_1'], header['CD1_2']],      # MATRIX takes you into EQUA TANGENT PLANE
                                [header['CD2_1'], header['CD2_2']]])
         self.Ups_n_inv = np.linalg.inv(self.Ups_n)
 
@@ -157,7 +162,7 @@ class FitsImage():
 
     def pixel2equa(self, s_pixel):
         phi1rad = self.phi_n[1] / 180. * np.pi
-        s_iwc   = np.dot(self.Ups_n, s_pixel - self.rho_n) 
+        s_iwc   = np.dot(self.Ups_n, s_pixel - self.rho_n)
         s_equa = np.array([ s_iwc[0]/np.cos(phi1rad) + self.phi_n[0], 
                                     s_iwc[1] + self.phi_n[1] ])
         return s_equa

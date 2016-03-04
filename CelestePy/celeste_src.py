@@ -1,9 +1,8 @@
 import numpy as np
 
 class SrcParams():
-    """ source parameter object
-
-
+    """ source parameter object - contains a list of both star and galaxy
+        parameters with names that roughly match the celeste model conventions
         Input:
           u : 2-d np.array holdin right ascension and declination
           b : Total brightness/flux.  Equal to 
@@ -26,6 +25,13 @@ class SrcParams():
           t : effective temperature of source (in Kelvin)
           ell : luminosity of source (in Suns)
           d : distance to source (in light years)
+
+        gal params: 
+            theta : exponential mixture weight. (1 - theta = devac mixture weight)
+            sigma : radius of galaxy object (in arcsc > 0)
+            rho   : axis ratio, dimensionless, in [0,1]
+            phi   : radians, "E of N" 0=direction of increasing Dec, 90=direction of increasting RAab
+
     """
     # define source parameter D_type
     src_dtype = [ ('a', 'u1'),

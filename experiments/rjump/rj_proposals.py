@@ -218,7 +218,7 @@ if __name__=="__main__":
 
         # verify galaxy
         fig, axarr = plt.subplots(1, 2)
-        axarr[0].contourf(xx, yy, lams[:,:,0])
+        axarr[0].contourf(xx, yy, lams[:,:,2])
         axarr[1].contourf(xx, yy, image.nelec[yy,xx])
         plt.show()
 

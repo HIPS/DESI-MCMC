@@ -28,7 +28,98 @@ from CelestePy.celeste_src import SrcParams
 
 import pickle
 
+
+# constnats 
 BANDS = ['u', 'g', 'r', 'i', 'z']
+
+#
+# Get a UGRIZ dictionary of fits images (only works for DR8+ fields)
+#
+def make_fits_images(run, camcol, field):
+    """gets field files from local cache (or sdss), returns UGRIZ dict of 
+    fits images"""
+    print """==================================================\n\n
+            Grabbing image files from the cache.
+            TODO: turn off the tractor printing... """
+
+    imgs = {}
+    for band in BANDS:
+        print "reading in band %s" % band
+        imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
+
+    fn = asdss.DR9().retrieve('photoField', run, camcol, field)
+    F = aufits.fits_table(fn)
+
+    # convert to FitsImage's
+    imgfits = {}
+    for iband,band in enumerate(BANDS):
+        print "converting images %s" % band
+        frame   = asdss.DR9().readFrame(run, camcol, field, band)
+        calib   = np.median(frame.getCalibVec())
+        gain    = F[0].gain[iband]
+        darkvar = F[0].dark_variance[iband]
+        sky     = np.median(frame.getSky())
+        imgfits[band] = FitsImage(band,
+                                  timg=imgs[band],
+                                  calib=calib,
+                                  gain=gain,
+                                  darkvar=darkvar,
+                                  sky=sky)
+    return imgfits
+
+
+def photoobj_to_celestepy_src(photoobj_row):
+    """Conversion between tractor source object and our source object...."""
+    u = photoobj_row[['ra', 'dec']].values
+
+    # brightnesses are stored in mags (gotta convert to nanomaggies)
+    def mags2nanomaggies(mags):
+        return np.power(10., (mags - 22.5)/-2.5)
+
+    mags   = photoobj_row[['psfMag_%s'%b for b in ['u', 'g', 'r', 'i', 'z']]].values
+    fluxes = [mags2nanomaggies(m) for m in mags]
+
+    # photoobj type 3 are gals, type 6 are stars
+    if photoobj_row.type == 6:
+        return SrcParams(u, a=0, fluxes=fluxes)
+    else:
+
+        # compute frac dev/exp 
+        prob_dev = np.mean(photoobj_row[['fracDeV_%s'%b for b in BANDS]])
+
+        # galaxy A/B estimate, angle, and radius
+        devAB      = np.mean(photoobj_row[['deVAB_%s'%b for b in BANDS]])
+        devRad     = np.mean(photoobj_row[['deVRad_%s'%b for b in BANDS]])
+        devPhi     = np.mean(photoobj_row[['deVPhi_%s'%b for b in BANDS]])
+        expAB      = np.mean(photoobj_row[['expAB_%s'%b for b in BANDS]])
+        expRad     = np.mean(photoobj_row[['expRad_%s'%b for b in BANDS]])
+        expPhi     = np.mean(photoobj_row[['expPhi_%s'%b for b in BANDS]])
+
+        #estimate - mix over frac dev/exp
+        AB  = prob_dev * devAB + (1. - prob_dev) * expAB
+        Rad = prob_dev * devRad + (1. - prob_dev) * expRad
+        Phi = prob_dev * devPhi + (1. - prob_dev) * expPhi
+
+        ## galaxy flux esimates
+        devFlux = np.array([mags2nanomaggies(m) for m in
+                                photoobj_row[['deVMag_%s'%b for b in BANDS]]])
+        expFlux = np.array([mags2nanomaggies(m) for m in
+                                photoobj_row[['expMag_%s'%b for b in BANDS]]])
+        fluxes = prob_dev * devFlux + (1. - prob_dev) * expFlux
+
+        #theta : exponential mixture weight. (1 - theta = devac mixture weight)
+        #sigma : radius of galaxy object (in arcsc > 0)
+        #rho   : axis ratio, dimensionless, in [0,1]
+        #phi   : radians, "E of N" 0=direction of increasing Dec, 90=direction of increasting RAab
+        return SrcParams(u,
+                         a      = 1,
+                         v      = u,
+                         theta  = 1.0-prob_dev,
+                         phi    = Phi * np.pi / 180. + np.pi / 2,
+                         sigma  = Rad,
+                         rho    = AB,
+                         fluxes = fluxes)
+
 
 def tractor_src_to_celestepy_src(tsrc):
     """Conversion between tractor source object and our source object...."""
@@ -391,4 +482,58 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     pickle.dump(all_data, output)
 
     return timg,info
+
+
+
+#
+# Code to put together URLs for DR7 fields
+#
+def get_sdss_dr7_frame_url(run, camcol, field, band, rerun=40):
+    # url to "corrected" frame 
+    url_base  = "http://das.sdss.org/imaging/{run}/{rerun}/corr/{camcol}/" . \
+                    format(rerun=rerun, run=run, camcol=camcol)
+    file_name = "fpC-{run}-{band}{camcol}-{field}.fit.gz" . \
+                    format(run="%06d"%run, band=band, camcol=camcol, field="%04d"%field)
+    url = os.path.join(url_base, file_name)
+
+    # psField url
+    psurl_base = "http://das.sdss.org/imaging/{run}/{rerun}/objcs/{camcol}/" . \
+                      format(rerun=rerun, run=run, camcol=camcol)
+    psfield     = "psField-{run}-{camcol}-{field}.fit".format(run="%06d"%run, camcol=camcol, field="%04d"%field)
+    psfield_url = os.path.join(psurl_base, psfield)
+
+    # calibration statistics url
+    calib_base = "http://das.sdss.org/imaging/{run}/{rerun}/calibChunks/{camcol}/" .\
+                        format(rerun=rerun, run=run, camcol=camcol)
+    calib      = "tsField-{run}-{camcol}-{rerun}-{field}.fit".format(run="%06d"%run, camcol=camcol, field="%04d"%field, rerun=rerun)
+    calib_url  = os.path.join(calib_base, calib)
+    return url, psfield_url, calib_url
+
+def get_sdss_dr7_frame(run, camcol, field, band, rerun=40):
+    url, psfield_url, calib_url = \
+        get_sdss_dr7_frame_url(run, camcol, field, band, rerun)
+
+    # download files if necessary
+    import wget
+    if not os.path.exists(img_filename):
+        img_filename = wget.download(url)
+    if not os.path.exists(ps_filename):
+        ps_filename  = wget.download(psfield_url)
+
+    # load calibration data to get sky noise
+    ps_data  = fitsio.FITS(ps_filename)[6].read()
+
+    # create fitsfile
+    img_data = fitsio.FITS(img_filename)[0].read()
+    img_header = fitsio.read_header(img_filename)
+
+    import CelestePy.fits_image as fits_image
+    reload(fits_image)
+    imgfits = fits_image.FitsImage(band,
+                              timg=imgs[band],
+                              calib=1.,
+                              gain=gain,
+                              darkvar=darkvar,
+                              sky=0.)
+
 

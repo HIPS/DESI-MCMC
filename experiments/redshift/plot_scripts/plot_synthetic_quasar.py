@@ -2,10 +2,10 @@ import numpy as np
 import fitsio
 import sys
 sys.path.append("../..")
-import planck
+#import planck
 from scipy import interpolate
-from celeste import FitsImage, celeste_likelihood_multi_image, gen_model_image
-from util.init_utils import load_imgs_and_catalog
+#from celeste import FitsImage, celeste_likelihood_multi_image, gen_model_image
+#from util.init_utils import load_imgs_and_catalog
 import numpy as np
 import matplotlib.pyplot as plt
 from redshift_utils import load_data_clean_split, project_to_bands
@@ -14,6 +14,9 @@ import scipy.integrate as integrate
 
 ## grab some plotting defaults
 import seaborn as sns
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 sns.set_style("white")
 current_palette = sns.color_palette()
 
@@ -75,26 +78,27 @@ plt.xticks(fontsize=15)
 plt.savefig(out_dir + "quasar_redshift_rest_frame.pdf", bbox_inches = 'tight')
 
 ## plot a bunch in it's own directory
-full_out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/quasar_specs/" 
-full_idx = np.arange(0, qtrain['spectra'].shape[0], 5)
-for idx in full_idx: 
-    fig = plt.figure(figsize=(20,6))
-    lam_rest = lam_obs / (1 + qtrain['Z'][idx])
-    plt.plot(lam_rest, qtrain['spectra'][idx, :].T, label="z = %2.2f"%qtrain['Z'][idx], linewidth=1)
-    plt.plot(lam_rest, qtrain['spectra_ivar'][idx, :].T, label="inv var", color='grey', alpha=.5, linewidth=.3)
-    plt.title("Quasar (training # %d)"%idx)
-    plt.xlabel("wavelength")
-    plt.ylabel("$f(\lambda)$", fontsize=18)
-    plt.xlim(500, 4500)
-    plt.legend()
-    plt.savefig(full_out_dir + "quasar_spectra_%d.png"%idx, bbox_inches = 'tight')
-    #plt.close('all')
+#full_out_dir = "/Users/acm/Dropbox/Proj/astro/DESIMCMC/tex/quasar_z/quasar_specs/" 
+#full_idx = np.arange(0, qtrain['spectra'].shape[0], 5)
+#for idx in full_idx: 
+#    fig = plt.figure(figsize=(20,6))
+#    lam_rest = lam_obs / (1 + qtrain['Z'][idx])
+#    plt.plot(lam_rest, qtrain['spectra'][idx, :].T, label="z = %2.2f"%qtrain['Z'][idx], linewidth=1)
+#    plt.plot(lam_rest, qtrain['spectra_ivar'][idx, :].T, label="inv var", color='grey', alpha=.5, linewidth=.3)
+#    plt.title("Quasar (training # %d)"%idx)
+#    plt.xlabel("wavelength")
+#    plt.ylabel("$f(\lambda)$", fontsize=18)
+#    plt.xlim(500, 4500)
+#    plt.legend()
+#    plt.savefig(full_out_dir + "quasar_spectra_%d.png"%idx, bbox_inches = 'tight')
+#    #plt.close('all')
 
 ## plot example spectrograph and overlay SDSS filter bands 
 #normalize first spectral density
 
 ## plot double
-spec_file = glob("../../data/DR10QSO/specs/spec-*-*-*.fits")[5]
+#spec_file = glob("../../data/DR10QSO/specs/spec-*-*-*.fits")[5]
+spec_file = glob("/Users/acm/Dropbox/Proj/astro/SEDModel/SpecExperiments/local_data/QSO/spec-*-*-*.fits")[11]
 sdf = fitsio.FITS(spec_file)
 spec_flux = sdf[1]['flux'].read()
 spec_lam  = np.power(10., sdf[1]['loglam'].read())
@@ -110,6 +114,7 @@ plt.xlabel("wavelength $(\AA)$", fontsize=20)
 plt.ylabel("$f^{(obs)}(\lambda)$", fontsize=20)
 colors = ['g', 'r', 'c', 'm', 'y', 'k']
 plt.plot(spec_lam, 2.5*spec_flux/normalizer, label="SED", linewidth=2, alpha=.95)
+import CelestePy.planck as planck
 for n, b in enumerate(planck.bands): 
     plt.plot(planck.wavelength_lookup[b] * 1e10, 
              planck.sensitivity_lookup[b], 
@@ -127,7 +132,7 @@ plt.close('all')
 ## plot corresponding fluxes and uncertainties 
 fig = plt.figure(figsize=(6, 4))
 xs = np.arange(5)
-plt.bar(xs, psf_flux, alpha=.4, width=.8, yerr = 2*np.sqrt(1./spec_ivar),
+plt.bar(xs, psf_flux, alpha=.4, width=.8, yerr = 2*np.sqrt(1./psf_flux_ivar),
         error_kw = {'linewidth':5},
         color=sns.color_palette()[1], label='PSFFLUX')
 plt.legend(loc='upper left', fontsize=18)
@@ -182,14 +187,14 @@ import matplotlib
 
 idxs = [11, 4] # 23] #, 4]
 fig, axarr = plt.subplots(2, 1, figsize=(18, 6))
-for idx in idxs:
-    quasar_spectra[idx, quasar_spectra[idx,:].argmax()] = 0
+#for idx in idxs:
+#    quasar_spectra[idx, quasar_spectra[idx,:].argmax()] = 0
 
 ## plot OBSERVATION frame
 for idx in idxs:
     axarr[0].plot(lam_obs, quasar_spectra[idx, :].T, label="$z = %2.2f$"%quasar_z[idx], alpha=.75)
-axarr[0].set_ylim(0, 25) #quasar_spectra[idxs, :].max())
-axarr[0].set_xlim(900, lam_obs.max()-2000)
+#axarr[0].set_ylim(0, 25) #quasar_spectra[idxs, :].max())
+#axarr[0].set_xlim(900, lam_obs.max()-2000)
 axarr[0].legend(fontsize='xx-large')
 axarr[0].set_title("Red-shift comparison of quasar spectra")
 axarr[0].set_ylabel("$f^{(obs)}(\lambda)$", fontsize=18)
@@ -206,15 +211,14 @@ for idx in idxs:
                                    transform = fig.transFigure)
     fig.lines.append(line)
 
-axarr[1].set_ylim(0, 25) # quasar_spectra[idxs, :].max())
-axarr[1].set_xlim(900, lam_obs.max()-2000)
+#axarr[1].set_ylim(0, 25) # quasar_spectra[idxs, :].max())
+#axarr[1].set_xlim(900, lam_obs.max()-2000)
 axarr[1].legend(fontsize='xx-large')
 #axarr[1].title("Red-shift comparison of quasar spectra")
 axarr[1].set_xlabel("wavelength $(\AA)$", fontsize=18)
 axarr[1].set_ylabel("$f^{(rest)}(\lambda)$", fontsize=18)
 #axarr[1].set_xticklabels(fontsize=15)
-plt.show()
-
+#plt.show()
 plt.savefig(out_dir + "quasar_redshift_example.pdf", bbox_inches = 'tight')
 
 

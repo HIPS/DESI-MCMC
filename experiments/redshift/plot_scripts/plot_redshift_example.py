@@ -2,19 +2,20 @@
 import fitsio
 import sys
 sys.path.append("../..")
-import planck
 from scipy import interpolate
-from celeste import FitsImage, celeste_likelihood_multi_image, gen_model_image
-from util.init_utils import load_imgs_and_catalog
+#from celeste import F0itsImage, celeste_likelihood_multi_image, gen_model_image
+#from util.init_utils import load_imgs_and_catalog
 import numpy as np
 import matplotlib.pyplot as plt
 from redshift_utils import load_data_clean_split, project_to_bands
 from glob import glob
 import scipy.integrate as integrate
-import matplotlib
 
 ## grab some plotting defaults
 import seaborn as sns
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 sns.set_style("white")
 current_palette = sns.color_palette()
 

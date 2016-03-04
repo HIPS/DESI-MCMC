@@ -1,12 +1,11 @@
-import sys
-import os.path
-from CelestePy.util.like import gmm_like_2d, gmm_like, ein_gmm_like
-from scipy.stats import multivariate_normal
 from scipy.misc import logsumexp
 import numpy as np
-import timeit
 
 def test_multivariate_normal_log_pdf():
+    from scipy.stats import multivariate_normal
+    from CelestePy.util.like import multivariate_normal_logpdf, multivariate_normal
+    import CelestePy.util.like.gmm_like_fast as gmlf
+
     np.random.seed(41)
     K = 3
     means = 2*np.random.randn(K*2).reshape(K, 2)
@@ -62,6 +61,9 @@ def test_multivariate_normal_log_pdf():
 
 
 def test_gmm_like():
+    from CelestePy.util.like.gmm_like_fast import gmm_like_2d
+    from CelestePy.util.like import gmm_prob, multivariate_normal
+    # gen random distributions
     np.random.seed(41)
     K = 42
     means = 2*np.random.randn(K*2).reshape(K, 2)
@@ -84,9 +86,7 @@ def test_gmm_like():
     X      = np.column_stack((xx.ravel(), yy.ravel()))
 
     ## test different methods
-    ll_fast = gmm_like(X, ws, means, covs)
-
-    #%lprun -m CelestePy.util.like.gmm_like ll_ein = ein_gmm_like(X, ws, means, covs)
+    ll_fast = gmm_prob(X, ws, means, covs)
     ll_faster = np.zeros(X.shape[0])
     gmm_like_2d(ll_faster, x=X.astype(np.float), 
                            ws=ws.astype(np.float),
@@ -99,16 +99,18 @@ def test_gmm_like():
         ll[:,k] = multivariate_normal(mean = means[k,:],
                                       cov  = covs[k,:,:]).logpdf(X) + np.log(ws[k])
     ll_slow = np.exp(logsumexp(ll, axis=1))
-    assert np.allclose(ll_fast, ll_slow), "fast doesn't match slow"
+    assert np.allclose(ll_faster, ll_slow), "fast doesn't match slow"
     assert np.allclose(ll_faster, ll_fast), "faster doesn't match faster"
     #assert np.allclose(ll_faster, np.log(ll_fastest)), "faster doesn't match cython fastest"
     print "GMM LIKE TESTS PASS"
 
 def time_gmm_like():
+    import timeit
     print "=== Timing GMM likes for speed ==="
     setup = """
 import numpy as np
-from CelestePy.util.like import gmm_like_2d, gmm_like
+from CelestePy.util.like import gmm_prob
+from CelestePy.util.like.gmm_like_fast import gmm_like_2d
 np.random.seed(41)
 K = 42
 means = 2*np.random.randn(K*2).reshape(K, 2)
@@ -140,7 +142,7 @@ gmm_like_2d(ll_faster, x=X.astype(np.float),
 
     num_reps = 30
     gmm_cython = timeit.timeit(cython_string, setup, number = num_reps) / num_reps
-    gmm_numpy  = timeit.timeit("gmm_like(X, ws, means, covs)", setup, number=num_reps) / num_reps
+    gmm_numpy  = timeit.timeit("gmm_prob(X, ws, means, covs)", setup, number=num_reps) / num_reps
     print "Cython Time: %2.4f per call"%gmm_cython
     print "Numpy  Time: %2.4f per call"%gmm_numpy
     print "Cython is %2.2f times faster"%(gmm_numpy / gmm_cython) 
@@ -148,5 +150,5 @@ gmm_like_2d(ll_faster, x=X.astype(np.float),
 
 if __name__ == "__main__":
     #test_multivariate_normal_log_pdf()
-    test_gmm_like()
+    #test_gmm_like()
     time_gmm_like()
