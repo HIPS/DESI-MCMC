@@ -18,6 +18,7 @@ def create_matched_dataset(primary_df, coadd_df):
     N = primary_df.shape[0]
     good_match = np.ones((N,), dtype=bool)      # is this primary source a match?
     match_idx  = np.zeros((N,), dtype=np.int)   # which coadd_idx is the match?
+    dists      = np.zeros((N,))
     for i in xrange(N):
         # find closest coadd to primary_i
         ra, dec      = primary_df[['ra', 'dec']].values[i, :]
@@ -35,6 +36,7 @@ def create_matched_dataset(primary_df, coadd_df):
         dist2 = np.sqrt(np.sum(diff2**2))  # dist to second closest
         if dist1 > 1e-4 or (dist2 / dist1) < 3:
             good_match[i] = False
+            dists[i] = dist1
 
     # make matched dataframe 
     coadd_match_df = coadd_df.iloc[match_idx]
@@ -43,7 +45,7 @@ def create_matched_dataset(primary_df, coadd_df):
     primary_matched = primary_df[ good_match ]
     coadd_matched   = coadd_match_df[ good_match ] 
 
-    return primary_matched, coadd_matched
+    return primary_matched, coadd_matched, dists
 
 
 def df_from_fits(filename, i=1):
@@ -62,17 +64,18 @@ if __name__=="__main__":
     ###################################################
     # load in each catalog file as a pandas dataframe #
     ###################################################
-    test_primary_fn = "square_6425_4.fit"
+    test_primary_fn = "square_4263_4.fit"
     test_coadd_fn   = "square_106_4.fit"
     primary_df      = df_from_fits(test_primary_fn)
     coadd_df        = df_from_fits(test_coadd_fn)
 
     # create a matched dataset - coadd source (ground truth) to 
     # primary sources (baseline)
-    primary_matched, coadd_matched = create_matched_dataset(primary_df, coadd_df)
+    primary_matched, coadd_matched, dists = create_matched_dataset(primary_df, coadd_df)
 
 
     import matplotlib.pyplot as plt
+    import seaborn as sns
     plt.ion()
     plt.scatter(coadd_matched['psfMag_r'], primary_matched['psfMag_r'])
     plt.errorbar(coadd_matched['psfMag_r'], primary_matched['psfMag_r'],
@@ -81,10 +84,22 @@ if __name__=="__main__":
     ylo, yhi  = np.percentile(primary_matched['psfMag_r'], [1, 99])
     plt.plot([ylo, yhi], [ylo, yhi])
     plt.ylim((ylo, yhi))
+    plt.xlim((ylo, yhi))
     plt.xlabel("coadd R mags")
     plt.ylabel("primary R mags")
     plt.show()
     plt.close("all")
+
+
+    ##### visualize distance #######
+    abs_error = np.abs(coadd_matched['psfMag_r'].values - primary_matched['psfMag_r'].values)
+    err_order = np.argsort(abs_error)
+    plt.scatter(abs_error[err_order], dists[err_order]) 
+    plt.ylim((dists.min(), dists.max()))
+    plt.xlabel("Absolute R Mag Error")
+    plt.ylabel("Distance between coadd center and primary center")
+    plt.title("Matched Source Distance and Coadd Error")
+    plt.show()
 
 
     # look at some statistics of the error

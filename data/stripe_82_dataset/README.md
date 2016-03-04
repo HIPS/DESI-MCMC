@@ -40,3 +40,16 @@ WHERE ra BETWEEN 37.5 AND 38.5
   AND camcol = 4
 ```
 
+* `square_4263_4.fit` includes another non-coadd fit to the same area of sky,
+but uses a DR8+ run (4263).
+
+```
+SELECT *
+INTO MyDB.square_4263_4
+FROM Stripe82.photoobj
+WHERE ra BETWEEN 37.5 AND 38.5 
+  AND dec > 0 AND dec < 1
+  AND run = 4263
+  AND camcol = 4
+```
+
