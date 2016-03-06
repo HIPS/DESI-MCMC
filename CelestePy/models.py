@@ -9,6 +9,7 @@ import CelestePy.celeste_mcmc as cel_mcmc
 import CelestePy.util.data as du
 from  CelestePy import celeste
 import CelestePy.celeste_galaxy_conditionals as gal_funs
+from CelestePy.util.infer.slicesample import slicesample
 import pyprind
 
 class Celeste:
@@ -45,6 +46,26 @@ class Celeste:
             assert k in self.bands, "Celeste model doesn't support band %s"%k
         self.field_list.append(Field(img_dict))
 
+    @property
+    def source_types(self):
+        return np.array([s.object_type for s in self.srcs])
+
+    def get_brightest(self, object_type='star', num_srcs=1, band='r', return_idx=False):
+        """return brightest sources (by source type, band)"""
+        fluxes      = np.array([s.params.flux_dict[band] for s in self.srcs])
+        type_idx    = np.where(self.source_types == object_type)[0]
+        type_fluxes = fluxes[type_idx]
+        type_idx    = type_idx[np.argsort(type_fluxes)[::-1]][:num_srcs]
+        blist       = [self.srcs[i] for i in type_idx]
+        if return_idx:
+            return blist, type_idx
+        else:
+            return blist
+
+    ####################
+    # Resample methods #
+    ####################
+
     def resample_model(self):
         """ resample each field """
         for field in pyprind.prog_bar(self.field_list):
@@ -55,6 +76,9 @@ class Celeste:
         for src in pyprind.prog_bar(self.srcs):
             src.resample()
 
+    #####################
+    # Plotting Methods  #
+    #####################
     def render_model_image(self, roi=None):
         raise NotImplementedError
 
@@ -72,7 +96,7 @@ class Field:
         self.a_0 = 5      # convolution parameter - higher tends to avoid 0
         self.b_0 = .005   # inverse scale parameter
 
-    def resample_photons(self, srcs):
+    def resample_photons(self, srcs, verbose=False):
         """resample photons - store source-specific images"""
 
         # first, clear out old sample images
@@ -83,9 +107,12 @@ class Field:
         # this field.  keep track of photons due to noise
         noise_sums = {}
         for band, img in self.img_dict.iteritems():
-            print " ... resampling band %s " % band
+            if verbose:
+                print " ... resampling band %s " % band
             samp_imgs, noise_sum = \
-                cel_mcmc.sample_source_photons_single_image_cython(img, [s.params for s in srcs])
+                cel_mcmc.sample_source_photons_single_image_cython(
+                    img, [s.params for s in srcs]
+                )
 
             # tell each source to keep track of it's source-specific sampled
             # images (and the image it was stripped out of)
@@ -118,6 +145,12 @@ class Source:
         self.u_upper = self.params.u + .0025
         self.du      = self.u_upper - self.u_lower
 
+        # kept samples for each source
+        self.loc_samps      = []
+        self.flux_samps     = []
+        self.shape_samps    = []
+        self.ll_samps       = []
+
     def clear_sample_images(self):
         self.sample_image_list = []
         #TODO maybe force a garbage collect?
@@ -131,47 +164,73 @@ class Source:
         else:
             return "none"
 
+    @property
+    def location_samples(self):
+        return np.array(self.loc_samps)
+
+    @property
+    def flux_samples(self):
+        return np.array(self.flux_samps)
+
+    @property
+    def shape_samples(self):
+        return np.array(self.shape_samps)
+
+    @property
+    def loglike_samples(self):
+        return np.array(self.ll_samps)
+
     def is_star(self):
         return self.params.a == 0
 
     def is_galaxy(self):
         return self.params.a == 1
 
-    def flux_in_image(self, fits_image):
+    def flux_in_image(self, fits_image, fluxes=None):
         """convert flux in nanomaggies to flux in pixel counts for a 
         particular image """
-        band_flux = (self.params.flux_dict[fits_image.band] / fits_image.calib) * \
-                    fits_image.kappa
+        if fluxes is not None:
+            band_i = ['u', 'g', 'r', 'i', 'z'].index(fits_image.band)
+            f      = fluxes[band_i]
+        else:
+            f = self.params.flux_dict[fits_image.band]
+        band_flux = (f / fits_image.calib) * fits_image.kappa
         return band_flux
 
     ##########################################################################
     # likelihood functions (used by resampling methods, can be overridden)   #
     ##########################################################################
-    def location_likelihood(self, u):
+    def log_likelihood(self, u=None, fluxes=None, shape=None):
+        """ conditional likelihood of source conditioned on photon
+        sampled images """
+        # args passed in or from source's own params
+        u      = self.params.u      if u is None else u
+        fluxes = self.params.fluxes if fluxes is None else shape
+        shape  = self.params.shape  if shape is None else shape
+
+        # for each source image, compute per pixel poisson likelihood term
         ll = 0
         for n, (samp_img, fits_img) in enumerate(self.sample_image_list):
-            # grab the patch the sample_image corresponds to (everything else is zero)
+            # grab the patch the sample_image corresponds to (every other 
+            # pixel is a zero value)
             ylim, xlim = (samp_img.y0, samp_img.y1), \
                          (samp_img.x0, samp_img.x1)
 
-            # create the scatter image (from psf and galaxy extent) on the patch
+            # photon scatter image (from psf and galaxy extent) aligned w/ patch
             psf_ns, _, _ = \
-                self.compute_scatter_on_pixels(fits_image=fits_img, u=u,
+                self.compute_scatter_on_pixels(fits_image=fits_img,
+                                               u=u, shape=shape,
                                                ylim=ylim, xlim=xlim)
-            # compute the sum over the lamba outside the range
-            #lambda_outside = np.sum(fits_img.weights) - np.sum(psf_ns)
 
             # convert parameter flux to fits_image specific photon count flux
-            band_flux   = self.flux_in_image(fits_img)
+            band_flux = self.flux_in_image(fits_img, fluxes=fluxes)
             if psf_ns is None:
                 ll_img = - band_flux * np.sum(fits_img.weights)
-                #print "psf_ns is none!", ll_img
                 ll    += ll_img
                 continue
 
             # compute model patch means and the sum of means outside patch (should be small...)
             model_patch   = band_flux * psf_ns
-            #model_outside = band_flux * lambda_outside
 
             # compute poisson likelihood of each pixel - note that 
             # the last term would be sum(model_patch) - model_outside, which is 
@@ -179,7 +238,7 @@ class Source:
             mask  = (model_patch > 0.)
             ll_img = np.sum( np.log(model_patch[mask]) * 
                              np.array(samp_img.data)[mask] ) - \
-                         band_flux*np.sum(fits_img.weights)
+                             band_flux*np.sum(fits_img.weights)
 
             ### debug
             if np.isnan(ll_img):
@@ -190,14 +249,26 @@ class Source:
             ll += ll_img
         return ll
 
+    def location_likelihood(self, u):
+        return self.log_likelihood(u = u)
+
+    def store_sample(self):
+        self.loc_samps.append(self.params.u.copy())
+        self.flux_samps.append(self.params.fluxes.copy())
+        self.shape_samps.append(self.params.shape.copy())
+
+    def store_loglike(self):
+        self.ll_samps.append(self.log_likelihood())
+
     ##########################
     # resampling methods     #
     ##########################
     def resample(self):
+        assert len(self.sample_image_list) != 0, "resample source needs sampled images"
         self.resample_fluxes()
         self.resample_location()
-        self.resample_shape()
-        self.resample_type()
+        #self.resample_shape()
+        #self.resample_type()
 
     def resample_type(self):
         #TODO: call reversible jump move
@@ -208,13 +279,13 @@ class Source:
         """ conditionally resample location of source """
         if u is None:
             u = self.params.u.copy()
-        from CelestePy.util.infer.slicesample import slicesample
         u, ll = slicesample(init_x   = u,
                             logprob  = lambda u: self.location_likelihood(u),
                             step     = self.du/5,
                             step_out = False,
                             upper_bound = self.u_upper,
                             lower_bound = self.u_lower)
+        self.params.u = u
         return u
 
     def resample_shape(self):
@@ -247,7 +318,7 @@ class Source:
         b_n    = b_0 + np.array([psf_sums[b] for b in bands])
         self.params.fluxes = np.random.gamma(a_n, 1./b_n)
 
-    def compute_scatter_on_pixels(self, fits_image, epsilon=.0001, u=None, xlim=None, ylim=None):
+    def compute_scatter_on_pixels(self, fits_image, u=None, shape=None, epsilon=.0001, xlim=None, ylim=None):
         """ compute how photons will be scattered spatially on fits_image, 
         subselecting only the pixels with  > epsilon probability of seeing a 
         photon.
@@ -263,15 +334,14 @@ class Source:
                                                    xlim=xlim, ylim=ylim)
             return patch, ylim, xlim
         elif self.is_galaxy():
-            gal_th = np.array([self.params.theta, self.params.sigma,
-                               self.params.phi,   self.params.rho])
+            if shape is None:
+                shape = self.params.shape
             patch, ylim, xlim = \
-                gal_funs.gen_galaxy_psf_image(gal_th, u, fits_image,
+                gal_funs.gen_galaxy_psf_image(shape, u, fits_image,
                                               xlim=xlim, ylim=ylim,
                                               check_overlap=True,
                                               unconstrained=False,
                                               return_patch=True)
-                #celeste.gen_galaxy_psf_image(self.params, fits_image)
             return patch, ylim, xlim
         else:
             raise NotImplementedError, "only stars and galaxies have photon scattering images"
@@ -283,6 +353,9 @@ class Source:
                     fits_image.kappa
         return band_flux * patch, ylim, xlim
 
+    ###################
+    # source plotting #
+    ###################
     def plot(self, fits_image, ax, data_ax=None, diff_ax=None):
         import matplotlib.pyplot as plt; import seaborn as sns;
         from CelestePy.util.misc import plot_util
