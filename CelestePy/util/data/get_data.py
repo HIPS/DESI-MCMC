@@ -32,6 +32,13 @@ import pickle
 # constnats 
 BANDS = ['u', 'g', 'r', 'i', 'z']
 
+# simple converter between mags and nanomaggies
+def mags2nanomaggies(mags):
+    return np.power(10., (mags - 22.5)/-2.5)
+
+def nanomaggies2mags(nanos):
+    return (-2.5)*np.log10(nanos) + 22.5
+
 #
 # Get a UGRIZ dictionary of fits images (only works for DR8+ fields)
 #
@@ -47,7 +54,10 @@ def make_fits_images(run, camcol, field):
         print "reading in band %s" % band
         imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
 
-    fn = asdss.DR9().retrieve('photoField', run, camcol, field)
+    # grab photo field objects - cache in 'sdss_data' if possible
+    if not os.path.exists('sdss_data'):
+        os.makedirs('sdss_data')
+    fn = asdss.DR9(basedir='sdss_data').retrieve('photoField', run, camcol, field)
     F = aufits.fits_table(fn)
 
     # convert to FitsImage's
@@ -73,9 +83,6 @@ def photoobj_to_celestepy_src(photoobj_row):
     u = photoobj_row[['ra', 'dec']].values
 
     # brightnesses are stored in mags (gotta convert to nanomaggies)
-    def mags2nanomaggies(mags):
-        return np.power(10., (mags - 22.5)/-2.5)
-
     mags   = photoobj_row[['psfMag_%s'%b for b in ['u', 'g', 'r', 'i', 'z']]].values
     fluxes = [mags2nanomaggies(m) for m in mags]
 
@@ -115,7 +122,7 @@ def photoobj_to_celestepy_src(photoobj_row):
                          a      = 1,
                          v      = u,
                          theta  = 1.0-prob_dev,
-                         phi    = Phi * np.pi / 180. + np.pi / 2,
+                         phi    = (Phi * np.pi / 180. + np.pi / 2) % np.pi,
                          sigma  = Rad,
                          rho    = AB,
                          fluxes = fluxes)
