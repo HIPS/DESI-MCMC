@@ -135,3 +135,11 @@ class SrcParams():
     def flux_dict(self):
         return {c:v for c, v in zip(['u', 'g', 'r', 'i', 'z'], self.fluxes)}
 
+    @property
+    def shape(self):
+        return np.array([self.theta, self.sigma, self.phi, self.rho])
+
+    @shape.setter
+    def shape(self, shape):
+        self.theta, self.sigma, self.phi, self.rho = shape
+
