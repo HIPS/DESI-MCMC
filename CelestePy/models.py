@@ -12,7 +12,7 @@ import CelestePy.celeste_galaxy_conditionals as gal_funs
 from CelestePy.util.infer.slicesample import slicesample
 import pyprind
 
-class Celeste:
+class CelesteBase(object):
     """ Main model class - interface to user.  Holds a list of
     Source objects, each of which contains local markov chain state, 
     including source parameters, source-sample images"""
@@ -22,14 +22,20 @@ class Celeste:
         self.field_list = []
         self.bands = ['u', 'g', 'r', 'i', 'z']
 
+        #TODO incorporate prior over fluxes
+        self.star_flux_prior_distn = star_flux_prior_distn
+        self.gal_flux_prior_distn  = gal_flux_prior_distn
+        #self.gal_shape_prior_distn = gal_shape_prior_distn
+
     def initialize_sources(self, init_srcs=None, init_src_params=None, photoobj_df=None):
         """ initialize sources after adding fields """
         if init_srcs is not None:
             self.srcs = init_srcs
         elif init_src_params is not None:
-            self.srcs = [Source(s) for s in init_src_params]
+            self.srcs = [self._source_type(s, self) for s in init_src_params]
         elif photoobj_df is not None:
-            self.srcs = [Source(du.photoobj_to_celestepy_src(p)) for (i, p) in photoobj_df.iterrows()]
+            self.srcs = [self._source_type(du.photoobj_to_celestepy_src(p), self)
+                         for (i, p) in photoobj_df.iterrows()]
         else:
             raise NotImplementedError
 
@@ -83,7 +89,7 @@ class Celeste:
         raise NotImplementedError
 
 
-class Field:
+class Field(object):
     """ holds image data associated with a single field """
     def __init__(self, img_dict):
         self.img_dict = img_dict
@@ -118,7 +124,13 @@ class Field:
             # images (and the image it was stripped out of)
             for src, samp_img in zip(srcs, samp_imgs):
                 if samp_img is not None:
-                    src.sample_image_list.append((samp_img, img))
+
+                    # cache pixel grid for each sample image
+                    y_grid = np.arange(samp_img.y0, samp_img.y1, dtype=np.float)
+                    x_grid = np.arange(samp_img.x0, samp_img.x1, dtype=np.float)
+                    xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
+                    pixel_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
+                    src.sample_image_list.append((samp_img, img, pixel_grid))
 
             # keep track of noise sums
             noise_sums[band] = noise_sum
@@ -131,11 +143,11 @@ class Field:
             img.epsilon = np.random.gamma(a_n, 1./b_n)
 
 
-class Source:
+class Source(object):
     """ source object - holds current state of markov chain and implements
     several sampling methods"""
 
-    def __init__(self, params):
+    def __init__(self, params, model):
         self.params = params
         self.sample_image_list = []
 
@@ -164,6 +176,15 @@ class Source:
         else:
             return "none"
 
+    def is_star(self):
+        return self.params.a == 0
+
+    def is_galaxy(self):
+        return self.params.a == 1
+
+    ###############################################################
+    # source store their own location, fluxes, and shape samples  #
+    ###############################################################
     @property
     def location_samples(self):
         return np.array(self.loc_samps)
@@ -180,11 +201,13 @@ class Source:
     def loglike_samples(self):
         return np.array(self.ll_samps)
 
-    def is_star(self):
-        return self.params.a == 0
+    def store_sample(self):
+        self.loc_samps.append(self.params.u.copy())
+        self.flux_samps.append(self.params.fluxes.copy())
+        self.shape_samps.append(self.params.shape.copy())
 
-    def is_galaxy(self):
-        return self.params.a == 1
+    def store_loglike(self):
+        self.ll_samps.append(self.log_likelihood())
 
     def flux_in_image(self, fits_image, fluxes=None):
         """convert flux in nanomaggies to flux in pixel counts for a 
@@ -205,12 +228,12 @@ class Source:
         sampled images """
         # args passed in or from source's own params
         u      = self.params.u      if u is None else u
-        fluxes = self.params.fluxes if fluxes is None else shape
+        fluxes = self.params.fluxes if fluxes is None else fluxes
         shape  = self.params.shape  if shape is None else shape
 
         # for each source image, compute per pixel poisson likelihood term
         ll = 0
-        for n, (samp_img, fits_img) in enumerate(self.sample_image_list):
+        for n, (samp_img, fits_img, pixel_grid) in enumerate(self.sample_image_list):
             # grab the patch the sample_image corresponds to (every other 
             # pixel is a zero value)
             ylim, xlim = (samp_img.y0, samp_img.y1), \
@@ -220,7 +243,8 @@ class Source:
             psf_ns, _, _ = \
                 self.compute_scatter_on_pixels(fits_image=fits_img,
                                                u=u, shape=shape,
-                                               ylim=ylim, xlim=xlim)
+                                               xlim=xlim, ylim=ylim,
+                                               pixel_grid=pixel_grid)
 
             # convert parameter flux to fits_image specific photon count flux
             band_flux = self.flux_in_image(fits_img, fluxes=fluxes)
@@ -252,13 +276,56 @@ class Source:
     def location_likelihood(self, u):
         return self.log_likelihood(u = u)
 
-    def store_sample(self):
-        self.loc_samps.append(self.params.u.copy())
-        self.flux_samps.append(self.params.fluxes.copy())
-        self.shape_samps.append(self.params.shape.copy())
+    def log_likelihood_isolated(self, u=None, fluxes=None, shape=None):
+        """ log likelihood of this source if this is the only patch in the 
+        local area.  This is the same as saying the pixel for lambda_m is only
+        determined by this source's model and the image noise 
+        """
+        # args passed in or from source's own params
+        u      = self.params.u      if u is None else u
+        fluxes = self.params.fluxes if fluxes is None else fluxes
+        shape  = self.params.shape  if shape is None else shape
 
-    def store_loglike(self):
-        self.ll_samps.append(self.log_likelihood())
+        # for each source image, compute per pixel poisson likelihood term
+        ll = 0
+        for n, (samp_img, fits_img, pixel_grid) in enumerate(self.sample_image_list):
+            # grab the patch the sample_image corresponds to
+            ylim, xlim = (samp_img.y0, samp_img.y1), \
+                         (samp_img.x0, samp_img.x1)
+            data_patch = fits_img.nelec[ylim[0]:ylim[1], xlim[0]:xlim[1]]
+
+            # photon scatter image (from psf and galaxy extent) aligned w/ patch
+            psf_ns, _, _ = \
+                self.compute_scatter_on_pixels(fits_image=fits_img,
+                                               u=u, shape=shape,
+                                               pixel_grid=pixel_grid,
+                                               ylim=ylim, xlim=xlim)
+
+            # convert parameter flux to fits_image specific photon count flux
+            band_flux = self.flux_in_image(fits_img, fluxes=fluxes)
+            assert psf_ns is not None, 'source not overlapping - this is a bug fix me.'
+            #if psf_ns is None:
+            #    ll_img = - band_flux * np.sum(fits_img.weights)
+            #    ll    += ll_img
+            #    continue
+
+            # compute model patch means and the sum of means outside patch (should be small...)
+            model_patch = band_flux * psf_ns + fits_img.epsilon
+
+            # compute poisson likelihood of each pixel - note that 
+            # the last term would be sum(model_patch) - model_outside, which is 
+            # just equal to band_flux * sum(fits_img.weights)
+            mask  = (model_patch > 0.)
+            ll_img = np.sum(np.log(model_patch) * np.array(data_patch)) - np.sum(model_patch)
+
+            ### debug
+            if np.isnan(ll_img):
+                print "NAN"
+                print "model patch zeros: ", np.sum(model_patch==0)
+                print "band flux ", band_flux
+
+            ll += ll_img
+        return ll
 
     ##########################
     # resampling methods     #
@@ -308,9 +375,9 @@ class Source:
         bands       = ['u', 'g', 'r', 'i', 'z']
         band_counts = {b: 0 for b in bands}
         psf_sums    = {b: 0 for b in bands}
-        for src_img, fits_img in self.sample_image_list:
+        for src_img, fits_img, pixel_grid in self.sample_image_list:
             band_counts[fits_img.band] += np.sum(np.array(src_img.data))
-            psf_ns, ylim, xlim = self.compute_scatter_on_pixels(fits_img)
+            psf_ns, ylim, xlim = self.compute_scatter_on_pixels(fits_img, pixel_grid)
             psf_sums[fits_img.band] += np.sum(psf_ns) * fits_img.kappa/fits_img.calib
 
         # resample fluxes
@@ -318,12 +385,21 @@ class Source:
         b_n    = b_0 + np.array([psf_sums[b] for b in bands])
         self.params.fluxes = np.random.gamma(a_n, 1./b_n)
 
-    def compute_scatter_on_pixels(self, fits_image, u=None, shape=None, epsilon=.0001, xlim=None, ylim=None):
+    def compute_scatter_on_pixels(self, fits_image, u=None, shape=None, 
+                                        xlim=None, ylim=None,
+                                        pixel_grid=None):
         """ compute how photons will be scattered spatially on fits_image, 
         subselecting only the pixels with  > epsilon probability of seeing a 
         photon.
         For a star, this is just the PSF image.  For a Galaxy, this
         is the convolution of the PSF model with the PSF
+
+        kwargs: 
+          u          : source (ra, dec) location
+          shape      : galaxy shape parameters
+          xlim       : pixel limits to compute scatter (must be within fits_image bounds)
+          ylim       : ''
+          pixel_grid : list of points to evaluate mog (cached for speed)
         """
         #TODO make sure this returns an image with EPSILON error - 
         if u is None:
@@ -331,7 +407,8 @@ class Source:
         if self.is_star():
             patch, ylim, xlim = \
                 celeste.gen_point_source_psf_image(u, fits_image,
-                                                   xlim=xlim, ylim=ylim)
+                                                   xlim=xlim, ylim=ylim,
+                                                   pixel_grid=pixel_grid)
             return patch, ylim, xlim
         elif self.is_galaxy():
             if shape is None:
@@ -362,16 +439,31 @@ class Source:
         patch, ylim, xlim = self.compute_model_patch(fits_image)
         cim = ax.imshow(patch, extent=(xlim[0], xlim[1], ylim[0], ylim[1]))
         plot_util.add_colorbar_to_axis(ax, cim)
+        ax.set_title("model")
 
         if data_ax is not None:
-            dpatch = fits_image.nelec[ylim[0]:ylim[1], xlim[0]:xlim[1]]
+            dpatch = fits_image.nelec[ylim[0]:ylim[1], xlim[0]:xlim[1]].copy()
+            print "Data patch median: ", np.median(dpatch)
             dpatch -= np.median(dpatch)
+            dpatch[dpatch<0] = 0.
             dim = data_ax.imshow(dpatch, extent=(xlim[0], xlim[1], ylim[0], ylim[1]))
             plot_util.add_colorbar_to_axis(data_ax, dim)
+            data_ax.set_title("data")
 
         if diff_ax is not None:
-            dpatch = fits_image.nelec[ylim[0]:ylim[1], xlim[0]:xlim[1]]
+            dpatch = fits_image.nelec[ylim[0]:ylim[1], xlim[0]:xlim[1]].copy()
             dpatch -= np.median(dpatch)
+            dpatch[dpatch<0] = 0.
             dim = diff_ax.imshow((dpatch - patch), extent=(xlim[0], xlim[1], ylim[0], ylim[1]))
             plot_util.add_colorbar_to_axis(diff_ax, dim)
+            msqe  = np.mean((dpatch - patch)**2)
+            smsqe = np.mean((dpatch - patch)**2 / patch)
+            diff_ax.set_title("diff, mse = %2.3f; chi-sq = %2.3f"%(msqe, smsqe))
+
+
+#####################################
+# Instantiate Generic Celeste class #
+#####################################
+class Celeste(CelesteBase):
+    _source_type = Source
 
