@@ -3,8 +3,7 @@
 #
 # Author: Andrew Miller <acm@seas.harvard.edu>
 import fitsio
-import numpy as np
-import scipy.stats
+import autograd.numpy as np
 from util.bound.bounding_box import calc_bounding_radius
 import tractor.sdss as sdss
 
@@ -83,21 +82,23 @@ class FitsImage():
             self.dn    = self.img / calib + sky #timg[0].getSky().val
             self.nelec = np.round(self.dn * gain)
 
+        # make nelec immutable - it is constant data!!
+        self.nelec.flags.writeable = False
         self.shape = self.nelec.shape
         self.pixel_grid = self.make_pixel_grid()  # keep pixel grid around
 
         # reference points
         # TODO: Does CRPIX1 refer to the first axis of self.img ?? 
-        self.rho_n = np.array([header['CRPIX1'], header['CRPIX2']]) -1  # PIXEL REFERENCE POINT (fits stores it 1-based indexing)
+        self.rho_n = np.array([header['CRPIX1'], header['CRPIX2']]) - 1  # PIXEL REFERENCE POINT (fits stores it 1-based indexing)
         self.phi_n = np.array([header['CRVAL1'], header['CRVAL2']])     # EQUA REFERENCE POINT
         self.Ups_n = np.array([[header['CD1_1'], header['CD1_2']],      # MATRIX takes you into EQUA TANGENT PLANE
                                [header['CD2_1'], header['CD2_2']]])
         self.Ups_n_inv = np.linalg.inv(self.Ups_n)
 
-        ###### DEAD CODE ######################################################
-        #astrometry wcs object for pixel x,y to equa ra,dec conversion
-        #self.wcs = WCS(self.band_file) #Tan(self.band_file)
-        #######################################################################
+        #astrometry wcs object for "exact" x,y to equa ra,dec conversion
+        import astropy.wcs as wcs
+        self.wcs = wcs.WCS(self.header)
+        self.use_wcs = False
 
         # set image specific KAPPA and epsilon 
         if fits_file_template:
@@ -154,6 +155,9 @@ class FitsImage():
                (v_s[1] > -pad) and (v_s[1] < self.nelec.shape[1] + pad)
 
     def equa2pixel(self, s_equa):
+        if self.use_wcs:
+            print "using wcs in equa2pixel"
+            return self.wcs.wcs_world2pix(np.atleast_2d(s_equa), 0).squeeze()
         phi1rad = self.phi_n[1] / 180. * np.pi
         s_iwc = np.array([ (s_equa[0] - self.phi_n[0]) * np.cos(phi1rad),
                                    (s_equa[1] - self.phi_n[1]) ])

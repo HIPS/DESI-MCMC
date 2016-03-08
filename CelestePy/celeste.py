@@ -10,9 +10,9 @@
 #       (right ascension and declination), and temperature
 #
 
-import numpy as np
+import autograd.numpy as np
 from autograd import grad
-from scipy.misc import logsumexp
+from autograd.scipy.misc import logsumexp
 import celeste_galaxy_conditionals as gal_funs
 from planck import photons_expected, photons_expected_brightness
 from fits_image import FitsImage
@@ -117,7 +117,8 @@ def gen_point_source_psf_image(
         ylim          = None,      #   by xlim ylimcompute only for this patch
         check_overlap = True,      # speedup to check overlap before computing
         return_patch  = True,      # return the small patch as opposed to large patch (memory/speed purposes)
-        psf_grid      = None       # cached PSF grid to be filled out
+        psf_grid      = None,      # cached PSF grid to be filled out
+        pixel_grid    = None       # Nx2 matrix of discrete pixel values to evaluate mog at
         ):
     """ generates a PSF image (assigns density values to pixels) """
     # compute pixel space location of source
@@ -136,13 +137,19 @@ def gen_point_source_psf_image(
         bound = image.R
         minx_b, maxx_b = max(0, int(v_s[0] - bound)), min(int(v_s[0] + bound + 1), image.nelec.shape[1])
         miny_b, maxy_b = max(0, int(v_s[1] - bound)), min(int(v_s[1] + bound + 1), image.nelec.shape[0])
+        y_grid = np.arange(miny_b, maxy_b, dtype=np.float)
+        x_grid = np.arange(minx_b, maxx_b, dtype=np.float)
+        xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
+        pixel_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
     else:
         miny_b, maxy_b = ylim
         minx_b, maxx_b = xlim
-    y_grid = np.arange(miny_b, maxy_b, dtype=np.float)
-    x_grid = np.arange(minx_b, maxx_b, dtype=np.float)
-    xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
-    pixel_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
+        if pixel_grid is None:
+            y_grid = np.arange(miny_b, maxy_b, dtype=np.float)
+            x_grid = np.arange(minx_b, maxx_b, dtype=np.float)
+            xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
+            pixel_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
+    grid_shape = (maxy_b-miny_b, maxx_b-minx_b)
     psf_grid_small = gmm_like_2d(x       = pixel_grid,
                                  ws      = image.weights,
                                  mus     = image.means + v_s,
@@ -150,7 +157,8 @@ def gen_point_source_psf_image(
 
     # return the small patch and it's bounding box in the bigger fits_image
     if return_patch:
-        return psf_grid_small.reshape(xx.shape, order='C'), (miny_b, maxy_b), (minx_b, maxx_b)
+        return psf_grid_small.reshape(grid_shape, order='C'), \
+               (miny_b, maxy_b), (minx_b, maxx_b)
 
     # instantiate a PSF grid 
     if psf_grid is None:
