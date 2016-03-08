@@ -1,5 +1,5 @@
-import numpy as np
-import scipy.misc as scpm
+import autograd.numpy as np
+import autograd.scipy.misc as scpm
 from scipy.stats import multivariate_normal
 
 def gmm_logprob(x, ws, mus, sigs, invsigs=None, logdets=None):
