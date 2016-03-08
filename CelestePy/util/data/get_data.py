@@ -6,6 +6,7 @@ from datetime import datetime
 import pyfits
 import pylab as plt
 import numpy as np
+import pandas as pd
 
 from tractor.engine import *
 from tractor.basics import *
@@ -163,6 +164,12 @@ def tractor_src_to_celestepy_src(tsrc):
                          sigma=shape[0],
                          rho=shape[1],
                          fluxes=fluxes)
+
+
+def df_from_fits(filename, i=1):
+    """ create a pandas dataframe from a fits file """
+    return pd.DataFrame.from_records(fitsio.FITS(filename)[i].read().byteswap().newbyteorder())
+
 
 def loadTractorSingleImage(run=1752, camcol=3, field=164, bands=['r'],
                            roi=[100,600,100,600], dr='dr9', data_dir='data',
