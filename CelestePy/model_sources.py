@@ -5,6 +5,18 @@ Celeste Source Derived Classes
 from models import Source, CelesteBase
 import autograd.numpy as np
 from autograd import grad
+import cPickle as pickle
+
+#############################
+#source parameter priors    #
+#############################
+import os
+prior_param_dir = os.path.join(os.path.dirname(__file__),
+                               '../experiments/empirical_priors')
+star_flux_mog = pickle.load(open(os.path.join(prior_param_dir, 'star_fluxes_mog.pkl'), 'rb'))
+gal_flux_mog  = pickle.load(open(os.path.join(prior_param_dir, 'gal_fluxes_mog.pkl'), 'rb'))
+gal_shape_mog = pickle.load(open(os.path.join(prior_param_dir, 'gal_shape_mog.pkl'), 'rb'))
+
 
 class SourceGMMPrior(Source):
     def __init__(self, params, model):
@@ -22,7 +34,7 @@ class SourceGMMPrior(Source):
 
         # jointly resample fluxes and location
         th = np.concatenate([self.params.u, self.params.fluxes])
-        loglike = lambda th: self.log_likelihood(u=th[:2], fluxes=th[2:])
+        loglike  = lambda th: self.log_likelihood(u=th[:2], fluxes=th[2:])
 
         def gloglike(th):
             g = np.zeros(th.shape)

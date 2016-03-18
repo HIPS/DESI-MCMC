@@ -85,9 +85,21 @@ class CelesteBase(object):
     #####################
     # Plotting Methods  #
     #####################
-    def render_model_image(self, roi=None):
-        raise NotImplementedError
+    def render_model_image(self, fimg, roi=None):
+        # create model image, and add each patch in - init with sky noise
+        mod_img = np.ones(fimg.nelec.shape) * fimg.epsilon
 
+        # add each source's model patch
+        for s in pyprind.prog_bar(self.srcs):
+            patch, ylim, xlim = s.compute_model_patch(fits_image=fimg)
+            mod_img[ylim[0]:ylim[1], xlim[0]:xlim[1]] += patch
+        return mod_img
+
+    def img_log_likelihood(self, fimg, mod_img=None):
+        if mod_img is None:
+            mod_img = self.render_model_image(fimg)
+        ll = np.sum(np.log(mod_img) * fimg.nelec) - np.sum(mod_img)
+        return ll
 
 class Field(object):
     """ holds image data associated with a single field """
@@ -181,6 +193,10 @@ class Source(object):
 
     def is_galaxy(self):
         return self.params.a == 1
+
+    @property
+    def id(self):
+        return "in_%s_to_%s"%(np.str(self.u_lower), np.str(self.u_upper))
 
     ###############################################################
     # source store their own location, fluxes, and shape samples  #
