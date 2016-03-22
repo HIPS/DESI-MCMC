@@ -50,22 +50,26 @@ def make_fits_images(run, camcol, field):
             Grabbing image files from the cache.
             TODO: turn off the tractor printing... """
 
-    imgs = {}
-    for band in BANDS:
-        print "reading in band %s" % band
-        imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band)
-
     # grab photo field objects - cache in 'sdss_data' if possible
     if not os.path.exists('sdss_data'):
         os.makedirs('sdss_data')
-    fn = asdss.DR9(basedir='sdss_data').retrieve('photoField', run, camcol, field)
+    sdssobj = asdss.DR9(basedir='sdss_data')
+
+    # grab images
+    imgs = {}
+    for band in BANDS:
+        print "reading in band %s" % band
+        imgs[band] = sdss.get_tractor_image_dr9(run, camcol, field, band, sdss=sdssobj)
+
+    # grab photo field
+    fn = sdssobj.retrieve('photoField', run, camcol, field)
     F = aufits.fits_table(fn)
 
     # convert to FitsImage's
     imgfits = {}
     for iband,band in enumerate(BANDS):
         print "converting images %s" % band
-        frame   = asdss.DR9().readFrame(run, camcol, field, band)
+        frame   = sdssobj.readFrame(run, camcol, field, band)
         calib   = np.median(frame.getCalibVec())
         gain    = F[0].gain[iband]
         darkvar = F[0].dark_variance[iband]
