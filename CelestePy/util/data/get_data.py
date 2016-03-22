@@ -136,7 +136,7 @@ def photoobj_to_celestepy_src(photoobj_row):
 def tractor_src_to_celestepy_src(tsrc):
     """Conversion between tractor source object and our source object...."""
     pos = tsrc.getPosition()
-    u = [p for p in pos]
+    u = np.array([p for p in pos])
 
     # brightnesses are stored in mags (gotta convert to nanomaggies)
     def mags2nanomaggies(mags):
