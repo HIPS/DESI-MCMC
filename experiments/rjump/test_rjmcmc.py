@@ -13,7 +13,7 @@ from CelestePy.util.data.get_data import photoobj_to_celestepy_src
 from CelestePy.celeste import FitsImage, gen_src_image_with_fluxes
 from CelestePy.celeste_src import SrcParams
 
-ITERATIONS = 100
+ITERATIONS = 10000
 
 STAR_FLUXES_FILE = 'star_fluxes_mog.pkl'
 GAL_FLUXES_FILE = 'gal_fluxes_mog.pkl'
@@ -38,6 +38,7 @@ def propose_from_gal_prior(star, fluxes_prior, shape_prior,
     ab = ab_prior.sample()[0,0]
     phi = phi_prior.sample()[0,0]
 
+    # propose star-like shape parameters
     if test:
         phi = 0.01
         rho = 0.01
@@ -94,6 +95,7 @@ def calc_transition_probs(model_star, model_galaxy,
     if to_star:
         mult = 1
 
+    # use the same patch limits for likelihoods
     star_ell, ylims, xlims = calc_src_likelihood(model_star, images)
     gal_ell,      _,     _ = calc_src_likelihood(model_galaxy, images, xlims, ylims)
 
@@ -168,6 +170,7 @@ if __name__=="__main__":
     model.add_field(img_dict = imgfits)
     bsrcs, bidx = model.get_brightest(object_type='galaxy', num_srcs = 50, return_idx=True)
  
+    # create a random galaxy
     src = bsrcs[1]
     src.params.fluxes = np.exp(gal_fluxes_prior.sample()[0])
     src.params.rho = 0.01
