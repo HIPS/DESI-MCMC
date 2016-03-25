@@ -98,24 +98,62 @@ def examine_brightest_sources(model):
     plt.savefig("figs/brightest_sources.pdf", bbox_inches='tight')
 
 
-def examine_initialization(s, imgfits, model, id=None):
+def examine_initialization(s, imgfits, model, run, camcol, field, id=None, band='r'):
     if id is None:
         id = s.id
+    fimg = imgfits[band]
 
     # plot initial state of s
-    fig, axarr = plt.subplots(2, 3, figsize=(10,10))
-    s.plot(imgfits['i'], *axarr[0])
+    fig, axarr = plt.subplots(4, 3, figsize=(10,10))
+    s.plot(fimg, *axarr[0])
 
-    # resample photon images
-    for _ in xrange(5):
+    # plot tractor initialization 
+    from CelestePy.util.misc import plot_util
+    import tractor_render as tr
+    _, ylim, xlim = s.compute_model_patch(fimg)
+    def render_tractor_patch(tractor_patch, tim, xlim, ylim, axarr):
+        # rescale tractor patch and img data by fimg details
+        def img_nano2count(patch, fimg):
+            return np.round(patch / fimg.calib * fimg.kappa)
+
+        tractor_patch = img_nano2count(tractor_patch, fimg)
+        tim_count     = img_nano2count(tim.data, fimg)
+
+        cim = axarr[0].imshow(tractor_patch, extent=xlim+ylim)
+        plot_util.add_colorbar_to_axis(axarr[0], cim)
+        cim = axarr[1].imshow(tim_count, extent=xlim+ylim)
+        plot_util.add_colorbar_to_axis(axarr[1], cim)
+        cim = axarr[2].imshow(tim_count-tractor_patch, extent=xlim+ylim)
+        plot_util.add_colorbar_to_axis(axarr[2], cim)
+        axarr[2].set_title("diff, mse = %2.3f"%( np.mean((tim_count-tractor_patch)**2)))
+        axarr[0].set_title("tractor")
+
+    # render with tractor catalog
+    tractor_patch, tim = tr.tractor_render_patch(run, camcol, field, radec=s.params.u,
+                                roi=xlim+ylim, celeste_src=None, bandname=band)
+    render_tractor_patch(tractor_patch, tim, xlim, ylim, axarr[1])
+    axarr[1,0].set_title("Tractor (tractor catalog)")
+    tractor_patch, tim = tr.tractor_render_patch(run, camcol, field,
+                                roi=xlim+ylim, celeste_src=s, bandname=band)
+    render_tractor_patch(tractor_patch, tim, xlim, ylim, axarr[2])
+    axarr[2,0].set_title("Tractor (photo params)")
+
+    # resample photon images and plot
+    for _ in xrange(0):
         model.field_list[0].resample_photons([s])
         s.resample_star()
         print "marg like: ", s.log_likelihood_isolated()
+    s.plot(fimg, *axarr[3])
 
-    # plot post samples and save
-    s.plot(imgfits['i'], *axarr[1])
-    fig.suptitle("Photo (top) vs Celeste (bottom) initializations")
-    fig.tight_layout()
+    # label y axes for each plot
+    axarr[0,0].set_ylabel('photo init (celeste render)')
+    axarr[1,0].set_ylabel('tractor catalog (tractor render)')
+    axarr[2,0].set_ylabel('photo params (tractor render)')
+    axarr[3,0].set_ylabel('celeste em (celeste render)')
+
+    # show plot
+    #fig.suptitle("Photo (top) vs Celeste (bottom) initializations")
+    #fig.tight_layout()
     plt.savefig("figs/source_inits/%s_init.pdf"%s.id, bbox_inches='tight')
 
 
@@ -152,36 +190,6 @@ def report_star_error(bsrcs, bidx, primary_field_df, coadd_field_df):
     error_df.index = ['celeste', 'primary', '% improvement']
     print "RMSE table", error_df
     return error_df
-
-def tractor_render_patch(run, camcol, field, band='r'):
-    import tractor.sdss as sdss
-    tim,tinf = sdss.get_tractor_image_dr8(run, camcol, field, band, psf='kl-gm',
-                             roi=[500,600,500,600], nanomaggies=True)
-    psf = tim.getPsf()
-    print 'PSF', psf
-    dx, dy = 0., 0.
-    #for i,(dx,dy) in enumerate([
-	#    (0.,0.), (0.2,0.), (0.4,0), (0.6,0),
-	#    (0., -0.2), (0., -0.4), (0., -0.6)]):
-    px,py = 50.+dx, 50.+dy
-    patch = psf.getPointSourcePatch(px, py)
-    print 'Patch size:', patch.shape
-    print 'x0,y0', patch.x0, patch.y0
-    H,W = patch.shape
-    XX,YY = np.meshgrid(np.arange(W), np.arange(H))
-    im = patch.getImage()
-    cx = patch.x0 + (XX * im).sum() / im.sum()
-    cy = patch.y0 + (YY * im).sum() / im.sum()
-    print 'cx,cy', cx,cy
-    print 'px,py', px,py
-
-    #self.assertLess(np.abs(cx - px), 0.1)
-    #self.assertLess(np.abs(cy - py), 0.1)
-   
-    plt.clf()
-    plt.imshow(patch.getImage(), interpolation='nearest', origin='lower')
-    plt.title('dx,dy %f, %f' % (dx,dy))
-    plt.savefig('pixpsf-%i.png' % i)
 
 
 if __name__ == '__main__':
@@ -223,8 +231,6 @@ if __name__ == '__main__':
     # grab fits images 
     imgfits = make_fits_images(run, camcol, field)
 
-    sys.exit()
-
     #############################################
     # initialize celeste model
     #############################################
@@ -247,18 +253,38 @@ if __name__ == '__main__':
         examine_pixel_error(model)
         examine_brightest_sources(model)
 
+    sys.exit()
+
     bsrcs, bidx = model.get_brightest(object_type='star', num_srcs=50, return_idx=True)
-    bsrcs = bsrcs[10:21]
-    bidx  = bidx[10:21]
+    bsrcs = bsrcs[:30]
+    bidx  = bidx[:30]
 
     ##########################
     # DEBUG
     if False:
         for bright_i, s in enumerate(bsrcs):
-            examine_initialization(s, id="bright_%d"%bright_i, imgfits=imgfits, model=model)
+            examine_initialization(s, id="bright_%d"%bright_i, imgfits=imgfits, model=model, run=run, camcol=camcol, field=field)
             plt.close("all")
 
         rmod_img = model.render_model_image(imgfits['r'])
+
+
+        # visualize galaxy
+        # get galaxies with rho close to 1
+        gals = [s for s in model.srcs if s.is_galaxy()]
+        ecc_order = np.argsort([s.params.rho for s in gals])
+        top_ecc   = [gals[i] for i in ecc_order[:300]]
+        rs = [s.params.flux_dict['r'] for s in top_ecc]
+        rs_i = np.argsort(rs)[::-1]
+        examine_initialization(top_ecc[rs_i[0]], imgfits=imgfits, model=model, run=run, camcol=camcol, field=field)
+
+        gsrcs, bidx = model.get_brightest(object_type='galaxy', num_srcs=20, return_idx=True)
+        for bright_i, s in enumerate(gsrcs):
+            examine_initialization(s, id="bright_%d"%bright_i, imgfits=imgfits, model=model, run=run, camcol=camcol, field=field)
+            break
+            plt.close("all")
+
+
 
     ###END DEBUG #######################
 
