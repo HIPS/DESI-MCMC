@@ -9,6 +9,7 @@ import CelestePy.celeste_fast as celeste_fast
 import scipy.stats
 from util.bound.bounding_box import calc_bounding_radius
 from util.like import gmm_like_2d
+from util.dists.mog import MixtureOfGaussians
 
 BANDS = ['u', 'g', 'r', 'i', 'z']
 def galaxy_source_like(th, Z_s, images, check_overlap=True, unconstrained=True):
@@ -24,12 +25,12 @@ def galaxy_source_like(th, Z_s, images, check_overlap=True, unconstrained=True):
 
     # unpack params
     theta_s, sig_s, phi_s, rho_s = th[0:4]
-    R_s = gen_galaxy_transformation(sig_s, rho_s, phi_s)
     u_s = th[4:6]
 
     # compute rotation/scaling from params
     bs  = dict(zip(BANDS, th[-5:]))
     for n, img in enumerate(images):
+        R_s = gen_galaxy_transformation(sig_s, rho_s, phi_s, img.Ups_n)
         f_nms_exp   = gen_galaxy_prof_psf_image('exp', R_s, u_s, img)
         f_nms_dev   = gen_galaxy_prof_psf_image('dev', R_s, u_s, img)
         f_nms       = theta_s * f_nms_exp + (1. - theta_s) * f_nms_dev
@@ -43,7 +44,6 @@ def galaxy_source_like(th, Z_s, images, check_overlap=True, unconstrained=True):
 def galaxy_source_like_grad(th, Z_s, images, check_overlap=True, unconstrained=False):
     # unpack shape params
     theta_s, sig_s, phi_s, rho_s = th[0:4]
-    R_s = gen_galaxy_transformation(sig_s, rho_s, phi_s)
 
     # unpack location
     u_s = th[4:6]
@@ -55,6 +55,7 @@ def galaxy_source_like_grad(th, Z_s, images, check_overlap=True, unconstrained=F
     grad_theta_s = 0.
     grad_bs      = dict(zip(BANDS, np.zeros(len(BANDS))))
     for n, img in enumerate(images):
+        R_s = gen_galaxy_transformation(sig_s, rho_s, phi_s, img.Ups_n)
         f_nms_exp  = gen_galaxy_prof_psf_image('exp', R_s, u_s, img)
         f_nms_dev  = gen_galaxy_prof_psf_image('dev', R_s, u_s, img)
         f_nms      = theta_s * f_nms_exp + (1. - theta_s) * f_nms_dev
@@ -86,38 +87,53 @@ def galaxy_source_like_grad(th, Z_s, images, check_overlap=True, unconstrained=F
               ])
     return th_grad
 
-def gen_galaxy_transformation(sig_s, rho_s, phi_s):
+def gen_galaxy_ra_dec_basis(sig_s, rho_s, phi_s):
+    '''
+    Returns a transformation matrix that takes vectors in r_e
+    to delta-RA, delta-Dec vectors.
+    (adapted from tractor.galaxy)
+    '''
+    # convert re, ab, phi into a transformation matrix
+    phi = (90. - phi_s) * np.pi / 180.  # np.deg2rad(90-phi_s)
+    # convert re to degrees
+    # HACK -- bring up to a minimum size to prevent singular
+    # matrix inversions
+    re_deg = max(1./30, sig_s) / 3600.
+    cp = np.cos(phi)
+    sp = np.sin(phi)
+    # Squish, rotate, and scale into degrees.
+    # resulting G takes unit vectors (in r_e) to degrees
+    # (~intermediate world coords)
+    return re_deg * np.array([[cp, sp*rho_s], [-sp, cp*rho_s]])
+
+def gen_galaxy_transformation(sig_s, rho_s, phi_s, Ups_n):
     """ from dustin email, Jan 27
         sig_s (re)  : arcsec (greater than 0)
         rho_s (ab)  : axis ratio, dimensionless, in [0,1]
         phi_s (phi) : radians, "E of N", 0=direction of increasing Dec,
                       90=direction of increasing RAab = 
     """
-    # convert re, ab, phi into a transformation matrix
-    # convert unit vector to degrees
-    re_deg = max(1./30, sig_s) / 3600.
-    cp     = np.cos(phi_s)
-    sp     = np.sin(phi_s)
-
-    # Squish, rotate, and scale into degrees.
-    # resulting G takes unit vectors (in r_e) to degrees
-    # (~intermediate world coords)
-    G = re_deg * np.array([[ cp, sp * rho_s], 
-                           [-sp, cp * rho_s]])
+    # G takes unit vectors (in r_e) to degrees (~intermediate world coords)
+    G = gen_galaxy_ra_dec_basis(sig_s, rho_s, phi_s)
+    print "  celeste G mat: ", G
 
     # "cd" takes pixels to degrees (intermediate world coords)
-    cd = np.array([[0.396/3600, 0.         ],
-                   [0.,         0.396/3600.]])
-
+    cd = Ups_n
+    #cd = np.array([[0.396/3600, 0.         ],
+    #               [0.,         0.396/3600.]])
+    print cd
     # T takes pixels to unit vectors (effective radii).
     T    = np.dot(np.linalg.inv(G), cd)
+    print "   celeste T :", T
     Tinv = np.linalg.inv(T)
     return Tinv
 
 
 # galaxy profile objects - each is a mixture of gaussians
-galaxy_profs = [mp.get_exp_mixture(), mp.get_dev_mixture()]
+galaxy_profs_dstn = [mp.get_exp_mixture(), mp.get_dev_mixture()]
+galaxy_profs = [MixtureOfGaussians(means=g.mean, covs=g.var, pis = g.amp) for g in galaxy_profs_dstn]
 galaxy_prof_dict = dict(zip(['exp', 'dev'], galaxy_profs))
+
 
 def gen_galaxy_prof_psf_image(prof_type, R, u, img, return_patch=True, xlim=None, ylim=None):
     """ generate the profile galaxy psf image given:
@@ -178,31 +194,27 @@ def gen_galaxy_psf_image(th, u_s, img, xlim=None, ylim=None,
         Calls the above function twice - once for each profile, and adds them
         together
     """
-    #unpack skew/location
+    # unpack shape params
     theta_s, sig_s, phi_s, rho_s = th[0:4]
-    u_s       = np.array(u_s, dtype=np.float)
-    R_s       = gen_galaxy_transformation(sig_s, rho_s, phi_s)
-    f_nms_exp, ylime, xlime = \
-        gen_galaxy_prof_psf_image('exp', R_s, u_s, img,
-                                  return_patch=return_patch, xlim=xlim, ylim=ylim)
-    f_nms_dev, ylimd, xlimd = \
-        gen_galaxy_prof_psf_image('dev', R_s, u_s, img,
-                                  return_patch=return_patch, xlim=xlim, ylim=ylim)
-    #take the two patches above, align them, and return a single patch
-    xlim = (np.min([xlime[0], xlimd[0]]), np.max([xlime[1], xlimd[1]]))
-    ylim = (np.min([ylime[0], ylimd[0]]), np.max([ylime[1], ylimd[1]]))
-    fpatch = np.zeros((ylim[1]-ylim[0], xlim[1]-xlim[0]))
-    #exp contribution
-    xe0 = xlime[0] - xlim[0]
-    ye0 = ylime[0] - ylim[0]
-    fpatch[ye0:(ye0 + ylime[1]-ylime[0]), xe0:(xe0 + xlime[1]-xlime[0])] += f_nms_exp * theta_s
-    #dev contribution
-    xd0 = xlimd[0] - xlim[0]
-    yd0 = ylimd[0] - ylim[0]
-    fpatch[yd0:(yd0 + ylimd[1]-ylimd[0]), xd0:(xd0 + xlimd[1]-xlimd[0])] += f_nms_dev * (1 - theta_s)
-    return fpatch, ylim, xlim
-    #f_nms     = theta_s * f_nms_exp + (1. - theta_s) * f_nms_dev
-    #return f_nms, (0, f_nms.shape[0]), (0, f_nms.shape[1])
+
+    # generate unit flux model patch
+    px, py = img.equa2pixel(u_s)
+    galmix = MixtureOfGaussians.convex_combine(galaxy_profs,
+                                               [theta_s, 1.-theta_s])
+    Tinv  = gen_galaxy_transformation(sig_s, rho_s, phi_s, img.cd_at_pixel(px, py))
+    amix  = galmix.apply_affine(Tinv, np.array([px, py]))
+    cmix  = amix.convolve(img.psf)
+
+    # compute bounding box
+    bound = calc_bounding_radius(cmix.pis, cmix.means, cmix.covs,
+                                 error=1e-5, center=np.array([px, py]))
+    xlim = (np.max([0,                  np.floor(px - bound)]),
+            np.min([img.nelec.shape[1], np.ceil(px + bound)]))
+    ylim = (np.max([0,                  np.floor(py - bound)]),
+            np.min([img.nelec.shape[0], np.ceil(py + bound)]))
+
+    # compute values on grid
+    return cmix.evaluate_grid(xlim, ylim), ylim, xlim
 
 
 def gen_galaxy_psf_image_bound(src, img):
@@ -212,7 +224,7 @@ def gen_galaxy_psf_image_bound(src, img):
     """
     #unpack skew/location
     u_s       = np.array(src.u, dtype=np.float)
-    R_s       = gen_galaxy_transformation(src.sigma, src.rho, src.phi)
+    R_s       = gen_galaxy_transformation(src.sigma, src.rho, src.phi, img.Ups_n)
     Rexp      = gen_galaxy_prof_psf_image_bound('exp', R_s, u_s, img)
     Rdev      = gen_galaxy_prof_psf_image_bound('dev', R_s, u_s, img)
     return np.max([Rexp, Rdev])
