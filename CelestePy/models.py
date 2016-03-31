@@ -179,6 +179,25 @@ class Source(object):
         self.sample_image_list = []
         #TODO maybe force a garbage collect?
 
+    def __str__(self):
+        label = "%s at Ra, Dec = (%2.5f, %2.5f) " % \
+            (self.object_type, self.params.u[0], self.params.u[1])
+        mags  = " ".join([ "%s = %2.4f"%(b, self.nanomaggies2mags(f))
+                           for b,f in zip(['u', 'g', 'r', 'i', 'z'],
+                                           self.params.fluxes) ])
+        if self.is_star():
+            return label + " with Mags " + mags
+        else:
+            shape = "re=%2.3f, ab=%2.3f, phi=%2.3f" % \
+                (self.params.sigma, self.params.rho, self.params.phi)
+            return label + " with Mags " + mags + " and Galaxy Shape: " + shape
+
+    def mags2nanomaggies(self, mags):
+        return np.power(10., (mags - 22.5)/-2.5)
+
+    def nanomaggies2mags(self, nanos):
+        return (-2.5)*np.log10(nanos) + 22.5
+
     @property
     def object_type(self):
         if self.is_star():
@@ -449,10 +468,13 @@ class Source(object):
     ###################
     # source plotting #
     ###################
-    def plot(self, fits_image, ax, data_ax=None, diff_ax=None):
+    def plot(self, fits_image, ax, data_ax=None, diff_ax=None, unit_flux=False):
         import matplotlib.pyplot as plt; import seaborn as sns;
         from CelestePy.util.misc import plot_util
-        patch, ylim, xlim = self.compute_model_patch(fits_image)
+        if unit_flux:
+            patch, ylim, xlim = self.compute_scatter_on_pixels(fits_image)
+        else:
+            patch, ylim, xlim = self.compute_model_patch(fits_image)
         cim = ax.imshow(patch, extent=(xlim[0], xlim[1], ylim[0], ylim[1]))
         plot_util.add_colorbar_to_axis(ax, cim)
         ax.set_title("model")
@@ -474,7 +496,7 @@ class Source(object):
             plot_util.add_colorbar_to_axis(diff_ax, dim)
             msqe  = np.mean((dpatch - patch)**2)
             smsqe = np.mean((dpatch - patch)**2 / patch)
-            diff_ax.set_title("diff, mse = %2.3f; chi-sq = %2.3f"%(msqe, smsqe))
+            diff_ax.set_title("diff, mse = %2.3f"%msqe)
 
 
 #####################################
