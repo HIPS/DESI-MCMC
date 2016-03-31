@@ -63,7 +63,7 @@ def make_fits_images(run, camcol, field):
 
     # grab photo field
     fn = sdssobj.retrieve('photoField', run, camcol, field)
-    F = aufits.fits_table(fn)
+    F  = aufits.fits_table(fn)
 
     # convert to FitsImage's
     imgfits = {}
@@ -79,7 +79,9 @@ def make_fits_images(run, camcol, field):
                                   calib=calib,
                                   gain=gain,
                                   darkvar=darkvar,
-                                  sky=sky)
+                                  sky=sky,
+				  frame=frame,
+				  fits_table=F)
     return imgfits
 
 
@@ -127,7 +129,7 @@ def photoobj_to_celestepy_src(photoobj_row):
                          a      = 1,
                          v      = u,
                          theta  = 1.0-prob_dev,
-                         phi    = (Phi * np.pi / 180. + np.pi / 2) % np.pi,
+                         phi    = Phi, #(Phi * np.pi / 180.), # + np.pi / 2) % np.pi,
                          sigma  = Rad,
                          rho    = AB,
                          fluxes = fluxes)
@@ -163,10 +165,10 @@ def tractor_src_to_celestepy_src(tsrc):
         return SrcParams(u,
                          a=1,
                          v=u,
-                         theta=theta,
-                         phi = (shape[2] + 180) * np.pi / 180,
-                         sigma=shape[0],
-                         rho=shape[1],
+                         theta = theta,
+                         phi   = shape[2], #-1*(shape[2]-90), # * np.pi / 180., #(shape[2] + 180) * np.pi / 180,
+                         sigma = shape[0],
+                         rho   =shape[1],
                          fluxes=fluxes)
 
 

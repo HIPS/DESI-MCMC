@@ -6,6 +6,7 @@ import fitsio
 import autograd.numpy as np
 from util.bound.bounding_box import calc_bounding_radius
 import tractor.sdss as sdss
+from util.dists.mog import MixtureOfGaussians
 
 # autograd array wrapper
 from autograd import grad
@@ -52,7 +53,9 @@ class FitsImage():
             calib              = None,
             gain               = None,
             darkvar            = None,
-            sky                = None):
+            sky                = None,
+            frame              = None, 
+            fits_table         = None):
         self.band      = band
         if fits_file_template:
             self.band_file = fits_file_template%band
@@ -70,6 +73,8 @@ class FitsImage():
             pass
 
         self.header = header
+        self.frame  = frame
+        self.fits_table = fits_table
 
         # Compute the number of electrons, resource: 
         # http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
@@ -137,6 +142,8 @@ class FitsImage():
             sign, logdet = np.linalg.slogdet(self.covars[i,:,:])
             self.logdets[i] = logdet
 
+        self.psf_mog = MixtureOfGaussians(means = self.means, covs = self.covars, pis = self.weights)
+
         # for a point source in this image, calculate the radius such that 
         # at least 99% of photons from that source will fall within
         ERROR = 0.001
@@ -183,4 +190,32 @@ class FitsImage():
         xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
         # whenever we flatten and reshape use C ordering...
         return np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
+
+    def cd_at_pixel(self, x, y):
+        """ translation of dustin's wcs function:
+        (x,y) to numpy array (2,2) -- the CD matrix at pixel x,y:
+
+        [ [ dRA/dx * cos(Dec), dRA/dy * cos(Dec) ],
+          [ dDec/dx          , dDec/dy           ] ]
+
+        in FITS these are called:
+        [ [ CD11             , CD12              ],
+          [ CD21             , CD22              ] ]
+
+          Note: these statements have not been verified by the FDA. :( :( :)
+        """
+        # TODO can this be analytically written out???
+        ra0, dec0 = self.pixel2equa(np.array([x, y]))
+        step = 10. # pixels
+        rax, decx = self.pixel2equa(np.array([x+step, y]))
+        ray, decy = self.pixel2equa(np.array([x, y+step]))
+        cosd      = np.cos(dec0 * (np.pi / 180.))
+        return np.array([ [(rax - ra0)/step * cosd, (ray-ra0)/step * cosd ],
+                          [(decx - dec0)/step     , (decy-dec0)/step ] ])
+
+    @property
+    def psf(self):
+        return self.psf_mog
+
+
 
