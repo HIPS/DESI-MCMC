@@ -115,16 +115,12 @@ def gen_galaxy_transformation(sig_s, rho_s, phi_s, Ups_n):
     """
     # G takes unit vectors (in r_e) to degrees (~intermediate world coords)
     G = gen_galaxy_ra_dec_basis(sig_s, rho_s, phi_s)
-    print "  celeste G mat: ", G
 
     # "cd" takes pixels to degrees (intermediate world coords)
     cd = Ups_n
-    #cd = np.array([[0.396/3600, 0.         ],
-    #               [0.,         0.396/3600.]])
-    print cd
+
     # T takes pixels to unit vectors (effective radii).
     T    = np.dot(np.linalg.inv(G), cd)
-    print "   celeste T :", T
     Tinv = np.linalg.inv(T)
     return Tinv
 
@@ -206,12 +202,13 @@ def gen_galaxy_psf_image(th, u_s, img, xlim=None, ylim=None,
     cmix  = amix.convolve(img.psf)
 
     # compute bounding box
-    bound = calc_bounding_radius(cmix.pis, cmix.means, cmix.covs,
-                                 error=1e-5, center=np.array([px, py]))
-    xlim = (np.max([0,                  np.floor(px - bound)]),
-            np.min([img.nelec.shape[1], np.ceil(px + bound)]))
-    ylim = (np.max([0,                  np.floor(py - bound)]),
-            np.min([img.nelec.shape[0], np.ceil(py + bound)]))
+    if xlim is None and ylim is None:
+        bound = calc_bounding_radius(cmix.pis, cmix.means, cmix.covs,
+                                     error=1e-5, center=np.array([px, py]))
+        xlim = (np.max([0,                  np.floor(px - bound)]),
+                np.min([img.nelec.shape[1], np.ceil(px + bound)]))
+        ylim = (np.max([0,                  np.floor(py - bound)]),
+                np.min([img.nelec.shape[0], np.ceil(py + bound)]))
 
     # compute values on grid
     return cmix.evaluate_grid(xlim, ylim), ylim, xlim
@@ -222,12 +219,19 @@ def gen_galaxy_psf_image_bound(src, img):
         Calls the above function twice - once for each profile, and adds them 
         together
     """
-    #unpack skew/location
-    u_s       = np.array(src.u, dtype=np.float)
-    R_s       = gen_galaxy_transformation(src.sigma, src.rho, src.phi, img.Ups_n)
-    Rexp      = gen_galaxy_prof_psf_image_bound('exp', R_s, u_s, img)
-    Rdev      = gen_galaxy_prof_psf_image_bound('dev', R_s, u_s, img)
-    return np.max([Rexp, Rdev])
+    # unpack shape params
+    theta_s, sig_s, phi_s, rho_s = src.shape
+
+    # generate unit flux model patch
+    px, py = img.equa2pixel(src.u)
+    galmix = MixtureOfGaussians.convex_combine(galaxy_profs,
+                                               [theta_s, 1.-theta_s])
+    Tinv  = gen_galaxy_transformation(sig_s, rho_s, phi_s, img.cd_at_pixel(px, py))
+    amix  = galmix.apply_affine(Tinv, np.array([px, py]))
+    cmix  = amix.convolve(img.psf)
+    return calc_bounding_radius(cmix.pis, cmix.means, cmix.covs,
+                                  error=1e-5, center=np.array([px, py]))
+
 
 def gen_galaxy_prof_psf_image_bound(prof_type, R, u, img, ERROR=.01):
     """given galaxy source params and an image psf, generate the bounding 
