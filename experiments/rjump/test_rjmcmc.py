@@ -117,20 +117,20 @@ def calc_transition_probs(model_star, model_galaxy,
         return np.exp(mult * (star_ell - gal_ell + prior))
 
 if __name__=="__main__":
-    star_file       = open(STAR_FLUXES_FILE, 'rb')
-    gal_shape_file  = open(GAL_SHAPE_FILE, 'rb')
+    #star_file       = open(STAR_FLUXES_FILE, 'rb')
+    #gal_shape_file  = open(GAL_SHAPE_FILE, 'rb')
 
-    star_prior       = pickle.load(star_file)
-    gal_shape_prior  = pickle.load(gal_shape_file)
-    if TEST:
-        gal_fluxes_prior = star_prior
-    else:
-        gal_fluxes_file = open(GAL_FLUXES_FILE, 'rb')
-        gal_fluxes_prior = pickle.load(gal_fluxes_file)
-        gal_fluxes_file.close()
+    #star_prior       = pickle.load(star_file)
+    #gal_shape_prior  = pickle.load(gal_shape_file)
+    #if TEST:
+    #    gal_fluxes_prior = star_prior
+    #else:
+    #    gal_fluxes_file = open(GAL_FLUXES_FILE, 'rb')
+    #    gal_fluxes_prior = pickle.load(gal_fluxes_file)
+    #    gal_fluxes_file.close()
 
-    star_file.close()
-    gal_shape_file.close()
+    #star_file.close()
+    #gal_shape_file.close()
 
     # extract a single source
     test_primary_fn = os.path.join(STRIPE_82_DATA_DIR, "square_4263_4.fit")
@@ -165,20 +165,27 @@ if __name__=="__main__":
     imgs = [imgfits[b] for b in BANDS]
 
     import CelestePy.model_sources as models
+    reload(models)
     model = models.CelesteGMMPrior()
     model.initialize_sources(photoobj_df = primary_field_df)
     model.add_field(img_dict = imgfits)
-    bsrcs, bidx = model.get_brightest(object_type='galaxy', num_srcs = 50, return_idx=True)
- 
+    bsrcs, bidx = model.get_brightest(object_type='galaxy', num_srcs = 2, return_idx=True)
+    model.srcs = bsrcs
+
     # create a random galaxy
     src = bsrcs[1]
-    src.params.fluxes = np.exp(gal_fluxes_prior.sample()[0])
+    #src.params.fluxes = np.exp(gal_fluxes_prior.sample()[0])
     src.params.rho = 0.01
     src.params.phi = 0.01
     to_star_propose = 0
     to_star_trans   = 0
     to_gal_propose  = 0
     to_gal_trans    = 0
+
+    # ....
+    src.resample_type()
+
+    assert False
 
     for i in range(ITERATIONS):
         print "iteration", i
