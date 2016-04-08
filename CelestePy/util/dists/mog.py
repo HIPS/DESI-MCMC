@@ -26,10 +26,14 @@ def mog_samples(N, means, chols, pis):
     indices = discrete(pis, (N,))
     n_means = means[indices,:]
     n_chols = chols[indices,:,:]
-    white   = npr.randn(N,D)
+    white   = np.random.randn(N,D)
     color   = np.einsum('ikj,ij->ik', n_chols, white)
     return color + n_means
 
+def discrete(p, shape):
+    length = np.prod(shape)
+    indices = p.shape[0] - np.sum(np.random.rand(length)[:,np.newaxis] < np.cumsum(p), axis=1)
+    return indices.reshape(shape)
 
 class MixtureOfGaussians(object):
     """Evaluate logpdf and sample from Mixture of Gaussians"""
@@ -61,11 +65,12 @@ class MixtureOfGaussians(object):
 
     def mean(self, x):
         return np.dot(self.pis, self.means)
+
     def var(self, x):
         return np.sum(self.covs * pis[:,None,None], axis=0)
 
     def rvs(self, size=1):
-        return mog_samples(N, self.means, self.chols, self.pis)
+        return mog_samples(size, self.means, self.chols, self.pis)
 
     def convolve(self, mog):
         """ convolve this mixture of gaussians with mog. """

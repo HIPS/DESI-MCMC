@@ -58,3 +58,4 @@ class GalShapeMoG(MixtureOfGaussians):
     def logpdf(self, x):
         return super(GalShapeMoG, self).logpdf(self.to_unconstrained(x))
 
+
