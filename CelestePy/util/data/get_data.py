@@ -129,7 +129,7 @@ def photoobj_to_celestepy_src(photoobj_row):
                          a      = 1,
                          v      = u,
                          theta  = 1.0-prob_dev,
-                         phi    = Phi, #(Phi * np.pi / 180.), # + np.pi / 2) % np.pi,
+                         phi    = -1.*Phi, #(Phi * np.pi / 180.), # + np.pi / 2) % np.pi,
                          sigma  = Rad,
                          rho    = AB,
                          fluxes = fluxes)
@@ -152,10 +152,10 @@ def tractor_src_to_celestepy_src(tsrc):
     else:
         if type(tsrc) == ExpGalaxy:
             shape = tsrc.getShape()
-            theta = 0.
+            theta = 1.
         elif type(tsrc) == DevGalaxy:
             shape = tsrc.getShape()
-            theta = 1.
+            theta = 0.
         elif type(tsrc) == CompositeGalaxy:
             shape = tsrc.shapeExp
             theta = 0.5
