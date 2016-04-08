@@ -18,6 +18,7 @@ from planck import photons_expected, photons_expected_brightness
 from fits_image import FitsImage
 import mixture_profiles as mp
 from util.like import gmm_like_2d
+import util.dists.mog as mog_funs
 
 ## photometric bands we can handle
 BANDS = np.array(['u', 'g', 'r', 'i', 'z'], dtype=object)
@@ -150,10 +151,15 @@ def gen_point_source_psf_image(
             xx, yy = np.meshgrid(x_grid, y_grid, indexing='xy')
             pixel_grid = np.column_stack((xx.ravel(order='C'), yy.ravel(order='C')))
     grid_shape = (maxy_b-miny_b, maxx_b-minx_b)
-    psf_grid_small = gmm_like_2d(x       = pixel_grid,
-                                 ws      = image.weights,
-                                 mus     = image.means + v_s,
-                                 sigs    = image.covars)
+    #psf_grid_small = gmm_like_2d(x       = pixel_grid,
+    #                             ws      = image.weights,
+    ##                             mus     = image.means + v_s,
+    #                             sigs    = image.covars)
+    psf_grid_small = np.exp(mog_funs.mog_loglike(pixel_grid,
+                                            means = image.means+v_s,
+                                            icovs = image.invcovars,
+                                            dets  = np.exp(image.logdets),
+                                            pis   = image.weights))
 
     # return the small patch and it's bounding box in the bigger fits_image
     if return_patch:

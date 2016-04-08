@@ -12,6 +12,13 @@ import CelestePy.celeste_galaxy_conditionals as gal_funs
 from CelestePy.util.infer.slicesample import slicesample
 import pyprind
 
+def poisson_loglike(data, model_img):
+    mask   = (model_img > 0.)
+    ll_img = np.sum(np.log(model_img[mask]) * data[mask]) - \
+             np.sum(model_img)
+    return ll_img
+
+
 class CelesteBase(object):
     """ Main model class - interface to user.  Holds a list of
     Source objects, each of which contains local markov chain state, 
@@ -85,14 +92,19 @@ class CelesteBase(object):
     #####################
     # Plotting Methods  #
     #####################
-    def render_model_image(self, fimg, roi=None):
+    def render_model_image(self, fimg, xlim=None, ylim=None, exclude=None):
         # create model image, and add each patch in - init with sky noise
-        mod_img = np.ones(fimg.nelec.shape) * fimg.epsilon
+        mod_img     = np.ones(fimg.nelec.shape) * fimg.epsilon
+        source_list = [s for s in self.srcs if s is not exclude]
 
         # add each source's model patch
-        for s in pyprind.prog_bar(self.srcs):
-            patch, ylim, xlim = s.compute_model_patch(fits_image=fimg)
+        for s in pyprind.prog_bar(source_list):
+            patch, ylim, xlim = s.compute_model_patch(fits_image=fimg, xlim=xlim, ylim=ylim)
             mod_img[ylim[0]:ylim[1], xlim[0]:xlim[1]] += patch
+
+        if xlim is not None and ylim is not None:
+            mod_img = mod_img[ylim[0]:ylim[1], xlim[0]:xlim[1]]
+
         return mod_img
 
     def img_log_likelihood(self, fimg, mod_img=None):
@@ -161,6 +173,7 @@ class Source(object):
 
     def __init__(self, params, model):
         self.params = params
+        self.model  = model
         self.sample_image_list = []
 
         # create a bounding box of ~ 20x20 pixels to bound location
@@ -220,6 +233,21 @@ class Source(object):
     ###############################################################
     # source store their own location, fluxes, and shape samples  #
     ###############################################################
+    @staticmethod
+    def get_bounding_box(params, img):
+        if params.is_star():
+            bound = img.R
+        elif params.is_galaxy():
+            bound = gal_funs.gen_galaxy_psf_image_bound(params, img)
+        else:
+            raise "source type unknown"
+        px, py = img.equa2pixel(params.u)
+        xlim = (np.max([0,                  np.floor(px - bound)]),
+                np.min([img.nelec.shape[1], np.ceil(px + bound)]))
+        ylim = (np.max([0,                  np.floor(py - bound)]),
+                np.min([img.nelec.shape[0], np.ceil(py + bound)]))
+        return xlim, ylim
+
     @property
     def location_samples(self):
         return np.array(self.loc_samps)
@@ -369,13 +397,69 @@ class Source(object):
         assert len(self.sample_image_list) != 0, "resample source needs sampled images"
         self.resample_fluxes()
         self.resample_location()
-        #self.resample_shape()
-        #self.resample_type()
 
     def resample_type(self):
         #TODO: call reversible jump move
         """ resample type of source - star vs. galaxy """
-        pass
+        # propose new parameter setting: 
+        #  - return new params, probability of proposal, probability of reverse proposal
+        #  - and log det of transformation from current to proposed parameters
+        proposal, logpdf, logreverse, logdet = self.propose_other_type()
+
+        fimgs = [self.model.field_list[0].img_dict[b] for b in self.model.bands]
+        accept_logprob = self.calculate_acceptance_logprob(
+                proposal, logpdf, logreverse, logdet, fimgs)
+        if np.log(np.random.rand()) < accept_logprob:
+            self.params = proposal
+            #TODO: keep stats of acceptance + num like evals
+
+    def propose_other_type(self):
+        """ prior-based proposal (simplest).  override this for more
+        efficient proposals
+        """
+        if self.is_star():
+            params, logprob = self.model.prior_sample('galaxy', u=self.params.u)
+        elif self.is_galaxy():
+            params, logprob = self.model.prior_sample('star', u=self.params.u)
+        logreverse = self.model.logprior(self.params)
+        return params, logprob, logreverse, 0.
+
+    def calculate_acceptance_logprob(self, proposal, logprob_proposal, 
+            logprob_reverse, logdet, images):
+
+        def image_like(src, img):
+            # get biggest bounding box needed to consider for this image
+            xlimp, ylimp = Source.get_bounding_box(params=proposal, img=img)
+            xlimc, ylimc = Source.get_bounding_box(params=self.params, img=img)
+            xlim = (np.min([xlimp[0], xlimc[0]]), np.max([xlimp[1], xlimc[1]]))
+            ylim = (np.min([ylimp[0], ylimc[0]]), np.max([ylimp[1], ylimc[1]]))
+
+            # model image all other sources
+            background_img = \
+                self.model.render_model_image(img, xlim=xlim, ylim=ylim, exclude=self)
+            data_img      = img.nelec[ylim[0]:ylim[1], xlim[0]:xlim[1]]
+
+            # model image for img, (xlim, ylim)
+            model_img, _, _ = src.compute_model_patch(img, xlim=xlim, ylim=ylim)
+
+            # compute current model loglike and proposed model loglike
+            ll = poisson_loglike(data      = data_img,
+                                 model_img = background_img+model_img)
+            return ll
+
+        # compute current and proposal model likelihoods
+        curr_like = np.sum([image_like(self, img) for img in images])
+        curr_logprior = self.model.logprior(self.params)
+
+        proposal_source = self.model._source_type(proposal, self.model)
+        prop_like = np.sum([image_like(proposal_source, img) for img in images])
+        prop_logprior = self.model.logprior(proposal_source.params)
+
+        # compute acceptance ratio
+        accept_ll = (prop_like + prop_logprior) - (curr_like + curr_logprior) + \
+                    (logprob_reverse - logprob_proposal) - \
+                    logdet
+        return accept_ll
 
     def resample_location(self, u=None):
         """ conditionally resample location of source """

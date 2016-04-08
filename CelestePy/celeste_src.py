@@ -143,3 +143,9 @@ class SrcParams():
     def shape(self, shape):
         self.theta, self.sigma, self.phi, self.rho = shape
 
+    def is_star(self):
+        return self.a == 0
+
+    def is_galaxy(self):
+        return self.a == 1
+
