@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set_style("white")
 plt.ion()
-from CelestePy.util.data import make_fits_images
+from CelestePy.util.data import make_fits_images, tractor_src_to_celestepy_src
 import numpy as np
 import pandas as pd
 import pyprind
@@ -133,7 +133,7 @@ def examine_initialization(s, imgfits, model, run, camcol, field, id=None, band=
                                 roi=xlim+ylim, celeste_src=None, bandname=band)
     render_tractor_patch(tractor_patch, tim, xlim, ylim, axarr[1])
     axarr[1,0].set_title("Tractor (tractor catalog)")
-    tractor_patch, tim = tr.tractor_render_patch(run, camcol, field,
+    tractor_patch, tim = tr.tractor_render_patch(run, camcol, field, radec=s.params.u,
                                 roi=xlim+ylim, celeste_src=s, bandname=band)
     render_tractor_patch(tractor_patch, tim, xlim, ylim, axarr[2])
     axarr[2,0].set_title("Tractor (photo params)")
@@ -154,7 +154,7 @@ def examine_initialization(s, imgfits, model, run, camcol, field, id=None, band=
     # show plot
     #fig.suptitle("Photo (top) vs Celeste (bottom) initializations")
     #fig.tight_layout()
-    plt.savefig("figs/source_inits/%s_init.pdf"%s.id, bbox_inches='tight')
+    plt.savefig("figs/source_inits/%s_init.pdf"%id, bbox_inches='tight')
 
 
 def report_star_error(bsrcs, bidx, primary_field_df, coadd_field_df):
@@ -220,13 +220,16 @@ if __name__ == '__main__':
                 (field, num_stars, num_gals, primary_field_df.shape[0])
 
     ########################################################
-    # subselect stripe field 672 - get existing sources
+    # subselect stripe field 367 - get existing sources
     ########################################################
     run, camcol, field = 4263, 4, 367
     idx = np.where(primary_matched.field == field)[0]
     #primary_field_df = primary_matched[primary_matched.field == field]
     primary_field_df = primary_matched.iloc[idx]
     coadd_field_df   = coadd_matched.iloc[idx]
+
+    from tractor import sdss as st
+    tsrcs = st.get_tractor_sources_dr9(run, camcol, field)
 
     # grab fits images 
     imgfits = make_fits_images(run, camcol, field)
@@ -236,18 +239,78 @@ if __name__ == '__main__':
     #############################################
     import CelestePy.model_sources as models
     reload(models)
-    model = models.CelesteGMMPrior(
-            star_flux_prior_distn = None,
-            gal_flux_prior_distn  = None,
-            # patch epsilon options 
-            )
+    model = models.CelesteGMMPrior()
 
     # for each run/camcol/field, add a data
     model.add_field(img_dict = imgfits)
 
     # initialize sources from photo obj catalog
-    model.initialize_sources(photoobj_df = primary_field_df)
+    model.initialize_sources(photoobj_df = coadd_field_df)
+    #model.initialize_sources(init_src_params = [tractor_src_to_celestepy_src(s) for s in tsrcs])
 
+    # get brightest-ish sources
+    ssrcs, sidx = model.get_brightest(object_type='star', num_srcs=40, return_idx=True)
+    gsrcs, gidx = model.get_brightest(object_type='galaxy', num_srcs=40, return_idx=True)
+    bsrcs = ssrcs[35:] + gsrcs[17:20]
+    bidx  = np.concatenate([sidx[35:], gidx[17:20]])
+
+    # breadcrumbs - make sure we can examine which source corresponds to
+    # which catalog entry
+    blocs = np.array([s.params.u for s in bsrcs])
+    plocs = primary_field_df[['ra', 'dec']].values[bidx,:]
+    assert np.allclose(blocs, plocs), "not the same location! noooo"
+
+    ######################################
+    # gibbs step on a handful of sources #
+    ######################################
+    print "======= running celeste sampler ========"
+    # do some resampling, each source keeps each sample
+    Nsamps = 1
+    for i in pyprind.prog_bar(xrange(Nsamps)):
+
+        # resample photon images
+        model.field_list[0].resample_photons(bsrcs)
+
+        # resample one star and one galaxy
+        fig, axarr = plt.subplots(2, 3)
+        star = bsrcs[0]
+        gal  = bsrcs[-1]
+        gal.plot(imgfits['r'], *axarr[0])
+        gal.resample()
+        gal.plot(imgfits['r'], *axarr[1])
+
+        print star.log_likelihood()
+        star.resample()
+        print star.log_likelihood()
+        gal.resample()
+        print gal.log_likelihood()
+        fig, axarr = plt.subplots(2, 3)
+        star.plot(imgfits['r'], *axarr[0])
+        gal.plot(imgfits['r'], *axarr[1])
+
+        t_us = np.array([ np.array(ts.getPosition()) for ts in tsrcs])
+        dists = np.sum((t_us - gal.params.u)**2, axis=1)
+        ts = tsrcs[np.argmin(dists)]
+
+        plt.show()
+
+
+        # resample source params
+        for s in bsrcs:
+            s.resample()
+            s.store_sample()
+            s.store_loglike()
+
+        # global/local update
+        #for s in bsrcs:
+        #    s.sample_type()
+
+        # global updates
+        #model.sample_birth()
+        #model.sample_death()
+
+    ##########################
+    # DEBUG
     # look at pixel error and a few plots based on distance and source fluxes
     if False:
         examine_pixel_error(model)
@@ -255,19 +318,12 @@ if __name__ == '__main__':
 
     sys.exit()
 
-    bsrcs, bidx = model.get_brightest(object_type='star', num_srcs=50, return_idx=True)
-    bsrcs = bsrcs[:30]
-    bidx  = bidx[:30]
-
-    ##########################
-    # DEBUG
     if False:
         for bright_i, s in enumerate(bsrcs):
             examine_initialization(s, id="bright_%d"%bright_i, imgfits=imgfits, model=model, run=run, camcol=camcol, field=field)
             plt.close("all")
 
         rmod_img = model.render_model_image(imgfits['r'])
-
 
         # visualize galaxy
         # get galaxies with rho close to 1
@@ -276,42 +332,14 @@ if __name__ == '__main__':
         top_ecc   = [gals[i] for i in ecc_order[:300]]
         rs = [s.params.flux_dict['r'] for s in top_ecc]
         rs_i = np.argsort(rs)[::-1]
-        examine_initialization(top_ecc[rs_i[0]], imgfits=imgfits, model=model, run=run, camcol=camcol, field=field)
+        examine_initialization(top_ecc[rs_i[2]], imgfits=imgfits, model=model, run=run, camcol=camcol, field=field)
 
         gsrcs, bidx = model.get_brightest(object_type='galaxy', num_srcs=20, return_idx=True)
         for bright_i, s in enumerate(gsrcs):
             examine_initialization(s, id="bright_%d"%bright_i, imgfits=imgfits, model=model, run=run, camcol=camcol, field=field)
-            break
             plt.close("all")
 
-
-
     ###END DEBUG #######################
-
-    # breadcrumbs - make sure we can examine which source corresponds to
-    # which catalog entry
-    blocs = np.array([s.params.u for s in bsrcs])
-    plocs = primary_field_df[['ra', 'dec']].values[bidx,:]
-    assert np.allclose(blocs, plocs), "not the same location! noooo"
-
-
-    ######################################
-    # gibbs step on a handful of sources #
-    ######################################
-    # do some resampling, each source keeps each sample
-    Nsamps = 20
-    for i in pyprind.prog_bar(xrange(Nsamps)):
-
-        # resample photon images
-        model.field_list[0].resample_photons(bsrcs)
-
-        # resample source params
-        for s in bsrcs:
-            s.resample_star()
-            #resample_location()
-            #s.resample_fluxes()
-            s.store_sample()
-            s.store_loglike()
 
 
     ######################################

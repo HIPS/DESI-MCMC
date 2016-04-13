@@ -19,10 +19,18 @@ star_flux_mog = pickle.load(open(os.path.join(prior_param_dir, 'star_fluxes_mog.
 gal_flux_mog  = pickle.load(open(os.path.join(prior_param_dir, 'gal_fluxes_mog.pkl'), 'rb'))
 gal_shape_mog = pickle.load(open(os.path.join(prior_param_dir, 'gal_shape_mog.pkl'), 'rb'))
 
+def contains(pt, lower, upper):
+    return np.all( (pt > lower) & (pt < upper) )
 
 class SourceGMMPrior(Source):
     def __init__(self, params, model):
         super(SourceGMMPrior, self).__init__(params, model)
+
+    def location_logprior(self, u):
+        if contains(u, self.u_lower, self.u_upper):
+            return 0.
+        else:
+            return -np.inf
 
     def resample(self):
         assert len(self.sample_image_list) != 0, "resample source needs sampled source images"
@@ -31,46 +39,81 @@ class SourceGMMPrior(Source):
         elif self.is_galaxy():
             self.resample_galaxy()
 
+    def constrain_loc(self, u_unc):
+        u_unit = 1./(1. + np.exp(-u_unc))
+        return u_unit * (self.u_upper - self.u_lower) + self.u_lower
+
+    def unconstrain_loc(self, u):
+        assert contains(u, self.u_lower, self.u_upper), "point not contained in initial interval!"
+        # convert to unit interval, and then apply logit transformation
+        u_unit = (u - self.u_lower) / (self.u_upper - self.u_lower)
+        return np.log(u_unit) - np.log(1. - u_unit)
+
+    def constrain_shape(self, shape):
+        theta = 1./(1. + np.exp(-shape[0]))
+        sigma = np.exp(shape[1])
+        phi   = 1./(1. + np.exp(-shape[2])) * (360) + -180
+        rho   = 1./(1. + np.exp(-shape[3]))
+        return theta, sigma, phi, rho
+
+    def unconstrain_shape(self, shape):
+        lg_theta = np.log(shape[0]) - np.log(1-shape[0])
+        lg_sigma = np.log(sigma)
+        lg_rho   = 
 
     def resample_star(self):
-
         # jointly resample fluxes and location
-        th = np.concatenate([self.params.u, self.params.fluxes])
-        loglike  = lambda th: self.log_likelihood(u=th[:2], fluxes=th[2:])
+        def loglike(th):
+            u, color = self.constrain_loc(th[:2]), th[2:]  #unpack params
+            fluxes   = star_flux_mog.to_fluxes(color)
+            ll       = self.log_likelihood(u=u, fluxes=fluxes)
+            ll_color = star_flux_mog.logpdf(color)
+            return ll+ll_color
         gloglike = grad(loglike)
-        print loglike(th)
-        print gloglike(th)
 
-        #print "initial conditional likelihood: %2.4f"%loglike(th)
+        # pack params (make sure we convert to color first
+        th  = np.concatenate([self.unconstrain_loc(self.params.u),
+                              star_flux_mog.to_colors(self.params.fluxes)])
+        print "initial conditional likelihood: %2.4f"%loglike(th)
         from scipy.optimize import minimize
         res = minimize(fun = lambda th: -1.*loglike(th),
-                       x0=th, method='Nelder-Mead')
-        #print "final conditional likelihood: %2.4f"%loglike(res.x)
-        self.params.u = res.x[:2]
-        self.params.fluxes = res.x[2:]
+                       jac = lambda th: -1.*gloglike(th),
+                       x0=th,
+                       method='L-BFGS-B',
+                       options={'ftol' : 1e3 * np.finfo(float).eps})
 
+        print res
+        print "final conditional likelihood: %2.4f"%loglike(res.x)
+        print gloglike(res.x)
+        self.params.u      = self.constrain_loc(res.x[:2])
+        self.params.fluxes = star_flux_mog.to_fluxes(res.x[2:])
 
     def resample_galaxy(self):
-
         # gradient w.r.t fluxes
-        colors   = gal_flux_mog.to_colors(self.params.fluxes)
-        def color_logprob(c):
-            return self.log_likelihood(fluxes=gal_flux_mog.to_fluxes(c)) + \
-                   gal_flux_mog.logpdf(c)
-        dcolor_logprob = grad(color_logprob)
-
-        print color_logprob(colors)
-        print dcolor_logprob(colors)
+        def loglike(th):
+            # unpack location, color and shape parameters
+            u, color, shape = self.constrain_loc(th[:2]), th[2:7], \
+                              self.constrain_shape(th[7:])
+            fluxes          = gal_flux_mog.to_fluxes(color)
+            ll              = self.log_likelihood(u=u, fluxes=fluxes, shape=shape)
+            ll_color        = gal_flux_mog.logpdf(color)
+            return ll+ll_color
+        gloglike = grad(loglike)
 
         #print "initial conditional likelihood: %2.4f"%loglike(th)
+        th  = np.concatenate([self.unconstrain_loc(self.params.u),
+                              gal_flux_mog.to_colors(self.params.fluxes),
+                              self.unconstrain_shape(self.params.shape)])
         from scipy.optimize import minimize
-        res = minimize(fun = lambda th: -1.*color_logprob(th), jac=dcolor_logprob,
-                       x0  = colors, method='L-BFGS-B', options={'disp':1})
-        self.params.fluxes = gal_flux_mog.to_fluxes(res.x)
-        #print "final conditional likelihood: %2.4f"%loglike(res.x)
-        #self.params.u = res.x[:2]
-        #self.params.fluxes = res.x[2:]
+        res = minimize(fun = lambda th: -1.*loglike(th),
+                       jac = lambda th: -1.*gloglike(th),
+                       x0  = colors,
+                       method='L-BFGS-B', options={'disp':1})
 
+        # store new values
+        self.params.u      = self.constrain_loc(res.x[:2])
+        self.params.fluxes = gal_flux_mog.to_fluxes(res.x[2:7])
+        self.params.shape  = self.constrain_shape(res[7:])
 
 
 # Create universe model with this source type
