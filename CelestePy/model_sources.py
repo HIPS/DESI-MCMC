@@ -49,17 +49,22 @@ class SourceGMMPrior(Source):
         u_unit = (u - self.u_lower) / (self.u_upper - self.u_lower)
         return np.log(u_unit) - np.log(1. - u_unit)
 
-    def constrain_shape(self, shape):
-        theta = 1./(1. + np.exp(-shape[0]))
-        sigma = np.exp(shape[1])
-        phi   = 1./(1. + np.exp(-shape[2])) * (360) + -180
-        rho   = 1./(1. + np.exp(-shape[3]))
-        return theta, sigma, phi, rho
+    def constrain_shape(self, lg_shape):
+        lg_theta, lg_sigma, lg_phi, lg_rho = lg_shape
+        theta = 1./(1. + np.exp(-lg_theta))
+        sigma = np.exp(lg_sigma)
+        phi   = 1./(1. + np.exp(-lg_phi)) * (180) + -180
+        rho   = 1./(1. + np.exp(-lg_rho))
+        return np.array([theta, sigma, phi, rho])
 
     def unconstrain_shape(self, shape):
-        lg_theta = np.log(shape[0]) - np.log(1-shape[0])
+        theta, sigma, phi, rho = shape
+        lg_theta = np.log(theta) - np.log(1. - theta)
         lg_sigma = np.log(sigma)
-        lg_rho   = 
+        phi_unit = (phi+180) / 180.
+        lg_phi   = np.log(phi_unit) - np.log(1. - phi_unit)
+        lg_rho   = np.log(rho) - np.log(1. - rho)
+        return np.array([lg_theta, lg_sigma, lg_phi, lg_rho])
 
     def resample_star(self):
         # jointly resample fluxes and location
@@ -101,19 +106,21 @@ class SourceGMMPrior(Source):
         gloglike = grad(loglike)
 
         #print "initial conditional likelihood: %2.4f"%loglike(th)
+        self.params.theta = np.clip(self.params.theta, 1e-6, 1-1e-6)
         th  = np.concatenate([self.unconstrain_loc(self.params.u),
                               gal_flux_mog.to_colors(self.params.fluxes),
                               self.unconstrain_shape(self.params.shape)])
+        print "initiali th: ", th
         from scipy.optimize import minimize
         res = minimize(fun = lambda th: -1.*loglike(th),
                        jac = lambda th: -1.*gloglike(th),
-                       x0  = colors,
-                       method='L-BFGS-B', options={'disp':1})
+                       x0  = th,
+                       method='L-BFGS-B', options={'disp':1, 'maxiter':10})
 
         # store new values
         self.params.u      = self.constrain_loc(res.x[:2])
         self.params.fluxes = gal_flux_mog.to_fluxes(res.x[2:7])
-        self.params.shape  = self.constrain_shape(res[7:])
+        self.params.shape  = self.constrain_shape(res.x[7:])
 
 
 # Create universe model with this source type
