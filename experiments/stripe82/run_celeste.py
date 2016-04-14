@@ -272,31 +272,18 @@ if __name__ == '__main__':
         model.field_list[0].resample_photons(bsrcs)
 
         # resample one star and one galaxy
-        fig, axarr = plt.subplots(2, 3)
-        star = bsrcs[0]
-        gal  = bsrcs[-1]
-        gal.plot(imgfits['r'], *axarr[0])
-        gal.resample()
-        gal.plot(imgfits['r'], *axarr[1])
-
-        print star.log_likelihood()
-        star.resample()
-        print star.log_likelihood()
-        gal.resample()
-        print gal.log_likelihood()
-        fig, axarr = plt.subplots(2, 3)
-        star.plot(imgfits['r'], *axarr[0])
-        gal.plot(imgfits['r'], *axarr[1])
-
-        t_us = np.array([ np.array(ts.getPosition()) for ts in tsrcs])
-        dists = np.sum((t_us - gal.params.u)**2, axis=1)
-        ts = tsrcs[np.argmin(dists)]
-
-        plt.show()
-
+        #fig, axarr = plt.subplots(2, 3)
+        #star = bsrcs[0]
+        #gal  = bsrcs[-1]
+        #gal.plot(imgfits['r'], *axarr[0])
+        #gal.resample()
+        #gal.plot(imgfits['r'], *axarr[1])
+        #t_us = np.array([ np.array(ts.getPosition()) for ts in tsrcs])
+        #dists = np.sum((t_us - gal.params.u)**2, axis=1)
+        #ts = tsrcs[np.argmin(dists)]
 
         # resample source params
-        for s in bsrcs:
+        for s in pyprind.prog_bar(bsrcs):
             s.resample()
             s.store_sample()
             s.store_loglike()
