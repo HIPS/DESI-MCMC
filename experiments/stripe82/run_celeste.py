@@ -251,8 +251,8 @@ if __name__ == '__main__':
     # get brightest-ish sources
     ssrcs, sidx = model.get_brightest(object_type='star', num_srcs=40, return_idx=True)
     gsrcs, gidx = model.get_brightest(object_type='galaxy', num_srcs=40, return_idx=True)
-    bsrcs = ssrcs[35:] + gsrcs[17:20]
-    bidx  = np.concatenate([sidx[35:], gidx[17:20]])
+    bsrcs = ssrcs[38:39] + gsrcs[38:39]
+    bidx  = np.concatenate([sidx[38:39], gidx[38:39]])
 
     # breadcrumbs - make sure we can examine which source corresponds to
     # which catalog entry
@@ -265,12 +265,27 @@ if __name__ == '__main__':
     ######################################
     print "======= running celeste sampler ========"
     # do some resampling, each source keeps each sample
-    Nsamps = 1
+    Nsamps = 10
     for i in pyprind.prog_bar(xrange(Nsamps)):
-
         # resample photon images
-        model.field_list[0].resample_photons(bsrcs)
+        model.field_list[0].resample_photons(bsrcs, verbose=True)
+        # resample source params
+        for s in pyprind.prog_bar(bsrcs):
+            s.resample()
+            s.store_sample()
+            s.store_loglike()
+        # global/local update
+        #for s in bsrcs:
+        #    s.sample_type()
+        # global updates
+        #model.sample_birth()
+        #model.sample_death()
 
+
+    ##########################
+    # DEBUG
+    # look at pixel error and a few plots based on distance and source fluxes
+    if False:
         # resample one star and one galaxy
         #fig, axarr = plt.subplots(2, 3)
         #star = bsrcs[0]
@@ -281,25 +296,6 @@ if __name__ == '__main__':
         #t_us = np.array([ np.array(ts.getPosition()) for ts in tsrcs])
         #dists = np.sum((t_us - gal.params.u)**2, axis=1)
         #ts = tsrcs[np.argmin(dists)]
-
-        # resample source params
-        for s in pyprind.prog_bar(bsrcs):
-            s.resample()
-            s.store_sample()
-            s.store_loglike()
-
-        # global/local update
-        #for s in bsrcs:
-        #    s.sample_type()
-
-        # global updates
-        #model.sample_birth()
-        #model.sample_death()
-
-    ##########################
-    # DEBUG
-    # look at pixel error and a few plots based on distance and source fluxes
-    if False:
         examine_pixel_error(model)
         examine_brightest_sources(model)
 
