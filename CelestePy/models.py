@@ -126,7 +126,6 @@ class Field(object):
 
     def resample_photons(self, srcs, verbose=False):
         """resample photons - store source-specific images"""
-
         # first, clear out old sample images
         for src in srcs:
             src.clear_sample_images()

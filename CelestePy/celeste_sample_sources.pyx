@@ -41,8 +41,8 @@ cdef class NativePatch:
     cdef public FLOAT_t[:,::1] data
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
+@cython.wraparound(True)
+@cython.boundscheck(True)
 cdef inline vector[INDEX_t] get_bounding_boxes_idx(INDEX_t x, INDEX_t y, INDEX_t[:,::1] src_boxes):
     cdef INDEX_t S = src_boxes.shape[0]
     cdef INDEX_t s
@@ -57,7 +57,7 @@ cdef inline vector[INDEX_t] get_bounding_boxes_idx(INDEX_t x, INDEX_t y, INDEX_t
 
 
 @cython.wraparound(False)
-@cython.boundscheck(False)
+@cython.boundscheck(True)
 def sample_source_counts(list src_imgs,
                          list samp_imgs,
                          FLOAT_t[:,::1] nelec,
@@ -102,7 +102,6 @@ def sample_source_counts(list src_imgs,
             model_fluxes[S-1] = epsilon
 
             # multinomial sample
-            # p = model_fluxes / model_fluxes.sum()
             src_photons = sample_multinomial(int(num_photons_xy),
                                              model_fluxes,
                                              state)
@@ -124,7 +123,7 @@ def sample_source_counts(list src_imgs,
 
 
 @cython.wraparound(False)
-@cython.boundscheck(False)
+@cython.boundscheck(True)
 cdef inline long[:] sample_multinomial(
             np.int_t     n,
             FLOAT_t[::1] probs,
@@ -156,6 +155,15 @@ cdef inline long[:] sample_multinomial(
     samples[S-1] += unsampled
     return samples
 
+
+@cython.wraparound(False)
+@cython.boundscheck(True)
+def sample_binomial(np.int_t n, np.float_t p, object random_state):
+    # create random state if not none
+    random_state         = random_state or np.random.RandomState()
+    cdef rk_state *state = (<RandomStateUnsafeAccess>random_state).internal_state
+    curr_sample = c_rk_binomial(state, n, p)
+    return curr_sample
 
 #ctypedef fused IMG_TYPE:
 #  float

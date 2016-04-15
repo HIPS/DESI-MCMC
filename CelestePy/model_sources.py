@@ -70,15 +70,16 @@ class SourceGMMPrior(Source):
         # jointly resample fluxes and location
         def loglike(th):
             u, color = self.constrain_loc(th[:2]), th[2:]  #unpack params
-            fluxes   = star_flux_mog.to_fluxes(color)
+            fluxes   = np.exp(star_flux_mog.to_fluxes(color))
             ll       = self.log_likelihood(u=u, fluxes=fluxes)
             ll_color = star_flux_mog.logpdf(color)
             return ll+ll_color
         gloglike = grad(loglike)
 
         # pack params (make sure we convert to color first
+        lfluxes = np.log(self.params.fluxes)
         th  = np.concatenate([self.unconstrain_loc(self.params.u),
-                              star_flux_mog.to_colors(self.params.fluxes)])
+                              star_flux_mog.to_colors(lfluxes)])
         print "initial conditional likelihood: %2.4f"%loglike(th)
         from scipy.optimize import minimize
         res = minimize(fun = lambda th: -1.*loglike(th),
@@ -91,7 +92,7 @@ class SourceGMMPrior(Source):
         print "final conditional likelihood: %2.4f"%loglike(res.x)
         print gloglike(res.x)
         self.params.u      = self.constrain_loc(res.x[:2])
-        self.params.fluxes = star_flux_mog.to_fluxes(res.x[2:])
+        self.params.fluxes = np.exp(star_flux_mog.to_fluxes(res.x[2:]))
 
     def resample_galaxy(self):
         # gradient w.r.t fluxes
@@ -99,7 +100,7 @@ class SourceGMMPrior(Source):
             # unpack location, color and shape parameters
             u, color, shape = self.constrain_loc(th[:2]), th[2:7], \
                               self.constrain_shape(th[7:])
-            fluxes          = gal_flux_mog.to_fluxes(color)
+            fluxes          = np.exp(gal_flux_mog.to_fluxes(color))
             ll              = self.log_likelihood(u=u, fluxes=fluxes, shape=shape)
             ll_color        = gal_flux_mog.logpdf(color)
             return ll+ll_color
@@ -108,7 +109,7 @@ class SourceGMMPrior(Source):
         #print "initial conditional likelihood: %2.4f"%loglike(th)
         self.params.theta = np.clip(self.params.theta, 1e-6, 1-1e-6)
         th  = np.concatenate([self.unconstrain_loc(self.params.u),
-                              gal_flux_mog.to_colors(self.params.fluxes),
+                              gal_flux_mog.to_colors(np.log(self.params.fluxes)),
                               self.unconstrain_shape(self.params.shape)])
         print "initiali th: ", th
         from scipy.optimize import minimize
@@ -119,7 +120,7 @@ class SourceGMMPrior(Source):
 
         # store new values
         self.params.u      = self.constrain_loc(res.x[:2])
-        self.params.fluxes = gal_flux_mog.to_fluxes(res.x[2:7])
+        self.params.fluxes = np.exp(gal_flux_mog.to_fluxes(res.x[2:7]))
         self.params.shape  = self.constrain_shape(res.x[7:])
 
 
