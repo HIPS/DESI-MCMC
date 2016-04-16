@@ -160,7 +160,7 @@ class CelesteGMMPrior(CelesteBase):
             color   = self.galaxy_flux_prior.rvs(size=1)[0]
             logprob = self.galaxy_flux_prior.logpdf(color)
             params.fluxes = np.exp(self.galaxy_flux_prior.to_fluxes(color))
-            params.shape  = self.galaxy_shape_prior.rvs(size=1)[0]
+            params.shape  = np.concatenate(([0.5], self.galaxy_shape_prior.rvs(size=1)[0]))
             logprob_shape = self.galaxy_shape_prior.logpdf(params.shape)
             return params, logprob
 

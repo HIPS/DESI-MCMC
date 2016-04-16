@@ -1,6 +1,6 @@
 import numpy as np
 
-class SrcParams():
+class SrcParams(object):
     """ source parameter object - contains a list of both star and galaxy
         parameters with names that roughly match the celeste model conventions
         Input:

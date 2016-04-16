@@ -1,6 +1,7 @@
 import autograd.numpy as np
 import CelestePy.celeste_galaxy_conditionals as gal_funs
 import CelestePy.celeste as celeste
+from models import poisson_loglike
 
 class Source(object):
     """ source object - holds current state of markov chain and implements
@@ -255,8 +256,10 @@ class Source(object):
         """
         if self.is_star():
             params, logprob = self.model.prior_sample('galaxy', u=self.params.u)
+            print "galaxy proposal:", params.fluxes, params.shape
         elif self.is_galaxy():
             params, logprob = self.model.prior_sample('star', u=self.params.u)
+            print "star proposal:", params.fluxes
         logreverse = self.model.logprior(self.params)
         return params, logprob, logreverse, 0.
 

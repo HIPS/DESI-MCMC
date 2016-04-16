@@ -47,10 +47,10 @@ class GalShapeMoG(MixtureOfGaussians):
 
     @staticmethod
     def to_unconstrained(x):
-        sigma, ab, phi = x[:,0,None], x[:,1,None], x[:,2,None]
-        return np.concatenate([ np.log(sigma),
-                                np.log(ab) - np.log(1.-ab),
-                                np.log(phi) - np.log(np.pi - phi) ], axis=1)
+        sigma, ab, phi = x[0], x[1], x[2]
+        return np.array([ np.log(sigma),
+                          np.log(ab) - np.log(1.-ab),
+                          np.log(phi) - np.log(np.pi - phi) ])
 
     def to_constrained(x):
         raise NotImplementedError

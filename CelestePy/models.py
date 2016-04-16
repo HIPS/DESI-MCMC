@@ -95,10 +95,11 @@ class CelesteBase(object):
         mod_img     = np.ones(fimg.nelec.shape) * fimg.epsilon
         source_list = [s for s in self.srcs if s is not exclude]
 
-        # add each source's model patch
-        for s in pyprind.prog_bar(source_list):
-            patch, ylim, xlim = s.compute_model_patch(fits_image=fimg, xlim=xlim, ylim=ylim)
-            mod_img[ylim[0]:ylim[1], xlim[0]:xlim[1]] += patch
+        if not len(source_list) == 0:
+            # add each source's model patch
+            for s in pyprind.prog_bar(source_list):
+                patch, ylim, xlim = s.compute_model_patch(fits_image=fimg, xlim=xlim, ylim=ylim)
+                mod_img[ylim[0]:ylim[1], xlim[0]:xlim[1]] += patch
 
         if xlim is not None and ylim is not None:
             mod_img = mod_img[ylim[0]:ylim[1], xlim[0]:xlim[1]]
