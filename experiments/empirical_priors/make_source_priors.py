@@ -1,17 +1,22 @@
 import autograd.numpy as np
 from CelestePy.util.data import mags2nanomaggies, df_from_fits
 from CelestePy.util.dists.mog import MixtureOfGaussians
-from CelestePy.util.dists.flux_prior import FluxColorMoG, GalShapeMoG
+from CelestePy.util.dists.flux_prior import FluxColorMoG, GalShapeMoG, GalRadiusMoG, GalAbMoG
 import cPickle as pickle
 import pandas as pd
 import pyprind
+import fitsio
 
 # cross validate mog function
 def fit_mog(data, max_comps = 20, mog_class = MixtureOfGaussians):
     from sklearn import mixture
     N            = data.shape[0]
-    train        = data[:int(.75*N), :]
-    test         = data[int(.75*N):, :]
+    if len(data.shape) == 1:
+        train = data[:int(.75 * N)]
+        test  = data[int(.75 * N):]
+    else:
+        train = data[:int(.75*N), :]
+        test  = data[int(.75*N):, :]
 
     # do train/val GMM fit
     num_comps = np.arange(1, max_comps+1)
@@ -89,13 +94,20 @@ if __name__=="__main__":
     print "fitting galaxy shape"
     shape_df = np.row_stack([ coadd_df[['expRad_r', 'expAB_r', 'expPhi_r']].values,
                               coadd_df[['deVRad_r', 'deVAB_r', 'deVPhi_r']].values ])[::3,:]
+    shape_df[:,0] = np.log(shape_df[:,0])
+    shape_df[:,1] = np.log(shape_df[:,1]) - np.log(1.-shape_df[:,1])
     shape_df[:,2] = shape_df[:,2] * (np.pi / 180.)
-    shape_df = GalShapeMoG.to_unconstrained(shape_df)
+
     bad_idx = np.any(np.isinf(shape_df), axis=1)
     shape_df = shape_df[~bad_idx,:]
-    gal_shape_mog = fit_mog(shape_df, mog_class = GalShapeMoG, max_comps=50)
-    with open('gal_shape_mog.pkl', 'wb') as f:
-        pickle.dump(gal_shape_mog, f)
+    gal_re_mog = fit_mog(shape_df[:,0], mog_class = GalRadiusMoG, max_comps=50)
+    gal_ab_mog = fit_mog(shape_df[:,1], mog_class = GalAbMoG, max_comps=50)
+
+    with open('gal_re_mog.pkl', 'wb') as f:
+        pickle.dump(gal_re_mog, f)
+
+    with open('gal_ab_mog.pkl', 'wb') as f:
+        pickle.dump(gal_ab_mog, f)
 
     ######################################
     # load in models and test them       #
@@ -128,5 +140,4 @@ if __name__=="__main__":
 
     sns.jointplot(colors_stars['cg'] - colors_stars['cu'], colors_stars['ci'] - colors_stars['cz'])
     plt.show()
-
 

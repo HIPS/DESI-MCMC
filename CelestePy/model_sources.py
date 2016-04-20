@@ -17,7 +17,8 @@ prior_param_dir = os.path.join(os.path.dirname(__file__),
 prior_param_dir = '../empirical_priors/'
 star_flux_mog = pickle.load(open(os.path.join(prior_param_dir, 'star_fluxes_mog.pkl'), 'rb'))
 gal_flux_mog  = pickle.load(open(os.path.join(prior_param_dir, 'gal_fluxes_mog.pkl'), 'rb'))
-gal_shape_mog = pickle.load(open(os.path.join(prior_param_dir, 'gal_shape_mog.pkl'), 'rb'))
+gal_re_mog    = pickle.load(open(os.path.join(prior_param_dir, 'gal_re_mog.pkl'), 'rb'))
+gal_ab_mog    = pickle.load(open(os.path.join(prior_param_dir, 'gal_ab_mog.pkl'), 'rb'))
 
 def contains(pt, lower, upper):
     return np.all( (pt > lower) & (pt < upper) )
@@ -130,10 +131,12 @@ class CelesteGMMPrior(CelesteBase):
 
     def __init__(self, star_flux_prior   = star_flux_mog,
                        galaxy_flux_prior = gal_flux_mog,
-                       galaxy_shape_prior = gal_shape_mog):
+                       galaxy_re_prior   = gal_re_mog,
+                       galaxy_ab_prior   = gal_ab_mog):
         self.star_flux_prior    = star_flux_prior
         self.galaxy_flux_prior  = galaxy_flux_prior
-        self.galaxy_shape_prior = galaxy_shape_prior
+        self.galaxy_re_prior    = galaxy_re_prior
+        self.galaxy_ab_prior    = galaxy_ab_prior
         super(CelesteGMMPrior, self).__init__()
 
     def logprior(self, params):
@@ -160,7 +163,17 @@ class CelesteGMMPrior(CelesteBase):
             color   = self.galaxy_flux_prior.rvs(size=1)[0]
             logprob = self.galaxy_flux_prior.logpdf(color)
             params.fluxes = np.exp(self.galaxy_flux_prior.to_fluxes(color))
-            params.shape  = np.concatenate(([0.5], self.galaxy_shape_prior.rvs(size=1)[0]))
-            logprob_shape = self.galaxy_shape_prior.logpdf(params.shape)
+
+            sample_ab = self.galaxy_ab_prior.rvs(size=1)[0,0]
+            sample_ab = np.exp(sample_ab) / (1.+np.exp(sample_ab))
+            
+            params.shape  = np.array([np.random.random(),
+                                      np.exp(self.galaxy_re_prior.rvs(size=1)[0,0]),
+                                      np.random.random() * np.pi,
+                                      sample_ab])
+
+            logprob_re    = self.galaxy_re_prior.logpdf(params.sigma)
+            logprob_ab    = self.galaxy_ab_prior.logpdf(params.rho)
+            logprob_shape = -np.log(np.pi) + logprob_re + logprob_ab
             return params, logprob
 

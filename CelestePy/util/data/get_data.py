@@ -28,6 +28,7 @@ from CelestePy.celeste import gen_point_source_psf_image, gen_galaxy_psf_image, 
 from CelestePy.celeste_src import SrcParams
 
 import pickle
+import fitsio
 
 
 # constnats 
