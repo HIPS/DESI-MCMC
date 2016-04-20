@@ -1,5 +1,14 @@
 import numpy as np
 
+# constants and converters
+BANDS = ['u', 'g', 'r', 'i', 'z']
+
+def mags2nanomaggies(mags):
+    return np.power(10., (mags - 22.5)/-2.5)
+
+def nanomaggies2mags(nanos):
+    return (-2.5)*np.log10(nanos) + 22.5
+
 class SrcParams(object):
     """ source parameter object - contains a list of both star and galaxy
         parameters with names that roughly match the celeste model conventions
@@ -136,6 +145,15 @@ class SrcParams(object):
         return {c:v for c, v in zip(['u', 'g', 'r', 'i', 'z'], self.fluxes)}
 
     @property
+    def mag_dict(self):
+        return {c:v for c, v in zip(['u', 'g', 'r', 'i', 'z'],
+                                    nanomaggies2mags(self.fluxes))}
+
+    @property
+    def mags(self):
+        return nanomaggies2mags(self.fluxes)
+
+    @property
     def shape(self):
         return np.array([self.theta, self.sigma, self.phi, self.rho])
 
@@ -148,4 +166,60 @@ class SrcParams(object):
 
     def is_galaxy(self):
         return self.a == 1
+
+
+class SrcMixParams(object):
+    """ source parameter object - contains a list of both star and galaxy
+        u = (ra, dec)
+        p_star      = float
+        star_fluxes = numpy array
+        gal_fluxes  = numpy array
+        gal_shape   = (theta, sigma, phi, rho)
+            gal params: 
+                theta : exponential mixture weight. (1 - theta = devac mixture weight)
+                sigma : radius of galaxy object (in arcsc > 0)
+                rho   : axis ratio, dimensionless, in [0,1]
+                phi   : radians, "E of N" 0=direction of increasing Dec, 90=direction of increasting RA
+    """
+    def __init__(self, u, p_star, star_fluxes, gal_fluxes, gal_shape,
+                 objid = None, run = None, camcol = None, field = None):
+        self.u           = u
+        self.p_star      = p_star
+        self.star_fluxes = star_fluxes
+        self.gal_fluxes  = gal_fluxes
+        self.gal_shape   = gal_shape
+        self.objid       = objid
+        self.run, self.camcol, self.field = run, camcol, field
+
+    @property
+    def star_flux_dict(self):
+        return {c:v for c, v in zip(['u', 'g', 'r', 'i', 'z'], self.star_fluxes)}
+
+    @property
+    def star_mag_dict(self):
+        return {c:v for c, v in zip(['u', 'g', 'r', 'i', 'z'],
+                                    nanomaggies2mags(self.star_fluxes))}
+
+    @property
+    def gal_flux_dict(self):
+        return {c:v for c, v in zip(['u', 'g', 'r', 'i', 'z'], self.gal_fluxes)}
+
+    @property
+    def gal_mag_dict(self):
+        return {c:v for c, v in zip(['u', 'g', 'r', 'i', 'z'],
+                                    nanomaggies2mags(self.gal_fluxes))}
+
+    @property
+    def star_mags(self):
+        return nanomaggies2mags(self.star_fluxes)
+
+    @property
+    def gal_mags(self):
+        return nanomaggies2mags(self.gal_fluxes)
+
+    def is_star(self):
+        return self.p_star > .5
+
+    def is_galaxy(self):
+        return self.p_star <= .5
 

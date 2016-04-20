@@ -69,6 +69,7 @@ class FitsImage():
             self.band_file = None
             self.img = timg[0].getImage()
             header = timg[1]['hdr']
+            self.timg = timg[0]
         else:
             pass
 

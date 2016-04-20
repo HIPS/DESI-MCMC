@@ -60,7 +60,6 @@ notebooks/.ipynb_checkpoints/
 notebooks/*.tex
 notebooks/*_files/
 notebooks/*
-*.c
 *.so
 .texpadtmp
 *.bin

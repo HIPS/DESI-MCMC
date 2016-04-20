@@ -12,7 +12,7 @@ from astrometry.sdss import DR9
 from tractor import *
 from tractor import sdss as st
 
-def tractor_render_patch(run, camcol, field, roi, celeste_src=None, bandname='r', radec=None):
+def tractor_render_patch(run, camcol, field, roi, radec, celeste_src=None, bandname='r'):
     """ ROI = (x0, x1, y0, y1), zero indexed pixel coordinates """
     # set up tractor
     if not os.path.exists('sdss_data'):
@@ -28,7 +28,8 @@ def tractor_render_patch(run, camcol, field, roi, celeste_src=None, bandname='r'
     tim.zr = tinf['zr']
 
     # get corresponding sources
-    sources = getsrc(run, camcol, field, bandname, bands=[bandname], curl=True, roi=roi)
+    #sources = getsrc(run, camcol, field, bandname, bands=[bandname], curl=True, roi=roi)
+    sources = getsrc(run, camcol, field, radecrad=(radec[0], radec[1], .001))
     if radec is not None and len(sources) > 1:
         locs  = np.array([ [t.getPosition().ra, t.getPosition().dec] for t in sources])
         dists = np.sum((locs - radec)**2, axis=1)
@@ -51,11 +52,16 @@ def tractor_render_patch(run, camcol, field, roi, celeste_src=None, bandname='r'
         import tractor.galaxy as tg
         if type(ts) == tg.ExpGalaxy or type(ts) == tg.DevGalaxy:
             print "setting exp or dev galaxy params (not composite)"
-            ts.getShape().re = celeste_src.params.sigma
-            ts.getShape().ab = celeste_src.params.rho
+            ts.getShape().re  = celeste_src.params.sigma
+            ts.getShape().ab  = celeste_src.params.rho
             ts.getShape().phi = celeste_src.params.phi
         elif type(ts) == tg.CompositeGalaxy:
-            print " NOT SETTING COMPOSITE PARMETERS"
+            ts.shapeExp.re  = celeste_src.params.sigma
+            ts.shapeExp.ab  = celeste_src.params.rho
+            ts.shapeExp.phi = celeste_src.params.phi
+            ts.shapeDev.re  = celeste_src.params.sigma
+            ts.shapeDev.ab  = celeste_src.params.rho
+            ts.shapeDev.phi = celeste_src.params.phi
 
     # create a tractor object, get a model image
     print "tractor source plotted:", ts
