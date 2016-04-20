@@ -59,3 +59,36 @@ class GalShapeMoG(MixtureOfGaussians):
         return super(GalShapeMoG, self).logpdf(self.to_unconstrained(x))
 
 
+class GalRadiusMoG(MixtureOfGaussians):
+    """ prior distribution for flux colors """
+
+    def __init__(self, means, covs, pis):
+        super(GalRadiusMoG, self).__init__(means, covs, pis)
+
+    @staticmethod
+    def to_unconstrained(x):
+        return np.log(x)
+
+    def to_constrained(x):
+        raise NotImplementedError
+
+    def logpdf(self, x):
+        return super(GalRadiusMoG, self).logpdf(self.to_unconstrained(x))
+
+
+class GalAbMoG(MixtureOfGaussians):
+    """ prior distribution for flux colors """
+
+    def __init__(self, means, covs, pis):
+        super(GalAbMoG, self).__init__(means, covs, pis)
+
+    @staticmethod
+    def to_unconstrained(x):
+        return np.log(x) - np.log(1.-x)
+
+    def to_constrained(x):
+        raise NotImplementedError
+
+    def logpdf(self, x):
+        return super(GalAbMoG, self).logpdf(self.to_unconstrained(x))
+
