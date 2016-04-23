@@ -1,12 +1,13 @@
 """
 Celeste Source Derived Classes
-
 """
 from CelestePy.models import Source, CelesteBase
 from CelestePy.celeste_src import SrcParams
 import autograd.numpy as np
 from autograd import grad
 import cPickle as pickle
+from scipy.stats import multivariate_normal as mvn
+import CelestePy.util.data as du
 
 #############################
 #source parameter priors    #
@@ -15,13 +16,19 @@ import os
 prior_param_dir = os.path.join(os.path.dirname(__file__),
                                '../experiments/empirical_priors')
 prior_param_dir = '../empirical_priors/'
-star_flux_mog = pickle.load(open(os.path.join(prior_param_dir, 'star_fluxes_mog.pkl'), 'rb'))
-gal_flux_mog  = pickle.load(open(os.path.join(prior_param_dir, 'gal_fluxes_mog.pkl'), 'rb'))
-gal_re_mog    = pickle.load(open(os.path.join(prior_param_dir, 'gal_re_mog.pkl'), 'rb'))
-gal_ab_mog    = pickle.load(open(os.path.join(prior_param_dir, 'gal_ab_mog.pkl'), 'rb'))
+from os.path import join
+star_flux_mog = pickle.load(open(join(prior_param_dir, 'star_fluxes_mog.pkl'), 'rb'))
+gal_flux_mog  = pickle.load(open(join(prior_param_dir, 'gal_fluxes_mog.pkl'), 'rb'))
+gal_re_mog    = pickle.load(open(join(prior_param_dir, 'gal_re_mog.pkl'), 'rb'))
+gal_ab_mog    = pickle.load(open(join(prior_param_dir, 'gal_ab_mog.pkl'), 'rb'))
+star_mag_proposal = pickle.load(open(join(prior_param_dir, 'star_mag_proposal.pkl'), 'rb'))
+gal_mag_proposal  = pickle.load(open(join(prior_param_dir, 'gal_mag_proposal.pkl'), 'rb'))
+star_rad_proposal = pickle.load(open(join(prior_param_dir, 'star_res_proposal.pkl'), 'rb'))
+
 
 def contains(pt, lower, upper):
     return np.all( (pt > lower) & (pt < upper) )
+
 
 class SourceGMMPrior(Source):
     def __init__(self, params, model):
@@ -124,6 +131,57 @@ class SourceGMMPrior(Source):
         self.params.fluxes = np.exp(gal_flux_mog.to_fluxes(res.x[2:7]))
         self.params.shape  = self.constrain_shape(res.x[7:])
 
+    def linear_propose_other_type(self):
+        """ based on linear regression of fluxes and conditional distribution
+        of galaxy shapes, propose parameters of the other type and report
+        the log probability of generating that proposal
+
+        Returns:
+            - proposal params
+            - log prob of proposal
+            - log prob of implied reverse proposal
+            - log determinant of the transformation |d(x',u')/d(x,u)|
+
+        """
+        params = SrcParams(u=self.params.u)
+        if self.is_star():
+            params.a = 1
+
+            # fluxes
+            residual = mvn.rvs(cov=star_mag_proposal.res_covariance)
+            ll_prop_fluxes = mvn.logpdf(residual, mean=None, cov=star_mag_proposal.res_covariance)
+            gal_mag = star_mag_proposal.predict(self.params.mags.reshape((1,-1))) + residual
+            params.fluxes = du.mags2nanomaggies(gal_mag).flatten()
+
+            # compute reverse ll
+            res   = gal_mag_proposal.predict(gal_mag) - self.params.mags
+            llrev = mvn.logpdf(res, mean=None, cov=gal_mag_proposal.res_covariance)
+
+            # shape
+            sample_re = star_rad_proposal.rvs(size=1)[0]
+            ll_shape  = star_rad_proposal.logpdf(sample_re)
+            params.shape = np.array([np.random.rand(),
+                                     np.exp(sample_re),
+                                     np.random.rand() * np.pi,
+                                     np.random.rand()])
+            _, logdet = np.linalg.slogdet(star_mag_proposal.coef_)
+            return params, ll_prop_fluxes + ll_shape, llrev, logdet
+
+        elif self.is_galaxy():
+            params.a = 0
+            # fluxes
+            residual = mvn.rvs(cov=gal_mag_proposal.res_covariance)
+            llprob   = mvn.logpdf(residual, mean=None, cov=gal_mag_proposal.res_covariance)
+            star_mag = gal_mag_proposal.predict(self.params.mags.reshape((1, -1))) + residual
+            params.fluxes = du.mags2nanomaggies(star_mag).flatten()
+
+            res   = star_mag_proposal.predict(star_mag) - self.params.mags
+            llrev = mvn.logpdf(res, mean=None, cov=star_mag_proposal.res_covariance)
+            ll_re = star_rad_proposal.logpdf(np.log(self.params.sigma))
+
+            _, logdet = np.linalg.slogdet(gal_mag_proposal.coef_)
+            return params, llprob, llrev + ll_re, logdet
+
 
 # Create universe model with this source type
 class CelesteGMMPrior(CelesteBase):
@@ -166,7 +224,7 @@ class CelesteGMMPrior(CelesteBase):
 
             sample_ab = self.galaxy_ab_prior.rvs(size=1)[0,0]
             sample_ab = np.exp(sample_ab) / (1.+np.exp(sample_ab))
-            
+
             params.shape  = np.array([np.random.random(),
                                       np.exp(self.galaxy_re_prior.rvs(size=1)[0,0]),
                                       np.random.random() * np.pi,
@@ -176,4 +234,5 @@ class CelesteGMMPrior(CelesteBase):
             logprob_ab    = self.galaxy_ab_prior.logpdf(params.rho)
             logprob_shape = -np.log(np.pi) + logprob_re + logprob_ab
             return params, logprob
+
 
