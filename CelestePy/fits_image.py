@@ -67,9 +67,10 @@ class FitsImage():
             header         = fitsio.read_header(self.band_file, ext=exposure_num)
         elif timg:
             self.band_file = None
-            self.img = timg[0].getImage()
-            header = timg[1]['hdr']
-            self.timg = timg[0]
+            self.img       = timg[0].getImage()
+            header         = timg[1]['hdr']
+            self.timg      = timg[0]
+            self.invvar    = self.timg.getInvvar()
         else:
             pass
 
