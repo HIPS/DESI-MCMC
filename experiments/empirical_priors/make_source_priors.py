@@ -109,6 +109,80 @@ if __name__=="__main__":
     with open('gal_ab_mog.pkl', 'wb') as f:
         pickle.dump(gal_ab_mog, f)
 
+
+    #####################################################################
+    # fit star => galaxy proposal distributions
+    #
+    #   re  - [0, infty], transformation log
+    #   ab  - [0, 1], transformation log (ab / (1 - ab))
+    #   phi - [0, 180], transformation log (phi / (180 - phi))
+    #
+    ######################################################################
+    import CelestePy.util.data as du
+    from sklearn.linear_model import LinearRegression
+    coadd_df = du.load_celeste_dataframe("../../data/stripe_82_dataset/coadd_catalog_from_casjobs.fit")
+
+    # make star => radial extent proposal
+    star_res = coadd_df.gal_arcsec_scale[ coadd_df.is_star ].values
+    star_res = np.clip(star_res, 1e-8, np.inf)
+    star_res_proposal = fit_mog(np.log(star_res).reshape((-1,1)), max_comps = 20, mog_class = MixtureOfGaussians)
+    with open('star_res_proposal.pkl', 'wb') as f:
+        pickle.dump(star_res_proposal, f)
+
+    if False:
+        xgrid = np.linspace(np.min(np.log(star_res)), np.max(np.log(star_res)), 100)
+        lpdf  = star_res_proposal.logpdf(xgrid.reshape((-1,1)))
+        plt.plot(xgrid, np.exp(lpdf))
+        plt.hist(np.log(star_res), 25, normed=True)
+        plt.hist(np.log(star_res), 25, normed=True, alpha=.24)
+        plt.hist(star_res_proposal.rvs(684).flatten(), 25, normed=True, alpha=.24)
+
+    # make star fluxes => gal fluxes for tars
+    colors    = ['ug', 'gr', 'ri', 'iz']
+    star_mags = np.array([du.colors_to_mags(r, c) 
+                  for r, c in zip(coadd_df.star_mag_r.values,
+                      coadd_df[['star_color_%s'%c for c in colors]].values)])
+
+    gal_mags  = np.array([du.colors_to_mags(r, c) 
+                    for r, c in zip(coadd_df.gal_mag_r.values,
+                        coadd_df[['gal_color_%s'%c for c in colors]].values)])
+
+    # look at galaxy fluxes regressed on stars
+    x = star_mags[coadd_df.is_star.values]
+    y = gal_mags[coadd_df.is_star.values]
+    star_mag_model = LinearRegression()
+    star_mag_model.fit(x, y)
+    star_residuals = star_mag_model.predict(x) - y
+    star_mag_model.res_covariance = np.cov(star_residuals.T)
+    star_resids    = np.std(star_mag_model.predict(x) - y, axis=0)
+    with open('star_mag_proposal.pkl', 'wb') as f:
+        pickle.dump(star_mag_model, f)
+
+    for i in xrange(5): 
+        plt.scatter(star_mag_model.predict(x)[:,i], y[:,i], label=i, c=sns.color_palette()[i])
+
+    plt.legend()
+    plt.show()
+
+    # look at star fluxes regressed on galaxy fluxes
+    x = gal_mags[~coadd_df.is_star.values]
+    y = star_mags[~coadd_df.is_star.values]
+    gal_mag_model = LinearRegression()
+    gal_mag_model.fit(x, y)
+    gal_residuals = gal_mag_model.predict(x) - y
+    gal_mag_model.res_covariance = np.cov(gal_residuals.T)
+    with open('gal_mag_proposal.pkl', 'wb') as f:
+        pickle.dump(gal_mag_model, f)
+    for i in xrange(5):
+        plt.scatter(gal_mag_model.predict(x)[:,i], y[:,i], label=i, c=sns.color_palette()[i])
+
+    plt.legend()
+    plt.show()
+
+
+
+
+
     ######################################
     # load in models and test them       #
     ######################################
