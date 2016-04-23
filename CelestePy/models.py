@@ -11,11 +11,6 @@ import CelestePy.celeste_galaxy_conditionals as gal_funs
 from CelestePy.util.infer.slicesample import slicesample
 import pyprind
 
-def poisson_loglike(data, model_img):
-    mask   = (model_img > 0.)
-    ll_img = np.sum(np.log(model_img[mask]) * data[mask]) - \
-             np.sum(model_img)
-    return ll_img
 
 class CelesteBase(object):
     """ Main model class - interface to user.  Holds a list of
