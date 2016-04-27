@@ -1,7 +1,16 @@
 import autograd.numpy as np
 import CelestePy.celeste_galaxy_conditionals as gal_funs
 import CelestePy.celeste as celeste
-from models import poisson_loglike
+
+
+def poisson_loglike(data, model_img, mask):
+    assert model_img.shape == mask.shape
+    assert data.shape == model_img.shape
+    good_pix = (model_img > 0.) & (mask != 0)
+    ll_img   = np.sum(np.log(model_img[good_pix]) * data[good_pix]) - \
+               np.sum(model_img[good_pix])
+    return ll_img
+
 
 class Source(object):
     """ source object - holds current state of markov chain and implements
@@ -235,13 +244,13 @@ class Source(object):
         self.resample_fluxes()
         self.resample_location()
 
-    def resample_type(self):
-        #TODO: call reversible jump move
+    def resample_type(self, proposal_fun=None):
         """ resample type of source - star vs. galaxy """
         # propose new parameter setting: 
         #  - return new params, probability of proposal, probability of reverse proposal
         #  - and log det of transformation from current to proposed parameters
-        proposal, logpdf, logreverse, logdet = self.propose_other_type()
+        proposal_fun = self.propose_other_type_prior if proposal_fun is None else proposal_fun
+        proposal, logpdf, logreverse, logdet = proposal_fun()
 
         fimgs = [self.model.field_list[0].img_dict[b] for b in self.model.bands]
         accept_logprob = self.calculate_acceptance_logprob(
@@ -250,7 +259,7 @@ class Source(object):
             self.params = proposal
             #TODO: keep stats of acceptance + num like evals
 
-    def propose_other_type(self):
+    def propose_other_type_prior(self):
         """ prior-based proposal (simplest).  override this for more
         efficient proposals
         """
@@ -263,40 +272,36 @@ class Source(object):
         logreverse = self.model.logprior(self.params)
         return params, logprob, logreverse, 0.
 
-    def calculate_acceptance_logprob(self, proposal, logprob_proposal, 
+    def calculate_acceptance_logprob(self, proposal, logprob_proposal,
             logprob_reverse, logdet, images):
 
         def image_like(src, img):
             # get biggest bounding box needed to consider for this image
-            xlimp, ylimp = Source.get_bounding_box(params=proposal, img=img)
-            xlimc, ylimc = Source.get_bounding_box(params=self.params, img=img)
-            xlim = (np.min([xlimp[0], xlimc[0]]), np.max([xlimp[1], xlimc[1]]))
-            ylim = (np.min([ylimp[0], ylimc[0]]), np.max([ylimp[1], ylimc[1]]))
-
-            # model image all other sources
-            background_img = \
-                self.model.render_model_image(img, xlim=xlim, ylim=ylim, exclude=self)
-            data_img      = img.nelec[ylim[0]:ylim[1], xlim[0]:xlim[1]]
+            xlim, ylim = self.bounding_boxes[img]
+            background_img = self.background_image_dict[img]
+            data_img       = img.nelec[ylim[0]:ylim[1], xlim[0]:xlim[1]]
+            mask_img       = img.invvar[ylim[0]:ylim[1], xlim[0]:xlim[1]]
 
             # model image for img, (xlim, ylim)
             model_img, _, _ = src.compute_model_patch(img, xlim=xlim, ylim=ylim)
 
             # compute current model loglike and proposed model loglike
             ll = poisson_loglike(data      = data_img,
-                                 model_img = background_img+model_img)
+                                 model_img = background_img+model_img,
+                                 mask      = mask_img)
             return ll
 
         # compute current and proposal model likelihoods
-        curr_like = np.sum([image_like(self, img) for img in images])
-        curr_logprior = self.model.logprior(self.params)
+        curr_like       = np.sum([image_like(self, img) for img in images])
+        curr_logprior   = self.model.logprior(self.params)
 
         proposal_source = self.model._source_type(proposal, self.model)
-        prop_like = np.sum([image_like(proposal_source, img) for img in images])
-        prop_logprior = self.model.logprior(proposal_source.params)
+        prop_like       = np.sum([image_like(proposal_source, img) for img in images])
+        prop_logprior   = self.model.logprior(proposal_source.params)
 
         # compute acceptance ratio
         accept_ll = (prop_like + prop_logprior) - (curr_like + curr_logprior) + \
-                    (logprob_reverse - logprob_proposal) - \
+                    (logprob_reverse - logprob_proposal) + \
                     logdet
         return accept_ll
 
@@ -343,9 +348,9 @@ class Source(object):
         b_n    = b_0 + np.array([psf_sums[b] for b in bands])
         self.params.fluxes = np.random.gamma(a_n, 1./b_n)
 
-    def compute_scatter_on_pixels(self, fits_image, u=None, shape=None, 
+    def compute_scatter_on_pixels(self, fits_image, u=None, shape=None,
                                         xlim=None, ylim=None,
-                                        pixel_grid=None):
+                                        pixel_grid=None, force_type=None):
         """ compute how photons will be scattered spatially on fits_image, 
         subselecting only the pixels with  > epsilon probability of seeing a 
         photon.
@@ -360,15 +365,16 @@ class Source(object):
           pixel_grid : list of points to evaluate mog (cached for speed)
         """
         #TODO make sure this returns an image with EPSILON error - 
-        if u is None:
-            u = self.params.u
-        if self.is_star():
+        u       = self.params.u if u is None else u
+        render_star = self.is_star() if force_type is None else (force_type=='star')
+        render_gal  = self.is_galaxy() if force_type is None else (force_type=='galaxy')
+        if render_star:
             patch, ylim, xlim = \
                 celeste.gen_point_source_psf_image(u, fits_image,
                                                    xlim=xlim, ylim=ylim,
                                                    pixel_grid=pixel_grid)
             return patch, ylim, xlim
-        elif self.is_galaxy():
+        elif render_gal:
             if shape is None:
                 shape = self.params.shape
             patch, ylim, xlim = \
@@ -420,5 +426,60 @@ class Source(object):
             msqe  = np.mean((dpatch - patch)**2)
             smsqe = np.mean((dpatch - patch)**2 / patch)
             diff_ax.set_title("diff, mse = %2.3f"%msqe)
+
+
+#####################################################################
+# some source utility functions
+#####################################################################
+def make_bbox_dict(params, images, pixel_radius=None):
+    """ for a set of model parameters and a list of images create a dictionary
+    from {img: bounding box}, where each entry describes the area affected
+    by this source's model image
+
+    Args:
+        - params       : SrceParams or SrcMixParams (anything with a u)
+        - images       : list of FitsImages
+        - pixel_radius : (optional)
+
+    Returns:
+        - dict: {img : bbox}
+    """
+    if pixel_radius is None:
+        raise NotImplementedError
+    def image_bbox(params, img):
+        img_ymax, img_xmax = img.nelec.shape
+        px, py = img.equa2pixel(params.u)
+        xlim = (np.max([0,        int(np.floor(px - pixel_radius))]),
+                np.min([img_xmax, int(np.ceil(px + pixel_radius))]))
+        ylim = (np.max([0,        int(np.floor(py - pixel_radius))]),
+                np.min([img_ymax, int(np.ceil(py + pixel_radius))]))
+        return xlim, ylim
+    return {img: image_bbox(params, img) for img in images}
+
+def get_active_sources(source, source_list, image):
+    """Given an initial source, "source" with a bounding box, find all
+    sources in source_list where their bounding box intersects with "source"'s
+    bounding box.
+
+    Collect all sources that contribute to this source's background model image
+    """
+    def intersect(sa, sb, image):
+        xlima, ylima = sa.bounding_boxes[image]
+        xlimb, ylimb = sb.bounding_boxes[image]
+        widtha, heighta = xlima[1] - xlima[0], ylima[1] - ylima[0]
+        widthb, heightb = xlimb[1] - xlimb[0], ylimb[1] - ylimb[0]
+        return (np.abs(xlima[0] - xlimb[0])*2 < (widtha + widthb)) and \
+               (np.abs(ylima[0] - ylimb[0])*2 < (heighta + heightb))
+    return [s for s in source_list if intersect(s, source, image) and s is not source]
+
+
+def generate_background_patch(source, source_list, image):
+    """get all active sources (sources that could contribute to the background
+    image) and render their ocntribution"""
+    active_sources = get_active_sources(source, source_list, image)
+    xlim, ylim     = source.bounding_boxes[image]
+    background     = np.sum([s.compute_model_patch(image, xlim=xlim, ylim=ylim)[0]
+                             for s in active_sources], axis=0) + image.epsilon
+    return background
 
 
